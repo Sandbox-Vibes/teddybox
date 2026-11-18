@@ -1,22 +1,6 @@
 #pragma once
 
-#define MAX_HTTP_HEADER_SIZE 1024
-#define HTTP_RECEIVE_SIZE 1600
-
-
-typedef struct
-{
-    esp_err_t (*http_status_cbr)(void *ctx, int status_code);
-    esp_err_t (*http_data_cbr)(void *ctx, uint8_t *data, size_t length);
-    esp_err_t (*http_end_cbr)(void *ctx);
-    esp_err_t (*content_length_cbr)(void *ctx, size_t content_range, size_t content_length);
-    void *ctx;
-    size_t content_length;
-    size_t received_data_length;
-    uint8_t *header_buffer;
-    size_t header_size;
-    int header_parsed;
-} http_parser_t;
+#include "cloud_http.h"
 
 typedef struct
 {
@@ -42,10 +26,6 @@ typedef enum
     CC_STATE_ERROR
 } cloud_content_state_t;
 
-typedef enum
-{
-    CBR_CLOSE_OK = 0x1000
-} cloud_cbr_err_t;
 
 typedef struct
 {

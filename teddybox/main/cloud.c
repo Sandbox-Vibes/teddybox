@@ -41,125 +41,6 @@ static esp_app_desc_t running_app_info;
 static QueueHandle_t cloud_request_queue;
 
 /********************************************************/
-/* HTTP parser handling routines                        */
-/********************************************************/
-
-esp_err_t http_parser_closed_cbr(void *ctx)
-{
-    http_parser_t *parser_ctx = (http_parser_t *)ctx;
-
-    if (parser_ctx->http_end_cbr)
-    {
-        parser_ctx->http_end_cbr(parser_ctx->ctx);
-    }
-
-    return ESP_OK;
-}
-
-esp_err_t http_parser_received_cbr(void *ctx, uint8_t *data, size_t length)
-{
-    esp_err_t ret = ESP_OK;
-    http_parser_t *parser_ctx = (http_parser_t *)ctx;
-
-    if (!parser_ctx->header_parsed)
-    {
-        if (parser_ctx->header_size + length > MAX_HTTP_HEADER_SIZE)
-        {
-            ESP_LOGI(TAG, "Buffer overflow");
-            return ESP_FAIL;
-        }
-
-        memcpy(parser_ctx->header_buffer + parser_ctx->header_size, data, length);
-        parser_ctx->header_size += length;
-
-        char *header_end = strstr((char *)parser_ctx->header_buffer, "\r\n\r\n");
-        if (header_end)
-        {
-            uint32_t status_code = 0;
-            uint32_t content_length = 0;
-
-            if (sscanf((char *)parser_ctx->header_buffer, "HTTP/1.1 %d ", &status_code) == 1)
-            {
-                ESP_LOGI(TAG, "Parsed HTTP Status Code: %d", status_code);
-                if (parser_ctx->http_status_cbr)
-                {
-                    ret = parser_ctx->http_status_cbr(parser_ctx->ctx, status_code);
-                    if (ret)
-                    {
-                        return ret;
-                    }
-                }
-            }
-
-            size_t start_byte = 0;
-            size_t end_byte = 0;
-            size_t total_bytes = 0;
-            char *content_range_str = strstr((char *)parser_ctx->header_buffer, "Content-Range: ");
-            if (content_range_str)
-            {
-                sscanf(content_range_str, "Content-Range: bytes %zu-%zu/%zu", &start_byte, &end_byte, &total_bytes);
-                ESP_LOGI(TAG, "Parsed Content-Range: start=%zu, end=%zu, total=%zu", start_byte, end_byte, total_bytes);
-            }
-
-            char *content_length_str = strstr((char *)parser_ctx->header_buffer, "Content-Length: ");
-            if (content_length_str)
-            {
-                sscanf(content_length_str, "Content-Length: %zu", &content_length);
-                ESP_LOGI(TAG, "Parsed Content-Length: %zu", content_length);
-            }
-
-            parser_ctx->content_length = content_length;
-            parser_ctx->header_parsed = 1;
-
-            if (parser_ctx->content_length_cbr)
-            {
-                ret = parser_ctx->content_length_cbr(parser_ctx->ctx, start_byte, parser_ctx->content_length);
-                if (ret)
-                {
-                    return ret;
-                }
-            }
-
-            uint8_t *content_start = (uint8_t *)(header_end + 4);
-            size_t content_size = parser_ctx->header_size - (content_start - parser_ctx->header_buffer);
-
-            if (parser_ctx->http_data_cbr)
-            {
-                ret = parser_ctx->http_data_cbr(parser_ctx->ctx, content_start, content_size);
-                if (ret)
-                {
-                    return ret;
-                }
-            }
-        }
-    }
-    else
-    {
-        parser_ctx->received_data_length += length;
-
-        if (parser_ctx->http_data_cbr)
-        {
-            ret = parser_ctx->http_data_cbr(parser_ctx->ctx, data, length);
-            if (ret)
-            {
-                return ret;
-            }
-        }
-
-        if (parser_ctx->received_data_length >= parser_ctx->content_length)
-        {
-            if (parser_ctx->http_end_cbr)
-            {
-                parser_ctx->http_end_cbr(parser_ctx->ctx);
-            }
-            return CBR_CLOSE_OK;
-        }
-    }
-
-    return ret;
-}
-
-/********************************************************/
 /* TLS connection handling                              */
 /********************************************************/
 
@@ -190,6 +71,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
                        "%s"
                        "%s"
                        "User-Agent: toniebox-esp32-teddybox/%s\r\n"
+                       "Connection: close\r\n"
                        "\r\n",
              req->path, req->host, auth_line, range_line, running_app_info.version);
 
@@ -354,7 +236,7 @@ esp_err_t cloud_set_time(void)
 {
     http_parser_t http_parser_handler_ctx = {
         .http_data_cbr = &cloud_set_time_cbr,
-        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE)};
+        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE + 1)};
     cloud_req_t req = {
         .host = CLOUD_HOST,
         .port = CLOUD_PORT,
@@ -421,26 +303,29 @@ esp_err_t cloud_content_status_cbr(void *ctx, int status_code)
     }
 }
 
-esp_err_t cloud_content_length_cbr(void *ctx, size_t content_range, size_t content_length)
+esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_length)
 {
     cloud_content_req_t *req = (cloud_content_req_t *)ctx;
 
-    req->received = content_range;
-    req->content_length = content_length;
-
-    ESP_LOGI(TAG, "[CDL] download %d-%d to '%s'", req->received, req->content_length, req->filename);
-
-    if (req->content_length == 0)
+    if (total_length == 0)
     {
-        ESP_LOGE(TAG, "[CDL] Zero-sized download, aborting");
+        ESP_LOGE(TAG, "[CDL] Zero-sized or unknown size download, aborting");
         return ESP_FAIL;
     }
 
+    /* the server may ignore our Range request and send everything again */
+    bool resume = range_start > 0 && range_start == req->received;
+    req->received = range_start;
+    req->content_length = total_length;
+
+    ESP_LOGI(TAG, "[CDL] download %u-%u to '%s'%s", req->received, req->content_length, req->filename, resume ? " (resume)" : "");
+
     cloud_create_directories(req->filename);
-    req->handle = fopen(req->filename, "wb+");
+    /* "wb+" would truncate the part we already have */
+    req->handle = fopen(req->filename, resume ? "rb+" : "wb+");
     if (!req->handle)
     {
-        ESP_LOGE(TAG, "[CDL] Failed to create '%s'", req->filename);
+        ESP_LOGE(TAG, "[CDL] Failed to open '%s'", req->filename);
         return ESP_FAIL;
     }
 
@@ -519,13 +404,14 @@ esp_err_t cloud_content_end_cbr(void *ctx)
         req->handle = NULL;
     }
 */
-    if (req->state == CC_STATE_ABORTED)
+    if (req->state == CC_STATE_RECEIVING && req->received >= req->content_length)
     {
-        req->state = CC_STATE_ERROR;
+        req->state = CC_STATE_FINISHED;
     }
     else
     {
-        req->state = CC_STATE_FINISHED;
+        /* aborted, HTTP error (state already ERROR) or connection lost midway */
+        req->state = CC_STATE_ERROR;
     }
     xSemaphoreGive(req->update_sem);
     return ESP_OK;
@@ -541,7 +427,7 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
         .http_end_cbr = &cloud_content_end_cbr,
         .content_length_cbr = &cloud_content_length_cbr,
         .ctx = content_req,
-        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE)};
+        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE + 1)};
 
     cloud_req_t req = {
         .host = CLOUD_HOST,
@@ -554,9 +440,18 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
         .connection_closed_cbr = &http_parser_closed_cbr,
         .connection_closed_ctx = &http_parser_handler_ctx};
 
+    content_req->state = CC_STATE_CONNECTING;
     esp_err_t ret = cloud_request(&req);
 
     free(http_parser_handler_ctx.header_buffer);
+
+    /* connection failed before any response: make sure the waiting side gets an answer */
+    if (content_req->state != CC_STATE_FINISHED && content_req->state != CC_STATE_ERROR)
+    {
+        ESP_LOGE(TAG, "[CDL] Request for '%s' failed", content_req->location);
+        content_req->state = CC_STATE_ERROR;
+        xSemaphoreGive(content_req->update_sem);
+    }
 
     return ret;
 }
@@ -688,39 +583,51 @@ esp_err_t cloud_load_cert(const char *path, uint8_t **ptr, size_t *length)
     return ESP_OK;
 }
 
+static void cloud_fail_request(cloud_content_req_t *req, const char *reason)
+{
+    ESP_LOGW(TAG, "[CDL] Not downloading '%s': %s", req->location, reason);
+    req->state = CC_STATE_ERROR;
+    xSemaphoreGive(req->update_sem);
+}
+
 static void cloud_task(void *ctx)
 {
     bool cloud_available = false;
+    TickType_t next_try = 0;
     while (true)
     {
-        if (!wifi_is_connected())
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+
+        if (wifi_is_connected() && !cloud_available && (int32_t)(xTaskGetTickCount() - next_try) >= 0)
         {
-            vTaskDelay(100 / portTICK_PERIOD_MS);
+            ESP_LOGI(TAG, "Try to get time from %s:%d", CLOUD_HOST, CLOUD_PORT);
+            cloud_available = (cloud_set_time() == ESP_OK);
+            next_try = xTaskGetTickCount() + pdMS_TO_TICKS(10000);
+        }
+
+        cloud_content_req_t *req;
+        if (xQueueReceive(cloud_request_queue, &req, 0) != pdTRUE)
+        {
             continue;
         }
 
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-
-        if (!cloud_available)
+        /* every request gets an answer, otherwise the playback side would wait forever */
+        if (req->abort)
         {
-            ESP_LOGI(TAG, "Try to get time");
-            if (cloud_set_time() == ESP_OK)
-            {
-                cloud_available = true;
-            }
-            else
-            {
-                vTaskDelay(1000 / portTICK_PERIOD_MS);
-            }
+            cloud_fail_request(req, "aborted");
         }
-        else
+        else if (!wifi_is_connected())
         {
-            cloud_content_req_t *req;
-
-            if (xQueueReceive(cloud_request_queue, &req, 0) == pdTRUE)
-            {
-                cloud_process_request(req);
-            }
+            cloud_fail_request(req, "no WiFi");
+        }
+        else if (!cloud_available)
+        {
+            cloud_fail_request(req, "cloud not reachable");
+        }
+        else if (cloud_process_request(req) != ESP_OK && req->status_code == 0)
+        {
+            /* connection level failure, check reachability again before the next request */
+            cloud_available = false;
         }
     }
     vTaskDelete(NULL);

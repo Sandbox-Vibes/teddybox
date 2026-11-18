@@ -19,6 +19,8 @@
 
 #include "playback.h"
 #include "settings.h"
+
+#define PB_DL_CONNECT_TIMEOUT_MS 20000
 #include "dac3100.h"
 #include "board.h"
 #include "math.h"
@@ -33,6 +35,7 @@ static QueueHandle_t playback_queue;
 static bool pb_default_content = false;
 static bool pb_playing = false;
 static pb_toniefile_t pb_toniefile_info;
+static volatile bool pb_headset = false;
 static cloud_content_req_t *current_dl_req = NULL;
 
 static uint64_t pb_last_nfc_uid = 0;
@@ -375,6 +378,21 @@ esp_err_t pb_set_chapter(int32_t chapter)
     }
     pb_toniefile_info.target_chapter = chapter;
     return ESP_OK;
+}
+
+bool pb_headphones_connected()
+{
+    return pb_headset;
+}
+
+int32_t pb_get_chapter_count()
+{
+    TonieboxAudioFileHeader *taf = pb_toniefile_info.taf;
+    if (!pb_toniefile_info.valid || !taf || pb_default_content)
+    {
+        return 0;
+    }
+    return taf->n_track_page_nums;
 }
 
 int32_t pb_get_chapter()
@@ -721,6 +739,8 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
     bool proceed = false;
     bool waiting = true;
     uint32_t start_pos = (pb_default_content ? 0 : pb_last_play_position) + PB_MIN_DL_BLOCKS;
+    /* cloud unreachable or no time sync yet: do not block the playback thread forever */
+    int connect_wait = PB_DL_CONNECT_TIMEOUT_MS / 100;
 
     while (waiting)
     {
@@ -729,6 +749,15 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
         {
         case CC_STATE_INIT:
         case CC_STATE_CONNECTING:
+            if (--connect_wait <= 0)
+            {
+                ESP_LOGE(TAG, "Download did not start in time");
+                pb_int_abort_dl();
+                waiting = false;
+                proceed = false;
+            }
+            break;
+
         case CC_STATE_ABORTED:
             break;
 
@@ -791,6 +820,7 @@ static esp_err_t pb_req_handle_default(pb_req_default_t *req)
 void pb_mainthread(void *arg)
 {
     pb_playing = false;
+    pb_headset = dac3100_headset_detected();
     ESP_LOGI(TAG, "Listen for all pipeline events");
 
     while (1)
@@ -800,6 +830,7 @@ void pb_mainthread(void *arg)
         if (board_headset_irq())
         {
             uint8_t type = dac3100_headset_detected();
+            pb_headset = type != 0;
             ESP_LOGI(TAG, "Headset detected: %s", type ? "YES" : "NO");
             dac3100_set_mute(!pb_is_playing() || type);
         }

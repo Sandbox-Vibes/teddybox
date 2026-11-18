@@ -105,6 +105,8 @@ esp_err_t pb_seek(int32_t blocks);
 esp_err_t pb_seek_chapter(int32_t chapters);
 esp_err_t pb_set_chapter(int32_t chapter);
 int32_t pb_get_chapter(void);
+int32_t pb_get_chapter_count(void);
+bool pb_headphones_connected(void);
 
 esp_err_t pb_play(const char *uri);
 esp_err_t pb_play_default_lang(uint32_t lang, uint32_t id);

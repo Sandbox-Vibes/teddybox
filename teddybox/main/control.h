@@ -1,0 +1,15 @@
+#pragma once
+
+#include <stdint.h>
+
+/*
+ * Requests from other tasks (MQTT, web, ...) to the main loop. They are
+ * applied within ~100 ms by app_main, so only one task talks to the codec
+ * and handles power off.
+ */
+
+/* volume in percent, clamped to 0..volume_max */
+void ctrl_request_volume(int percent);
+uint32_t ctrl_get_volume(void);
+
+void ctrl_request_poweroff(void);

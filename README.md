@@ -22,7 +22,9 @@ booted again at any time.
   announcement and power off when critical
 - **Back to the original firmware without a cable**: hold both ears for
   5 seconds
-- Content download from teddyCloud (`/v2/content`, resume via `Range`)
+- Content download from teddyCloud (`/v2/content`, resume via `Range`),
+  tag password read from the tag and sent as `Authorization: BD <hex>`
+- **Home Assistant** via MQTT discovery (see below)
 - OTA over TCP that never overwrites the original firmware
 
 ## Configuration: `teddybox.ini` on the SD card
@@ -38,6 +40,14 @@ cloud_port = 443
 ca_path = /sdcard/teddybox/ca.der
 # cloud_enabled = 0        # force off even with a host set
 
+# Home Assistant / MQTT; off while mqtt_host is empty
+mqtt_host = 192.168.1.10
+mqtt_port = 1883
+mqtt_user = teddybox
+mqtt_pass = secret
+# mqtt_topic = teddybox/<mac>          # default
+# ha_discovery_prefix = homeassistant  # default
+
 lang_id = 1                # system sounds: 0=EN-GB 1=DE 2=EN-US 3=FR
 volume_max = 80            # percent
 volume_default = 50
@@ -47,6 +57,40 @@ idle_timeout = 60          # seconds until power off
 
 The cloud is off by default on purpose: the box certificate would otherwise
 be used against the Boxine cloud by a non-original firmware.
+
+## teddyCloud
+
+TeddyBox uses the same protocol as the original firmware: `GET /v1/time`,
+`GET /v2/content/<rUID>` with `Authorization: BD <tag memory>` and `Range`
+for resuming. teddyCloud identifies it as an ESP32 box by the user agent
+`toniebox-esp32-teddybox/<version>`. Requirements:
+
+- `cloud_host` set to teddyCloud in `teddybox.ini`
+- teddyCloud's CA (`certs/server/ca.der`) on the SD card, `ca_path` pointing to it
+- the box certificates known to teddyCloud (`certs/client/<mac>/`), as for the original firmware
+
+## Home Assistant
+
+With `mqtt_host` set, the box registers itself via MQTT discovery as device
+"TeddyBox" with these entities (`<id>` = `teddybox_<mac>`):
+
+| Entity | |
+|---|---|
+| `sensor.<id>_status` | playing / idle |
+| `sensor.<id>_tonie` | UID of the current tonie |
+| `sensor.<id>_chapter`, `_chapters` | current chapter, number of chapters |
+| `number.<id>_volume` | volume, settable, limited by `volume_max` |
+| `sensor.<id>_battery` | charge, rough estimate from the voltage |
+| `sensor.<id>_battery_voltage` | battery voltage |
+| `binary_sensor.<id>_charging`, `_battery_low` | on the charger, battery low |
+| `binary_sensor.<id>_headphones` | headphones connected |
+| `sensor.<id>_rssi` | WiFi signal |
+| `button.<id>_stop`, `_next`, `_prev`, `_poweroff` | control |
+
+Topics: `teddybox/<mac>/state` (JSON), `teddybox/<mac>/availability`
+(`online`/`offline`, also as last will) and `teddybox/<mac>/cmd/<command>`.
+The box powers off when idle (`idle_timeout`), Home Assistant then shows it
+as unavailable. Needs about 16 KB of RAM.
 
 ## Flash layout
 
@@ -91,6 +135,12 @@ Back to the original firmware: hold both ears for 5 seconds, or
 ```sh
 dd if=backup.bin of=otadata_original.bin bs=4096 skip=367 count=2
 esptool.py write_flash 0x16f000 otadata_original.bin
+```
+
+## Tests
+
+```sh
+make -C tests/host     # host unit tests, no ESP-IDF needed
 ```
 
 ## OTA

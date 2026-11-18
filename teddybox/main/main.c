@@ -40,6 +40,8 @@
 #include "sfx.h"
 #include "battery.h"
 #include "bootsel.h"
+#include "control.h"
+#include "mqtt_ha.h"
 
 #include "config.h"
 
@@ -58,6 +60,26 @@ typedef struct
 } rtc_mem_t;
 
 static RTC_DATA_ATTR rtc_mem_t rtc_storage;
+
+/* requests from other tasks, see control.h */
+static volatile int ctrl_volume_request = -1;
+static volatile bool ctrl_poweroff_request = false;
+
+void ctrl_request_volume(int percent)
+{
+    int max = settings_get()->volume_max;
+    ctrl_volume_request = percent < 0 ? 0 : (percent > max ? max : percent);
+}
+
+uint32_t ctrl_get_volume(void)
+{
+    return rtc_storage.volume;
+}
+
+void ctrl_request_poweroff(void)
+{
+    ctrl_poweroff_request = true;
+}
 
 void dir_list(const char *path)
 {
@@ -220,6 +242,7 @@ void app_main(void)
     wifi_init();
     nfc_init();
     cloud_init();
+    mqtt_ha_init();
     /* already too much memory consumption, do not enable by default */
     // www_init();
     ota_init();
@@ -272,6 +295,21 @@ void app_main(void)
                 dac3100_beep(3, 0x140);
             }
             remute_time = cur_time + 800;
+        }
+
+        int vol_req = ctrl_volume_request;
+        if (vol_req >= 0)
+        {
+            ctrl_volume_request = -1;
+            ESP_LOGI(TAG, "Volume set to %d", vol_req);
+            rtc_storage.volume = vol_req;
+            audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
+            last_activity_time = cur_time;
+        }
+        if (ctrl_poweroff_request)
+        {
+            ESP_LOGI(TAG, "Power off requested");
+            break;
         }
 
         if (remute_time != 0 && cur_time > remute_time)
@@ -349,6 +387,7 @@ void app_main(void)
         ear_small_prev = ear_small;
     }
 
+    mqtt_ha_shutdown();
     ledman_change("poweroff");
     audio_board_sdcard_unmount();
     rtc_checksum_update();

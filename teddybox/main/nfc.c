@@ -19,6 +19,8 @@ static uint8_t slix_get_rand[] = {0x02, 0xB2, 0x04};
 static uint8_t slix_get_inventory[] = {0x26, 0x01, 0x00};
 static uint8_t slix_system_info[] = {0x22, 0x2b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 static uint8_t slix_set_pass[] = {0x02, 0xB3, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00};
+/* ISO15693 READ MULTIPLE BLOCKS: high data rate, first block 0, 8 blocks (value is count - 1) */
+static uint8_t iso_read_token[] = {0x02, 0x23, 0x00, 0x07};
 
 static const uint32_t passes[] = {0x0F0F0F0F, 0x7FFD6E5B, 0x00000000};
 static uint8_t received_data[256];
@@ -118,6 +120,24 @@ esp_err_t nfc_reset(trf7962a_t trf)
     return ESP_OK;
 }
 
+/* reads the 32 byte tag memory the cloud expects as "Authorization: BD <hex>" */
+static esp_err_t nfc_read_token(trf7962a_t trf)
+{
+    memset(nfc_current_token, 0, sizeof(nfc_current_token));
+
+    for (int retry = 0; retry < 3; retry++)
+    {
+        if (trf7962a_xmit(trf, iso_read_token, sizeof(iso_read_token), received_data, &received_length) == ESP_OK &&
+            received_length >= 1 + sizeof(nfc_current_token) && received_data[0] == 0)
+        {
+            memcpy(nfc_current_token, &received_data[1], sizeof(nfc_current_token));
+            return ESP_OK;
+        }
+    }
+    ESP_LOGW(TAG, "Could not read tag memory (%d bytes, status %d)", received_length, received_length ? received_data[0] : -1);
+    return ESP_FAIL;
+}
+
 /* when token was detected, try to start playback using UID */
 static void nfc_play()
 {
@@ -196,6 +216,8 @@ void nfc_mainthread(void *arg)
                 memcpy(nfc_current_uid_rev, &received_data[2], 8);
                 ESP_LOGI(TAG, "Tag entered: %llX", nfc_get_current_uid());
                 nfc_play();
+                /* received_data is reused by the read, the UID is already copied */
+                nfc_read_token(trf);
                 vTaskDelay(1000 / portTICK_PERIOD_MS);
                 nfc_play_token();
             }
@@ -206,9 +228,12 @@ void nfc_mainthread(void *arg)
                     memcpy(nfc_current_uid_rev, &received_data[2], 8);
                     ESP_LOGI(TAG, "Tag changed: %llX", nfc_get_current_uid());
                     nfc_play();
+                    nfc_read_token(trf);
+                    vTaskDelay(1000 / portTICK_PERIOD_MS);
+                    nfc_play_token();
                 }
             }
-            memcpy(nfc_current_uid_rev, &received_data[2], 8);
+            /* nfc_current_uid_rev is up to date here; received_data may hold the token by now */
             vTaskDelay(250 / portTICK_PERIOD_MS);
             break;
         }

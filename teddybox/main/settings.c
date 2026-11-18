@@ -27,6 +27,12 @@ static settings_t settings = {
     .volume_default = 50,
     .idle_timeout_s = 60,
     .ota_allow_overwrite_pd = false,
+    .mqtt_host = "",
+    .mqtt_port = 1883,
+    .mqtt_user = "",
+    .mqtt_pass = "",
+    .mqtt_topic = "",
+    .ha_discovery_prefix = "homeassistant",
 };
 
 const settings_t *settings_get(void)
@@ -168,6 +174,30 @@ void settings_load_ini(void)
         {
             settings.idle_timeout_s = num;
         }
+        else if (!strcmp(key, "mqtt_host"))
+        {
+            copy_str(settings.mqtt_host, sizeof(settings.mqtt_host), val);
+        }
+        else if (!strcmp(key, "mqtt_port") && num > 0 && num < 65536)
+        {
+            settings.mqtt_port = num;
+        }
+        else if (!strcmp(key, "mqtt_user"))
+        {
+            copy_str(settings.mqtt_user, sizeof(settings.mqtt_user), val);
+        }
+        else if (!strcmp(key, "mqtt_pass"))
+        {
+            copy_str(settings.mqtt_pass, sizeof(settings.mqtt_pass), val);
+        }
+        else if (!strcmp(key, "mqtt_topic"))
+        {
+            copy_str(settings.mqtt_topic, sizeof(settings.mqtt_topic), val);
+        }
+        else if (!strcmp(key, "ha_discovery_prefix"))
+        {
+            copy_str(settings.ha_discovery_prefix, sizeof(settings.ha_discovery_prefix), val);
+        }
         else if (!strcmp(key, "ota_allow_overwrite_pd"))
         {
             settings.ota_allow_overwrite_pd = parse_bool(val);
@@ -187,6 +217,10 @@ void settings_load_ini(void)
         settings.volume_default = settings.volume_max;
     }
 
+    if (settings.mqtt_host[0])
+    {
+        ESP_LOGI(TAG, "INI: MQTT %s:%d%s", settings.mqtt_host, settings.mqtt_port, settings.mqtt_user[0] ? " with login" : "");
+    }
     ESP_LOGI(TAG, "INI: cloud %s %s:%d (CA %s), lang %d, volume max %d, idle %ds",
              settings.cloud_enabled ? "on" : "off", settings.cloud_host, settings.cloud_port,
              settings.ca_path, settings.lang_id, settings.volume_max, settings.idle_timeout_s);

@@ -40,7 +40,16 @@ typedef struct
     /* idle time until power off, seconds */
     uint32_t idle_timeout_s;
 
-    /* OTA may overwrite the slot holding the factory "PD" app if no free slot is left */
+    /* MQTT / Home Assistant, off while mqtt_host is empty */
+    char mqtt_host[64];
+    uint16_t mqtt_port;
+    char mqtt_user[32];
+    char mqtt_pass[64];
+    /* base topic, default "teddybox/<mac>" */
+    char mqtt_topic[48];
+    char ha_discovery_prefix[32];
+
+        /* OTA may overwrite the slot holding the factory "PD" app if no free slot is left */
     bool ota_allow_overwrite_pd;
 } settings_t;
 
