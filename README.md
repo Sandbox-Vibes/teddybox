@@ -24,6 +24,8 @@ booted again at any time.
   5 seconds
 - Content download from teddyCloud (`/v2/content`, resume via `Range`),
   tag password read from the tag and sent as `Authorization: BD <hex>`
+- **Freshness check** like the original firmware: changed content (new
+  episodes, creative tonies, live content) is detected and downloaded again
 - **Home Assistant** via MQTT discovery (see below)
 - OTA over TCP that never overwrites the original firmware
 
@@ -68,6 +70,19 @@ for resuming. teddyCloud identifies it as an ESP32 box by the user agent
 - `cloud_host` set to teddyCloud in `teddybox.ini`
 - teddyCloud's CA (`certs/server/ca.der`) on the SD card, `ca_path` pointing to it
 - the box certificates known to teddyCloud (`certs/client/<mac>/`), as for the original firmware
+
+### Freshness check
+
+After boot (as soon as teddyCloud is reachable) and every 6 hours the box
+sends UID and `audio_id` of every tonie on the SD card to
+`POST /v1/freshness-check`. teddyCloud answers with the tonies that have new
+content: a newer version in its library, a newer version in the Boxine
+cloud (if cloud access is enabled in teddyCloud) or live content. Those
+files are renamed to `<file>.old`; the next time the tonie is placed, the new
+version is downloaded. If that fails (no WiFi, teddyCloud down), the `.old`
+version is played instead. `.old` files are removed once the new version is
+complete. A tonie that is playing during the check is handled next time.
+Up to 128 tonies per check.
 
 ## Home Assistant
 

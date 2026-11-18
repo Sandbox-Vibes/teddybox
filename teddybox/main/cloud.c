@@ -25,6 +25,7 @@
 #include "wifi.h"
 #include "playback.h"
 #include "settings.h"
+#include "freshness.h"
 
 #define CLOUD_HOST (settings_get()->cloud_host)
 #define CLOUD_PORT (settings_get()->cloud_port)
@@ -66,14 +67,21 @@ static esp_err_t cloud_request(cloud_req_t *req)
     asprintf(&url, "https://%s:%d%s", req->host, req->port, req->path);
     ESP_LOGI(TAG, "Connect to %s...", url);
 
-    asprintf(&request, "GET %s HTTP/1.1\r\n"
+    char body_line[48] = "";
+    if (req->body)
+    {
+        snprintf(body_line, sizeof(body_line), "Content-Length: %u\r\n", (unsigned)req->body_len);
+    }
+
+    asprintf(&request, "%s %s HTTP/1.1\r\n"
                        "Host: %s\r\n"
+                       "%s"
                        "%s"
                        "%s"
                        "User-Agent: toniebox-esp32-teddybox/%s\r\n"
                        "Connection: close\r\n"
                        "\r\n",
-             req->path, req->host, auth_line, range_line, running_app_info.version);
+             req->body ? "POST" : "GET", req->path, req->host, auth_line, range_line, body_line, running_app_info.version);
 
     // ESP_LOGI(TAG, "Header %s...", request);
     esp_tls_cfg_t cfg = {
@@ -83,6 +91,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
         .clientcert_bytes = client_der_len,
         .clientkey_buf = private_der,
         .clientkey_bytes = private_der_len,
+        .timeout_ms = 10000,
         .skip_common_name = true};
 
     uint8_t *receive_buffer = malloc(HTTP_RECEIVE_SIZE);
@@ -116,6 +125,21 @@ static esp_err_t cloud_request(cloud_req_t *req)
             goto exit;
         }
     } while (written_bytes < request_len);
+
+    written_bytes = 0;
+    while (req->body && written_bytes < req->body_len)
+    {
+        int ret = esp_tls_conn_write(tls, req->body + written_bytes, req->body_len - written_bytes);
+        if (ret >= 0)
+        {
+            written_bytes += ret;
+        }
+        else if (ret != ESP_TLS_ERR_SSL_WANT_READ && ret != ESP_TLS_ERR_SSL_WANT_WRITE)
+        {
+            ESP_LOGE(TAG, "esp_tls_conn_write (body) returned: [0x%02X](%s)", ret, esp_err_to_name(ret));
+            goto exit;
+        }
+    }
 
     bool connected = true;
 
@@ -457,6 +481,76 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
 }
 
 /********************************************************/
+/* small POST requests with the response in memory      */
+/********************************************************/
+
+typedef struct
+{
+    uint8_t *buf;
+    size_t size;
+    size_t len;
+    int status;
+    bool overflow;
+} cloud_mem_ctx_t;
+
+static esp_err_t cloud_mem_status_cbr(void *ctx, int status_code)
+{
+    cloud_mem_ctx_t *m = (cloud_mem_ctx_t *)ctx;
+    m->status = status_code;
+    return status_code == 200 ? ESP_OK : ESP_FAIL;
+}
+
+static esp_err_t cloud_mem_data_cbr(void *ctx, uint8_t *data, size_t length)
+{
+    cloud_mem_ctx_t *m = (cloud_mem_ctx_t *)ctx;
+    if (m->len + length > m->size)
+    {
+        m->overflow = true;
+        return ESP_FAIL;
+    }
+    memcpy(m->buf + m->len, data, length);
+    m->len += length;
+    return ESP_OK;
+}
+
+esp_err_t cloud_post(const char *path, const uint8_t *body, size_t body_len, uint8_t *resp, size_t resp_size, size_t *resp_len)
+{
+    cloud_mem_ctx_t mem = {.buf = resp, .size = resp_size};
+    http_parser_t parser = {
+        .http_status_cbr = &cloud_mem_status_cbr,
+        .http_data_cbr = &cloud_mem_data_cbr,
+        .ctx = &mem,
+        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE + 1)};
+    if (!parser.header_buffer)
+    {
+        return ESP_ERR_NO_MEM;
+    }
+
+    cloud_req_t req = {
+        .host = CLOUD_HOST,
+        .port = CLOUD_PORT,
+        .path = path,
+        .body = body,
+        .body_len = body_len,
+        .data_received_cbr = &http_parser_received_cbr,
+        .data_received_ctx = &parser,
+        .connection_closed_cbr = &http_parser_closed_cbr,
+        .connection_closed_ctx = &parser};
+
+    esp_err_t ret = cloud_request(&req);
+    bool complete = parser.finished && parser.has_content_length && parser.received_data_length == parser.content_length;
+    free(parser.header_buffer);
+
+    if (ret != ESP_OK || mem.status != 200 || mem.overflow || !complete)
+    {
+        ESP_LOGE(TAG, "POST %s failed: HTTP %d%s", path, mem.status, mem.overflow ? ", response too large" : "");
+        return ESP_FAIL;
+    }
+    *resp_len = mem.len;
+    return ESP_OK;
+}
+
+/********************************************************/
 /* cloud request code, called from external code        */
 /********************************************************/
 
@@ -594,6 +688,8 @@ static void cloud_task(void *ctx)
 {
     bool cloud_available = false;
     TickType_t next_try = 0;
+    bool fc_done = false;
+    TickType_t fc_last = 0;
     while (true)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -605,6 +701,19 @@ static void cloud_task(void *ctx)
             next_try = xTaskGetTickCount() + pdMS_TO_TICKS(10000);
         }
 
+        /* freshness check after boot and then every few hours, between downloads */
+        if (cloud_available && (!fc_done || xTaskGetTickCount() - fc_last >= pdMS_TO_TICKS(FRESHNESS_INTERVAL_MS)))
+        {
+            fc_last = xTaskGetTickCount();
+            fc_done = freshness_run() == ESP_OK;
+            if (!fc_done)
+            {
+                /* retry in a minute, not in a loop */
+                fc_done = true;
+                fc_last = xTaskGetTickCount() - pdMS_TO_TICKS(FRESHNESS_INTERVAL_MS) + pdMS_TO_TICKS(60000);
+            }
+        }
+
         cloud_content_req_t *req;
         if (xQueueReceive(cloud_request_queue, &req, 0) != pdTRUE)
         {
@@ -612,6 +721,7 @@ static void cloud_task(void *ctx)
         }
 
         /* every request gets an answer, otherwise the playback side would wait forever */
+        bool connection_failed = false;
         if (req->abort)
         {
             cloud_fail_request(req, "aborted");
@@ -626,7 +736,14 @@ static void cloud_task(void *ctx)
         }
         else if (cloud_process_request(req) != ESP_OK && req->status_code == 0)
         {
-            /* connection level failure, check reachability again before the next request */
+            connection_failed = true;
+        }
+        /* last access to req, the requester frees it after this */
+        req->done = true;
+
+        if (connection_failed)
+        {
+            /* check reachability again before the next request */
             cloud_available = false;
         }
     }

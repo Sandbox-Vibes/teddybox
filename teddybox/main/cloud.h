@@ -1,5 +1,8 @@
 #pragma once
 
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "cloud_http.h"
 
 typedef struct
@@ -9,6 +12,9 @@ typedef struct
     const char *path;
     const char *auth;
     uint32_t range_start;
+    /* optional request body, turns the request into a POST */
+    const uint8_t *body;
+    size_t body_len;
     esp_err_t (*data_received_cbr)(void *ctx, uint8_t *data, size_t length);
     void *data_received_ctx;
     esp_err_t (*connection_closed_cbr)(void *ctx);
@@ -32,6 +38,8 @@ typedef struct
     /* input fields filled by requester */
     uint64_t nfc_uid;
     bool abort;
+    /* set by the cloud task as its very last access, only then the requester may free it */
+    volatile bool done;
 
     /* working variables for the download handler */
     char *location;
@@ -48,6 +56,8 @@ typedef struct
 } cloud_content_req_t;
 
 void cloud_init(void);
+/* POST from the cloud task context, response body must fit into resp */
+esp_err_t cloud_post(const char *path, const uint8_t *body, size_t body_len, uint8_t *resp, size_t resp_size, size_t *resp_len);
 esp_err_t cloud_set_time(void);
 cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc_token);
 cloud_content_state_t cloud_content_get_state(cloud_content_req_t *req);

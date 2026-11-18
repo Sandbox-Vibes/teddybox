@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <stdio.h>
 #include "esp_peripherals.h"
 #include "toniebox.pb.taf-header.pb-c.h"
 
@@ -106,6 +107,8 @@ esp_err_t pb_seek_chapter(int32_t chapters);
 esp_err_t pb_set_chapter(int32_t chapter);
 int32_t pb_get_chapter(void);
 int32_t pb_get_chapter_count(void);
+/* reads and decodes the TAF header at the current position of fd, NULL on error */
+TonieboxAudioFileHeader *pb_toniefile_get_header(FILE *fd);
 bool pb_headphones_connected(void);
 
 esp_err_t pb_play(const char *uri);
@@ -116,6 +119,8 @@ esp_err_t pb_play_content_token(uint64_t nfc_uid, const uint8_t *token);
 esp_err_t pb_stop();
 bool pb_is_playing();
 char *pb_build_filename(uint64_t id);
+/* PB_ERR_GOOD_FILE if the TAF file is complete */
+esp_err_t pb_check_file(const char *filename);
 uint32_t pb_get_play_position();
 uint64_t pb_get_current_uid();
 void pb_set_last(uint64_t nfc_uid, uint32_t play_position);

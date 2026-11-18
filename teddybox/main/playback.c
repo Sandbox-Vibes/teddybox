@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -588,7 +589,7 @@ static esp_err_t pb_int_abort_dl()
     {
         ESP_LOGI(TAG, "There is a download for '%s'", curr->filename);
         curr->abort = true;
-        while (curr->state < CC_STATE_FINISHED)
+        while (!curr->done)
         {
             ESP_LOGI(TAG, "wait for abort...");
             vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -769,14 +770,16 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
             ESP_LOGE(TAG, "Download failed");
             waiting = false;
             proceed = false;
-            current_dl_req = NULL;
+            /* closes the file handle and frees the request */
+            pb_int_abort_dl();
             break;
 
         case CC_STATE_FINISHED:
             ESP_LOGI(TAG, "Download finished");
             waiting = false;
             proceed = true;
-            current_dl_req = NULL;
+            /* complete on disk, playback opens its own handle */
+            pb_int_abort_dl();
             break;
 
         case CC_STATE_RECEIVING:
@@ -793,6 +796,23 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
     if (!proceed)
     {
         ESP_LOGE(TAG, "...could not download the file");
+
+        /* the freshness check parks outdated content as .old: better the old version than nothing */
+        char old_name[64];
+        struct stat st;
+        snprintf(old_name, sizeof(old_name), "%s.old", filename);
+        if (stat(old_name, &st) == 0)
+        {
+            ESP_LOGW(TAG, "Playing previous version of '%s' instead", filename);
+            unlink(filename);
+            if (rename(old_name, filename) == 0)
+            {
+                esp_err_t ret = pb_int_play_file(filename, req->uid);
+                free(filename);
+                return ret;
+            }
+        }
+
         free(filename);
         ledman_change("failed");
         return ESP_ERR_NOT_FOUND;
