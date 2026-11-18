@@ -29,6 +29,19 @@ booted again at any time.
 - **Home Assistant** via MQTT discovery (see below)
 - OTA over TCP that never overwrites the original firmware
 
+## Setup page
+
+On the first boot (no `teddybox.ini` on the SD card yet), or when the big
+ear is held for 3 seconds while switching on, the box says the installation
+announcement, blinks blue/green and opens the WiFi hotspot `TeddyBox-XXXX`
+(no password, only while setup runs). Phones show the setup page
+automatically, otherwise open `http://192.168.4.1/`. It configures WiFi
+(with network scan), teddyCloud (address, port, CA upload as DER or PEM),
+Home Assistant (MQTT) and volume, language and power off time. Saving
+writes `teddybox.ini`, stores the WiFi in the original firmware's format and
+restarts. Unused for 15 minutes, the box switches off. Needs about 18 KB RAM;
+cloud, MQTT and NFC do not run in setup mode.
+
 ## Configuration: `teddybox.ini` on the SD card
 
 All keys are optional.

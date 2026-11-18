@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <unistd.h>
 
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -38,6 +39,80 @@ static settings_t settings = {
 const settings_t *settings_get(void)
 {
     return &settings;
+}
+
+settings_t *settings_get_mutable(void)
+{
+    return &settings;
+}
+
+int settings_ini_exists(void)
+{
+    FILE *f = fopen(SETTINGS_INI_PATH, "r");
+    if (f)
+    {
+        fclose(f);
+    }
+    return f != NULL;
+}
+
+int settings_save_ini(const char *path)
+{
+    char tmp[72];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    FILE *f = fopen(tmp, "w");
+    if (!f)
+    {
+        ESP_LOGE(TAG, "Cannot write %s", tmp);
+        return -1;
+    }
+
+    const settings_t *s = &settings;
+    int ok = fprintf(f,
+                     "# TeddyBox settings, written by the setup page (hold the big ear while switching on)\n"
+                     "\n"
+                     "# teddyCloud, cloud is off while cloud_host is empty\n"
+                     "cloud_host = %s\n"
+                     "cloud_port = %u\n"
+                     "ca_path = %s\n"
+                     "%s"
+                     "\n"
+                     "# Home Assistant / MQTT, off while mqtt_host is empty\n"
+                     "mqtt_host = %s\n"
+                     "mqtt_port = %u\n"
+                     "mqtt_user = %s\n"
+                     "mqtt_pass = %s\n"
+                     "%s%s%s"
+                     "ha_discovery_prefix = %s\n"
+                     "\n"
+                     "# box\n"
+                     "lang_id = %u\n"
+                     "volume_max = %u\n"
+                     "volume_default = %u\n"
+                     "idle_timeout = %u\n"
+                     "ota_allow_overwrite_pd = %d\n",
+                     s->cloud_host, s->cloud_port, s->ca_path,
+                     (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
+                     s->mqtt_host, s->mqtt_port, s->mqtt_user, s->mqtt_pass,
+                     s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
+                     s->ha_discovery_prefix,
+                     s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
+                     s->ota_allow_overwrite_pd ? 1 : 0) > 0;
+    ok = (fclose(f) == 0) && ok;
+
+    if (!ok)
+    {
+        unlink(tmp);
+        return -1;
+    }
+    unlink(path);
+    if (rename(tmp, path) != 0)
+    {
+        unlink(tmp);
+        return -1;
+    }
+    ESP_LOGI(TAG, "Saved %s", path);
+    return 0;
 }
 
 void settings_init(void)

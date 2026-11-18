@@ -42,6 +42,7 @@
 #include "bootsel.h"
 #include "control.h"
 #include "mqtt_ha.h"
+#include "setup_portal.h"
 
 #include "config.h"
 
@@ -185,6 +186,19 @@ void app_main(void)
     audio_board_handle_t board_handle = audio_board_init();
     ledman_init();
 
+    /* big ear held while switching on: open the setup page */
+    bool setup_requested = false;
+    if (audio_board_ear_big())
+    {
+        int held = 0;
+        while (audio_board_ear_big() && held < SETUP_EAR_HOLD_MS)
+        {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            held += 100;
+        }
+        setup_requested = held >= SETUP_EAR_HOLD_MS;
+    }
+
     ESP_LOGI(TAG, "Mount sdcard");
     audio_board_sdcard_init(set, SD_MODE_4_LINE);
 
@@ -197,6 +211,8 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to mount assets partition");
     }
 
+    /* first boot: no settings file yet */
+    bool setup_mode = setup_requested || !settings_ini_exists();
     settings_load_ini();
     sfx_install(settings_get()->lang_id);
 
@@ -231,6 +247,18 @@ void app_main(void)
     audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
 
     dac3100_set_mute(true);
+
+    if (setup_mode)
+    {
+        ESP_LOGI(TAG, "Setup mode%s", setup_requested ? " (big ear held)" : " (no settings yet)");
+        ledman_change(SETUP_LED_PATTERN);
+        /* "Hallo, nicht erschrecken ... brauche ich Hilfe bei der Installation" */
+        dac3100_set_mute(false);
+        pb_play_default(CONTENT_DEFAULT_INSTALLATION);
+        /* returns only if nobody used it, restarts after saving */
+        setup_portal_run();
+        goto shutdown;
+    }
 
     pb_play_default(CONTENT_DEFAULT_STARTUP);
 
@@ -388,6 +416,7 @@ void app_main(void)
     }
 
     mqtt_ha_shutdown();
+shutdown:
     ledman_change("poweroff");
     audio_board_sdcard_unmount();
     rtc_checksum_update();

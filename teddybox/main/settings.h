@@ -14,7 +14,9 @@
  * See README.md for the list of keys.
  */
 
+#ifndef SETTINGS_INI_PATH
 #define SETTINGS_INI_PATH "/sdcard/teddybox.ini"
+#endif
 
 typedef struct
 {
@@ -59,3 +61,10 @@ void settings_init(void);
 void settings_load_ini(void);
 
 const settings_t *settings_get(void);
+
+/* for the setup portal: modify a copy and write it with settings_save_ini() */
+settings_t *settings_get_mutable(void);
+/* writes all INI keys to path (SETTINGS_INI_PATH on the box), returns 0 on success */
+int settings_save_ini(const char *path);
+/* true if SETTINGS_INI_PATH exists */
+int settings_ini_exists(void);

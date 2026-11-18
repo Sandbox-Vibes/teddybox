@@ -207,24 +207,22 @@ void wifi_load_nvs(void)
     ESP_LOGI(TAG, "%d stored network(s)", creds_num);
 }
 
-void wifi_save_nvs(void)
+esp_err_t wifi_store_credentials(const char *ssid, const char *password)
 {
-    if (!wps_pending_save)
+    size_t ssid_len = strnlen(ssid, 32);
+    size_t pw_len = strnlen(password, 64);
+    if (ssid_len == 0)
     {
-        return;
+        return ESP_ERR_INVALID_ARG;
     }
-    wps_pending_save = false;
 
     nvs_handle_t h;
     esp_err_t err = nvs_open(WIFI_NVS_NAMESPACE, NVS_READWRITE, &h);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Error (%s) opening NVS", esp_err_to_name(err));
-        return;
+        return err;
     }
-
-    size_t ssid_len = strnlen((char *)wps_cred.sta.ssid, sizeof(wps_cred.sta.ssid));
-    size_t pw_len = strnlen((char *)wps_cred.sta.password, sizeof(wps_cred.sta.password));
 
     /* reuse the slot if this SSID is already known, else take the next one */
     uint8_t index = 0;
@@ -233,10 +231,10 @@ void wifi_save_nvs(void)
     for (int s = 0; s < WIFI_NVS_SLOTS; s++)
     {
         char key[8];
-        uint8_t ssid[32];
-        size_t len = sizeof(ssid);
+        uint8_t stored[32];
+        size_t len = sizeof(stored);
         slot_key(key, sizeof(key), "SSID", s);
-        if (nvs_get_blob(h, key, ssid, &len) == ESP_OK && len == ssid_len && !memcmp(ssid, wps_cred.sta.ssid, len))
+        if (nvs_get_blob(h, key, stored, &len) == ESP_OK && len == ssid_len && !memcmp(stored, ssid, len))
         {
             slot = s;
             break;
@@ -245,14 +243,15 @@ void wifi_save_nvs(void)
 
     char key[8];
     slot_key(key, sizeof(key), "SSID", slot);
-    err = nvs_set_blob(h, key, wps_cred.sta.ssid, ssid_len);
+    err = nvs_set_blob(h, key, ssid, ssid_len);
     if (err == ESP_OK)
     {
         slot_key(key, sizeof(key), "PW", slot);
-        err = nvs_set_blob(h, key, wps_cred.sta.password, pw_len);
+        err = nvs_set_blob(h, key, password, pw_len);
     }
     if (err == ESP_OK)
     {
+        /* INDEX = last written slot + 1, so this network is tried first */
         err = nvs_set_u8(h, "INDEX", slot + 1);
     }
     if (err == ESP_OK)
@@ -267,8 +266,47 @@ void wifi_save_nvs(void)
     }
     else
     {
-        ESP_LOGI(TAG, "Stored '%.32s' in slot %d", (char *)wps_cred.sta.ssid, slot);
+        ESP_LOGI(TAG, "Stored '%.32s' in slot %d", ssid, slot);
     }
+    return err;
+}
+
+void wifi_save_nvs(void)
+{
+    if (!wps_pending_save)
+    {
+        return;
+    }
+    wps_pending_save = false;
+
+    char ssid[33] = {0};
+    char pw[65] = {0};
+    memcpy(ssid, wps_cred.sta.ssid, 32);
+    memcpy(pw, wps_cred.sta.password, 64);
+    wifi_store_credentials(ssid, pw);
+}
+
+void wifi_get_last_ssid(char *ssid, size_t size)
+{
+    ssid[0] = 0;
+    nvs_handle_t h;
+    if (nvs_open(WIFI_NVS_NAMESPACE, NVS_READONLY, &h) != ESP_OK)
+    {
+        return;
+    }
+    uint8_t index = 0;
+    char key[8];
+    uint8_t buf[32];
+    size_t len = sizeof(buf);
+    nvs_get_u8(h, "INDEX", &index);
+    slot_key(key, sizeof(key), "SSID", (index + WIFI_NVS_SLOTS - 1) % WIFI_NVS_SLOTS);
+    if (nvs_get_blob(h, key, buf, &len) == ESP_OK)
+    {
+        size_t n = len < size - 1 ? len : size - 1;
+        memcpy(ssid, buf, n);
+        ssid[n] = 0;
+    }
+    nvs_close(h);
 }
 
 void wifi_init(void)

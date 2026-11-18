@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TeddyBox einrichten</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--text:#1f2328;--muted:#6b6f76;--accent:#c2410c;--ok:#15803d;--err:#b91c1c;--line:#e5e1d8}
+@media (prefers-color-scheme:dark){:root{--bg:#17181a;--card:#222326;--text:#ecebe8;--muted:#a1a1a6;--accent:#fb923c;--ok:#4ade80;--err:#f87171;--line:#34353a}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+main{max-width:34rem;margin:0 auto;padding:1.25rem 1rem 3rem}
+h1{font-size:1.5rem;margin:.25rem 0 .25rem}
+.sub{color:var(--muted);margin:0 0 1.25rem}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1rem 1rem .5rem;margin:0 0 1rem}
+h2{font-size:1.05rem;margin:0 0 .25rem}
+.hint{color:var(--muted);font-size:.875rem;margin:0 0 .75rem}
+label{display:block;font-size:.875rem;font-weight:600;margin:.5rem 0 .25rem}
+input,select{width:100%;font:inherit;padding:.6rem .7rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;gap:.6rem}.row>div{flex:1}.row>.small{flex:0 0 6.5rem}
+.nets{display:flex;flex-direction:column;gap:.35rem;margin:.25rem 0 .5rem;max-height:14rem;overflow:auto}
+.net{display:flex;justify-content:space-between;align-items:center;padding:.55rem .7rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;text-align:left;font:inherit;color:inherit}
+.net.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.net small{color:var(--muted)}
+button.main{width:100%;font:inherit;font-weight:700;padding:.85rem;border:0;border-radius:12px;background:var(--accent);color:#fff;cursor:pointer;margin-top:.5rem}
+button.link{background:none;border:0;color:var(--accent);font:inherit;padding:.25rem 0;cursor:pointer}
+.status{font-size:.875rem;margin:.4rem 0 .6rem;min-height:1.2em}
+.ok{color:var(--ok)}.err{color:var(--err)}
+details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem 0}
+</style>
+</head>
+<body>
+<main>
+<h1>TeddyBox einrichten</h1>
+<p class="sub">Alles ist optional bis auf das WLAN. Nach dem Speichern startet die Box neu. Diese Seite kommt wieder, wenn du beim Einschalten das große Ohr gedrückt hältst.</p>
+
+<section>
+<h2>WLAN</h2>
+<p class="hint">Netz auswählen oder Namen eingeben.</p>
+<div class="nets" id="nets"><span class="hint">Suche Netze …</span></div>
+<button class="link" type="button" id="rescan">Erneut suchen</button>
+<label for="ssid">Netzname (SSID)</label>
+<input id="ssid" autocomplete="off" autocapitalize="none" spellcheck="false">
+<label for="wpass">Passwort</label>
+<input id="wpass" type="password" autocomplete="off">
+</section>
+
+<section>
+<h2>teddyCloud</h2>
+<p class="hint">Leer lassen, wenn die Box nur Inhalte von der SD-Karte spielen soll.</p>
+<div class="row">
+<div><label for="chost">Adresse (IP oder Name)</label><input id="chost" autocapitalize="none" spellcheck="false" placeholder="192.168.178.20"></div>
+<div class="small"><label for="cport">Port</label><input id="cport" type="number" min="1" max="65535"></div>
+</div>
+<label for="cafile">CA-Zertifikat von teddyCloud (certs/server/ca.der)</label>
+<input id="cafile" type="file" accept=".der,.pem,.crt,.cer">
+<div class="status" id="castatus"></div>
+</section>
+
+<section>
+<h2>Home Assistant</h2>
+<p class="hint">MQTT-Broker, z.&nbsp;B. das Mosquitto-Add-on. Leer lassen, um es abzuschalten.</p>
+<div class="row">
+<div><label for="mhost">Broker-Adresse</label><input id="mhost" autocapitalize="none" spellcheck="false" placeholder="192.168.178.10"></div>
+<div class="small"><label for="mport">Port</label><input id="mport" type="number" min="1" max="65535"></div>
+</div>
+<div class="row">
+<div><label for="muser">Benutzer</label><input id="muser" autocapitalize="none" spellcheck="false" autocomplete="off"></div>
+<div><label for="mpass">Passwort</label><input id="mpass" type="password" autocomplete="off"></div>
+</div>
+</section>
+
+<section>
+<h2>Box</h2>
+<div class="row">
+<div><label for="lang">Sprache der Ansagen</label>
+<select id="lang"><option value="1">Deutsch</option><option value="0">Englisch (UK)</option><option value="2">Englisch (USA)</option><option value="3">Französisch</option></select></div>
+</div>
+<div class="row">
+<div><label for="vmax">Max. Lautstärke (%)</label><input id="vmax" type="number" min="10" max="100" step="5"></div>
+<div><label for="idle">Ausschalten nach (Sek.)</label><input id="idle" type="number" min="10" step="10"></div>
+</div>
+<details><summary>Erweitert</summary>
+<label><input id="otapd" type="checkbox" style="width:auto"> Updates übers WLAN dürfen den Slot der Notfall-App (PD) benutzen</label>
+</details>
+</section>
+
+<div class="status" id="status"></div>
+<button class="main" id="save" type="button">Speichern und neu starten</button>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let cfg={};
+function setStatus(el,msg,cls){el.textContent=msg;el.className='status '+(cls||'');}
+function bars(rssi){return rssi>-55?'▂▄▆█':rssi>-67?'▂▄▆':rssi>-78?'▂▄':'▂';}
+async function scan(){
+  $('nets').innerHTML='<span class="hint">Suche Netze …</span>';
+  try{
+    const r=await fetch('/api/scan');const list=await r.json();
+    $('nets').innerHTML='';
+    if(!list.length){$('nets').innerHTML='<span class="hint">Keine Netze gefunden.</span>';return;}
+    list.forEach(n=>{
+      const b=document.createElement('button');b.type='button';b.className='net'+(n.ssid===$('ssid').value?' sel':'');
+      const name=document.createElement('span');name.textContent=n.ssid+(n.secure?' 🔒':'');
+      const sig=document.createElement('small');sig.textContent=bars(n.rssi);
+      b.append(name,sig);
+      b.onclick=()=>{$('ssid').value=n.ssid;document.querySelectorAll('.net').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');$('wpass').focus();};
+      $('nets').append(b);
+    });
+  }catch(e){$('nets').innerHTML='<span class="hint">Suche fehlgeschlagen.</span>';}
+}
+async function load(){
+  try{
+    cfg=await (await fetch('/api/config')).json();
+    $('ssid').value=cfg.wifi_ssid||'';
+    if(cfg.wifi_ssid)$('wpass').placeholder='unverändert lassen';
+    $('chost').value=cfg.cloud_host||'';$('cport').value=cfg.cloud_port||443;
+    if(cfg.ca_custom)setStatus($('castatus'),'Eigenes CA-Zertifikat ist gespeichert.','ok');
+    $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
+    if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
+    $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('idle').value=cfg.idle_timeout||60;
+    $('otapd').checked=!!cfg.ota_allow_overwrite_pd;
+  }catch(e){setStatus($('status'),'Einstellungen konnten nicht geladen werden.','err');}
+  scan();
+}
+$('rescan').onclick=scan;
+$('cafile').onchange=async()=>{
+  const f=$('cafile').files[0];if(!f)return;
+  setStatus($('castatus'),'Lade hoch …');
+  try{
+    const r=await fetch('/api/ca',{method:'POST',body:await f.arrayBuffer()});
+    const j=await r.json();
+    setStatus($('castatus'),j.ok?'Zertifikat gespeichert: '+j.subject:'Fehler: '+j.error,j.ok?'ok':'err');
+  }catch(e){setStatus($('castatus'),'Upload fehlgeschlagen.','err');}
+};
+$('save').onclick=async()=>{
+  if(!$('ssid').value.trim()&&!cfg.wifi_ssid){setStatus($('status'),'Bitte ein WLAN auswählen.','err');return;}
+  const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
+    cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,
+    mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
+    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,idle_timeout:+$('idle').value||60,ota_allow_overwrite_pd:$('otapd').checked};
+  setStatus($('status'),'Speichere …');
+  try{
+    const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(j.ok){setStatus($('status'),'Gespeichert. Die Box startet neu und verbindet sich mit „'+(body.wifi_ssid||cfg.wifi_ssid)+'“. Du kannst diese Seite schließen.','ok');$('save').disabled=true;}
+    else setStatus($('status'),'Fehler: '+j.error,'err');
+  }catch(e){setStatus($('status'),'Speichern fehlgeschlagen.','err');}
+};
+load();
+</script>
+</body>
+</html>

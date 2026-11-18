@@ -30,3 +30,6 @@ CONFIG_BOOTLOADER_HOLD_TIME_GPIO=5
 
 # do not store PHY calibration in the NVS that belongs to the original firmware
 # CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE is not set
+
+# phones send long headers when probing for a captive portal
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
