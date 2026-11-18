@@ -18,6 +18,7 @@
 #include "raw_stream.h"
 
 #include "playback.h"
+#include "settings.h"
 #include "dac3100.h"
 #include "board.h"
 #include "math.h"
@@ -646,13 +647,15 @@ static esp_err_t pb_int_play_default(uint32_t lang, uint32_t id)
         pb_default_content = true;
         return pb_int_play_file(filename, 0);
     }
-    lang = 0;
 
-    sprintf(filename, "/sdcard/CONTENT/%08X/%08X", lang, id);
-    if (pb_check_file(filename) == PB_ERR_GOOD_FILE)
+    if (lang != 0)
     {
-        pb_default_content = true;
-        return pb_int_play_file(filename, 0);
+        sprintf(filename, "/sdcard/CONTENT/%08X/%08X", 0, id);
+        if (pb_check_file(filename) == PB_ERR_GOOD_FILE)
+        {
+            pb_default_content = true;
+            return pb_int_play_file(filename, 0);
+        }
     }
     ESP_LOGE(TAG, "requested ID does not exist: '%08X', neither in lang %d nor in default", id, lang);
     return ESP_ERR_NOT_FOUND;
@@ -778,7 +781,7 @@ static esp_err_t pb_req_handle_stop(pb_req_stop_t *req)
 static esp_err_t pb_req_handle_default(pb_req_default_t *req)
 {
     pb_int_stop();
-    return pb_int_play_default(0, req->voiceline);
+    return pb_int_play_default(settings_get()->lang_id, req->voiceline);
 }
 
 /********************************************************/

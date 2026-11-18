@@ -1,17 +1,105 @@
 # TeddyBox
 
-## Setup
-Tried on linux (WSL, Ubuntu-22.04) only yet.
-Execute ./setup_libs.sh which will download esp-adf and esp-idf.
+Custom firmware for the ESP32-S3 based Toniebox. It runs from a free OTA
+slot next to the original Boxine firmware, which stays untouched and can be
+booted again at any time.
 
-## Environment
-Before you can compile, you have to source the "env_vars.sh" in your shell environment.
-To do so, enter
- . ./env_vars.sh
-with the first dot in place.
+## What works
 
-## Compiling
-Enter ./teddybox directory and enter
-  idf.py build
-Now the build system will build the binaries.
-To flash follow the commandline output or use "make flash" which is hardcoded to a certain USB tty at the moment.
+- Playback of Tonie content (TAF files) from the SD card, seeking, chapters
+- NFC (TRF7962A), ears for volume, headphone detection, LEDs, accelerometer
+- **WiFi from the original firmware**: networks stored by the Tonies app
+  (NVS `TB_WIFI`, `SSID0..6`/`PW0..6`) are used directly, newest first.
+  WPS push button as fallback, credentials are stored in the same format.
+- **System sounds from the box itself**: `fw/sfx.bin` of the assets partition
+  holds all 25 voice lines (startup jingle, low battery, ...). On boot they
+  are copied once to `/CONTENT/<lang>/<id>` on the SD card. Files that
+  already exist are never overwritten, so custom sounds can be placed there.
+- **Language and battery thresholds from the original settings**
+  (NVS `TB_SETTINGS`: `LANG_ID`/`FAC_LANG_ID`, `BAT_CRITICAL`, `BAT_LOW_LEVEL_D/U`)
+- **Battery monitoring** (GPIO9, 100k/33k divider) and charger detection
+  (GPIO8, 100k/100k): warning sound when low (never interrupts a story),
+  announcement and power off when critical
+- **Back to the original firmware without a cable**: hold both ears for
+  5 seconds
+- Content download from teddyCloud (`/v2/content`, resume via `Range`)
+- OTA over TCP that never overwrites the original firmware
+
+## Configuration: `teddybox.ini` on the SD card
+
+All keys are optional.
+
+```ini
+# teddyCloud host or IP; the cloud stays off while this is empty
+cloud_host = 192.168.1.20
+cloud_port = 443
+# CA of your teddyCloud (certs/server/ca.der). The CA in flash only works
+# if it was already replaced by the teddyCloud patch
+ca_path = /sdcard/teddybox/ca.der
+# cloud_enabled = 0        # force off even with a host set
+
+lang_id = 1                # system sounds: 0=EN-GB 1=DE 2=EN-US 3=FR
+volume_max = 80            # percent
+volume_default = 50
+idle_timeout = 60          # seconds until power off
+# ota_allow_overwrite_pd = 1   # see OTA below
+```
+
+The cloud is off by default on purpose: the box certificate would otherwise
+be used against the Boxine cloud by a non-original firmware.
+
+## Flash layout
+
+Identical to the original firmware, the partition table is not changed:
+
+| Slot   | Address  | Original firmware            | With TeddyBox |
+|--------|----------|------------------------------|---------------|
+| ota_0  | 0x180000 | `toniebox-esp32-pd` (factory/fallback) | unchanged |
+| ota_1  | 0x3a0000 | free (`TB_OTA/FREE`)         | **TeddyBox**  |
+| ota_2  | 0x5c0000 | `toniebox-esp32-eu`          | unchanged     |
+
+Check your own layout first (`tools/make_otadata.py` prints the current
+slots, NVS `TB_OTA` lists `EU`, `PD`, `FREE`). The PD app takes over when the
+EU app is missing or invalid and then demands an update ("Codewort
+Murmeltier"), so neither of them may be overwritten.
+
+## Build
+
+Tested on Linux with ESP-ADF v2.6 and its bundled ESP-IDF v4.4.4.
+
+```sh
+./setup_libs.sh            # clones esp-adf v2.6, applies patches/malloc.diff
+. ./env_vars.sh
+cd teddybox && idf.py build
+```
+
+## Install (into the free slot)
+
+Make a full backup first and keep it safe (it contains the box certificate):
+
+```sh
+esptool.py -b 921600 read_flash 0x0 0x800000 backup.bin
+python3 tools/make_otadata.py backup.bin 1 otadata_teddybox.bin
+esptool.py -b 921600 write_flash 0x3a0000 teddybox/build/teddybox.bin 0x16f000 otadata_teddybox.bin
+```
+
+Only the free slot and the 8 KiB boot selection are written. Bootloader,
+partition table, NVS, certificates and both original apps stay as they are.
+
+Back to the original firmware: hold both ears for 5 seconds, or
+
+```sh
+dd if=backup.bin of=otadata_original.bin bs=4096 skip=367 count=2
+esptool.py write_flash 0x16f000 otadata_original.bin
+```
+
+## OTA
+
+```sh
+nc -q 2 <box-ip> 63660 < teddybox/build/teddybox.bin
+```
+
+The update goes to a slot that does not hold an original app. In the default
+layout no such slot is left besides the running one, so OTA refuses. Set
+`ota_allow_overwrite_pd = 1` to allow using the PD slot; the box then has no
+factory fallback anymore.

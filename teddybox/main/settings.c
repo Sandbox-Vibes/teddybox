@@ -1,0 +1,193 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+
+#include "settings.h"
+
+static const char *TAG = "Settings";
+
+static settings_t settings = {
+    .lang_id = 0,
+    .region = "EU",
+    .bat_critical_mv = 3600,
+    .bat_low_down_mv = 3670,
+    .bat_low_up_mv = 3700,
+    /* off until a host is configured: talking to the Boxine cloud with a
+       non-original firmware could get the box certificate blocked */
+    .cloud_enabled = false,
+    .cloud_host = "",
+    .cloud_port = 443,
+    .ca_path = "/spiflash/cert/ca.der",
+    .volume_max = 100,
+    .volume_default = 50,
+    .idle_timeout_s = 60,
+    .ota_allow_overwrite_pd = false,
+};
+
+const settings_t *settings_get(void)
+{
+    return &settings;
+}
+
+void settings_init(void)
+{
+    esp_log_level_set(TAG, ESP_LOG_INFO);
+
+    nvs_handle_t h;
+    if (nvs_open("TB_SETTINGS", NVS_READONLY, &h) != ESP_OK)
+    {
+        ESP_LOGW(TAG, "No original TB_SETTINGS in NVS, using defaults");
+        return;
+    }
+
+    uint8_t lang = 0, fac_lang = 0;
+    bool have_lang = nvs_get_u8(h, "LANG_ID", &lang) == ESP_OK;
+    bool have_fac = nvs_get_u8(h, "FAC_LANG_ID", &fac_lang) == ESP_OK;
+
+    /* the original firmware keeps LANG_ID at 0 unless the user changed it,
+       the factory language is the one the box was sold with */
+    if (have_lang && lang != 0)
+    {
+        settings.lang_id = lang;
+    }
+    else if (have_fac)
+    {
+        settings.lang_id = fac_lang;
+    }
+
+    size_t len = sizeof(settings.region);
+    nvs_get_str(h, "REGION", settings.region, &len);
+
+    uint16_t v;
+    if (nvs_get_u16(h, "BAT_CRITICAL", &v) == ESP_OK && v > 3000 && v < 4500)
+    {
+        settings.bat_critical_mv = v;
+    }
+    if (nvs_get_u16(h, "BAT_LOW_LEVEL_D", &v) == ESP_OK && v > 3000 && v < 4500)
+    {
+        settings.bat_low_down_mv = v;
+    }
+    if (nvs_get_u16(h, "BAT_LOW_LEVEL_U", &v) == ESP_OK && v > 3000 && v < 4500)
+    {
+        settings.bat_low_up_mv = v;
+    }
+    nvs_close(h);
+
+    ESP_LOGI(TAG, "NVS: lang %d, region %s, battery critical/low/ok %d/%d/%d mV",
+             settings.lang_id, settings.region,
+             settings.bat_critical_mv, settings.bat_low_down_mv, settings.bat_low_up_mv);
+}
+
+static char *trim(char *s)
+{
+    while (isspace((unsigned char)*s))
+    {
+        s++;
+    }
+    char *end = s + strlen(s);
+    while (end > s && isspace((unsigned char)end[-1]))
+    {
+        *--end = 0;
+    }
+    return s;
+}
+
+static bool parse_bool(const char *v)
+{
+    return !strcmp(v, "1") || !strcasecmp(v, "true") || !strcasecmp(v, "yes") || !strcasecmp(v, "on");
+}
+
+static void copy_str(char *dst, size_t size, const char *src)
+{
+    strncpy(dst, src, size - 1);
+    dst[size - 1] = 0;
+}
+
+void settings_load_ini(void)
+{
+    FILE *f = fopen(SETTINGS_INI_PATH, "r");
+    if (!f)
+    {
+        ESP_LOGI(TAG, "No %s, keeping defaults", SETTINGS_INI_PATH);
+        return;
+    }
+
+    char line[128];
+    int cloud_enabled_explicit = -1;
+    while (fgets(line, sizeof(line), f))
+    {
+        char *l = trim(line);
+        if (!*l || *l == '#' || *l == ';' || *l == '[')
+        {
+            continue;
+        }
+        char *eq = strchr(l, '=');
+        if (!eq)
+        {
+            continue;
+        }
+        *eq = 0;
+        char *key = trim(l);
+        char *val = trim(eq + 1);
+        long num = strtol(val, NULL, 0);
+
+        if (!strcmp(key, "cloud_enabled"))
+        {
+            cloud_enabled_explicit = parse_bool(val);
+        }
+        else if (!strcmp(key, "cloud_host"))
+        {
+            copy_str(settings.cloud_host, sizeof(settings.cloud_host), val);
+        }
+        else if (!strcmp(key, "cloud_port") && num > 0 && num < 65536)
+        {
+            settings.cloud_port = num;
+        }
+        else if (!strcmp(key, "ca_path"))
+        {
+            copy_str(settings.ca_path, sizeof(settings.ca_path), val);
+        }
+        else if (!strcmp(key, "lang_id") && num >= 0 && num < 256)
+        {
+            settings.lang_id = num;
+        }
+        else if (!strcmp(key, "volume_max") && num >= 10 && num <= 100)
+        {
+            settings.volume_max = num;
+        }
+        else if (!strcmp(key, "volume_default") && num >= 0 && num <= 100)
+        {
+            settings.volume_default = num;
+        }
+        else if (!strcmp(key, "idle_timeout") && num >= 10)
+        {
+            settings.idle_timeout_s = num;
+        }
+        else if (!strcmp(key, "ota_allow_overwrite_pd"))
+        {
+            settings.ota_allow_overwrite_pd = parse_bool(val);
+        }
+        else
+        {
+            ESP_LOGW(TAG, "Unknown key '%s'", key);
+        }
+    }
+    fclose(f);
+
+    /* a configured host enables the cloud unless cloud_enabled=0 is given */
+    settings.cloud_enabled = settings.cloud_host[0] && cloud_enabled_explicit != 0;
+
+    if (settings.volume_default > settings.volume_max)
+    {
+        settings.volume_default = settings.volume_max;
+    }
+
+    ESP_LOGI(TAG, "INI: cloud %s %s:%d (CA %s), lang %d, volume max %d, idle %ds",
+             settings.cloud_enabled ? "on" : "off", settings.cloud_host, settings.cloud_port,
+             settings.ca_path, settings.lang_id, settings.volume_max, settings.idle_timeout_s);
+}

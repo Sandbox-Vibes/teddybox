@@ -36,6 +36,10 @@
 #include "nfc.h"
 #include "cloud.h"
 #include "ledman.h"
+#include "settings.h"
+#include "sfx.h"
+#include "battery.h"
+#include "bootsel.h"
 
 #include "config.h"
 
@@ -139,17 +143,18 @@ static bool rtc_checksum_valid()
 
 void app_main(void)
 {
-        /* Initialize NVS — it is used to store PHY calibration data */
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
     esp_log_level_set("*", ESP_LOG_WARN);
     esp_log_level_set(TAG, ESP_LOG_INFO);
+
+    /* The NVS partition belongs to the original firmware (WiFi, OTA slot table,
+       hardware revision, settings). Never erase it, even if it looks unusable. */
+    esp_err_t ret = nvs_flash_init();
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "NVS init failed (%s), continuing without stored settings", esp_err_to_name(ret));
+    }
+    settings_init();
+    bootsel_init();
 
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
     esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
@@ -165,7 +170,13 @@ void app_main(void)
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,
         .max_files = 3};
-    esp_vfs_fat_spiflash_mount("/spiflash", NULL, &mount_config, &s_test_wl_handle);
+    if (esp_vfs_fat_spiflash_mount("/spiflash", NULL, &mount_config, &s_test_wl_handle) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to mount assets partition");
+    }
+
+    settings_load_ini();
+    sfx_install(settings_get()->lang_id);
 
     ESP_LOGI(TAG, "Start codec chip");
     audio_hal_ctrl_codec(audio_board_get_hal(), AUDIO_HAL_CODEC_MODE_DECODE, AUDIO_HAL_CTRL_START);
@@ -181,7 +192,7 @@ void app_main(void)
         ESP_LOGE(TAG, "RTC memory corrupted, reinit");
         memset(&rtc_storage, 0x00, sizeof(rtc_storage));
         rtc_storage.rtc_magic = 0xDEADC0DE;
-        rtc_storage.volume = 50;
+        rtc_storage.volume = settings_get()->volume_default;
         rtc_storage.play_position = 0;
         rtc_checksum_update();
     }
@@ -191,6 +202,10 @@ void app_main(void)
         pb_set_last(rtc_storage.nfc_uid, rtc_storage.play_position);
     }
 
+    if (rtc_storage.volume > settings_get()->volume_max)
+    {
+        rtc_storage.volume = settings_get()->volume_max;
+    }
     audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
 
     dac3100_set_mute(true);
@@ -201,6 +216,7 @@ void app_main(void)
     bool ear_small_prev = false;
 
     accel_init(board_handle);
+    battery_init();
     wifi_init();
     nfc_init();
     cloud_init();
@@ -210,6 +226,9 @@ void app_main(void)
 
     int64_t last_activity_time = esp_timer_get_time();
     int64_t remute_time = 0;
+    int64_t both_ears_since = 0;
+    bool low_battery_warned = false;
+    const int64_t poweroff_timeout = (int64_t)settings_get()->idle_timeout_s * 1000000LL;
     
     while (1)
     {
@@ -222,7 +241,7 @@ void app_main(void)
         if (ear_big && !ear_big_prev)
         {
             dac3100_set_mute(false);
-            if (rtc_storage.volume < 100)
+            if (rtc_storage.volume + 10 <= settings_get()->volume_max)
             {
                 ESP_LOGI(TAG, "Volume up");
                 rtc_storage.volume += 10;
@@ -272,7 +291,56 @@ void app_main(void)
             rtc_storage.play_position = pb_get_play_position();
         }
 
-        if ((cur_time - last_activity_time) > POWEROFF_TIMEOUT)
+        /* hold both ears for 5 seconds: reboot into the original firmware */
+        if (ear_big && ear_small)
+        {
+            if (!both_ears_since)
+            {
+                both_ears_since = cur_time;
+            }
+            else if (cur_time - both_ears_since > BOOT_OFW_HOLD_TIME)
+            {
+                ESP_LOGW(TAG, "Both ears held, switching to original firmware");
+                ledman_change("fadeblink blue");
+                pb_stop();
+                rtc_checksum_update();
+                bootsel_boot_original();
+                /* only returns on error */
+                ledman_change("failed");
+                both_ears_since = 0;
+            }
+        }
+        else
+        {
+            both_ears_since = 0;
+        }
+
+        battery_state_t bat = battery_get_state();
+        if (bat == BATTERY_CRITICAL)
+        {
+            ESP_LOGW(TAG, "Battery critical (%lu mV), shutting down", (unsigned long)battery_get_mv());
+            pb_play_default(CONTENT_DEFAULT_LOW_BATTERY_SHUTDOWN);
+            /* give the announcement time to start and finish */
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            for (int i = 0; i < 80 && pb_is_playing(); i++)
+            {
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+            }
+            break;
+        }
+        if (bat == BATTERY_LOW && !low_battery_warned && !pb_is_playing())
+        {
+            /* do not interrupt a story, warn as soon as the box is idle */
+            ESP_LOGW(TAG, "Battery low (%lu mV)", (unsigned long)battery_get_mv());
+            pb_play_default(CONTENT_DEFAULT_LOW_BATTERY_WARN);
+            low_battery_warned = true;
+        }
+        else if (bat == BATTERY_OK)
+        {
+            low_battery_warned = false;
+        }
+
+        if ((cur_time - last_activity_time) > poweroff_timeout)
         {
             break;
         }

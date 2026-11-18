@@ -24,8 +24,10 @@
 #include "cloud.h"
 #include "wifi.h"
 #include "playback.h"
+#include "settings.h"
 
-#define CLOUD_HOST "tc.fritz.box"
+#define CLOUD_HOST (settings_get()->cloud_host)
+#define CLOUD_PORT (settings_get()->cloud_port)
 
 static const char *TAG = "Cloud";
 
@@ -187,7 +189,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
                        "Host: %s\r\n"
                        "%s"
                        "%s"
-                       "User-Agent: teddybox/1.0 (ESP32) %s\r\n"
+                       "User-Agent: toniebox-esp32-teddybox/%s\r\n"
                        "\r\n",
              req->path, req->host, auth_line, range_line, running_app_info.version);
 
@@ -296,6 +298,7 @@ exit:
     esp_tls_conn_delete(tls);
 
     free(auth_line);
+    free(range_line);
     free(request);
     free(url);
     free(receive_buffer);
@@ -354,7 +357,7 @@ esp_err_t cloud_set_time(void)
         .header_buffer = malloc(MAX_HTTP_HEADER_SIZE)};
     cloud_req_t req = {
         .host = CLOUD_HOST,
-        .port = 443,
+        .port = CLOUD_PORT,
         .path = "/v1/time",
         .data_received_cbr = &http_parser_received_cbr,
         .data_received_ctx = &http_parser_handler_ctx};
@@ -542,7 +545,7 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
 
     cloud_req_t req = {
         .host = CLOUD_HOST,
-        .port = 443,
+        .port = CLOUD_PORT,
         .path = content_req->location,
         .auth = content_req->auth,
         .range_start = content_req->received,
@@ -564,6 +567,12 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
 
 cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc_token)
 {
+    if (!cloud_request_queue)
+    {
+        ESP_LOGW(TAG, "[CDL] Cloud disabled, cannot download UID %llX", nfc_uid);
+        return NULL;
+    }
+
     cloud_content_req_t *req = calloc(1, sizeof(cloud_content_req_t));
 
     ESP_LOGI(TAG, "[CDL] Queue request for UID %llX", nfc_uid);
@@ -628,6 +637,10 @@ cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc
 
 cloud_content_state_t cloud_content_get_state(cloud_content_req_t *req)
 {
+    if (!req)
+    {
+        return CC_STATE_ERROR;
+    }
     return req->state;
 }
 
@@ -651,9 +664,6 @@ esp_err_t cloud_load_cert(const char *path, uint8_t **ptr, size_t *length)
         return ESP_FAIL;
     }
 
-    *ptr = malloc(st.st_size);
-    *length = st.st_size;
-
     FILE *ca = fopen(path, "rb");
     if (!ca)
     {
@@ -661,11 +671,18 @@ esp_err_t cloud_load_cert(const char *path, uint8_t **ptr, size_t *length)
         return ESP_FAIL;
     }
 
-    if (fread(*ptr, *length, 1, ca) != 1)
+    *ptr = malloc(st.st_size);
+    *length = st.st_size;
+    if (!*ptr || fread(*ptr, *length, 1, ca) != 1)
     {
         ESP_LOGE(TAG, "Failed to read certificate");
+        fclose(ca);
+        free(*ptr);
+        *ptr = NULL;
+        *length = 0;
         return ESP_FAIL;
     }
+    fclose(ca);
     ESP_LOGI(TAG, "Loaded '%s' with %d bytes", path, *length);
 
     return ESP_OK;
@@ -715,10 +732,19 @@ void cloud_init(void)
 
     esp_ota_get_partition_description(esp_ota_get_running_partition(), &running_app_info);
 
+    if (!settings_get()->cloud_enabled)
+    {
+        ESP_LOGI(TAG, "Cloud disabled in settings, playing local content only");
+        return;
+    }
+
     cloud_request_queue = xQueueCreate(4, sizeof(cloud_content_req_t *));
 
-    ESP_LOGI(TAG, "Loading certificates");
-    cloud_load_cert("/spiflash/cert/ca.der", &ca_der, &ca_der_len);
+    ESP_LOGI(TAG, "Loading certificates, cloud is %s:%d", CLOUD_HOST, CLOUD_PORT);
+    if (cloud_load_cert(settings_get()->ca_path, &ca_der, &ca_der_len) != ESP_OK)
+    {
+        cloud_load_cert("/spiflash/cert/ca.der", &ca_der, &ca_der_len);
+    }
     cloud_load_cert("/spiflash/cert/client.der", &client_der, &client_der_len);
     cloud_load_cert("/spiflash/cert/private.der", &private_der, &private_der_len);
 
