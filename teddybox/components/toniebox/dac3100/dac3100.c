@@ -38,6 +38,19 @@ static i2c_bus_handle_t i2c_handle;
 static uint8_t reg_cache[14][256];
 static uint8_t reg_page = 0;
 
+/*
+ * Output and volume handling as in the original firmware (main/audio/CO3100.c
+ * of v5.235.0, read from the flash dump): 16 volume steps per output, set as
+ * DAC digital volume in 0.5 dB units, speaker gets (L+R)/2, the unused output
+ * is powered down. No biquads and no DRC are programmed there either.
+ */
+static const int8_t vol_table_spk[DAC3100_VOL_STEPS] = {-40, -37, -34, -31, -28, -25, -22, -18, -15, -12, -9, -6, -3, 0, 3, 5};
+static const int8_t vol_table_hp[DAC3100_VOL_STEPS] = {-40, -36, -32, -28, -26, -24, -22, -20, -18, -16, -14, -12, -10, -8, -6, -4};
+static dac3100_output_t cur_output = DAC3100_OUT_NONE;
+static int cur_volume = 50;
+static bool cur_muted = true;
+static uint8_t beep_level = 0x3F;
+
 uint16_t ofwButtonFreqTable[5][4][2] = {
     {
         // 16000
@@ -178,7 +191,8 @@ esp_err_t dac3100_beep_generate(uint16_t sin, uint16_t cos, uint32_t length)
     dac3100_write_reg(BEEP_COS_MSB, cos >> 8);
     dac3100_write_reg(BEEP_COS_LSB, cos);
 
-    dac3100_write_reg(BEEP_L_GEN, 0x80);
+    dac3100_write_reg(BEEP_R_GEN, 0x80);              /* right beep volume follows left */
+    dac3100_write_reg(BEEP_L_GEN, 0x80 | beep_level); /* start */
 
     return ESP_OK;
 }
@@ -218,18 +232,6 @@ esp_err_t dac3100_init(audio_hal_codec_config_t *cfg)
     // dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
     // dac3100_write_reg(VOL_MICDET_SAR_ADC, 0x00);
 
-    dac3100_write_reg(PAGE_CONTROL, DAC_OUT_VOL);
-    dac3100_write_reg(HP_DRIVERS, 0x04);
-    // dac3100_write_reg(HP_OUT_POP_REM_SET, 0x4E);
-    // dac3100_write_reg(DAC_LR_OUT_MIX_ROUTING, 0x44);
-    dac3100_write_reg(HPL_DRIVER, 0x06);
-    dac3100_write_reg(HPR_DRIVER, 0x06);
-    dac3100_write_reg(SPK_DRIVER, 0x1C);
-    dac3100_write_reg(HP_DRIVERS, 0xC4);
-    dac3100_write_reg(SPK_AMP, 0x86);
-    dac3100_write_reg(L_VOL_TO_HPL, 0x92);
-    dac3100_write_reg(R_VOL_TO_HPR, 0x92);
-    dac3100_write_reg(L_VOL_TO_SPK, 0x92);
 
     // dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
     // dac3100_write_reg(DAC_DATA_PATH_SETUP, 0xD4);
@@ -305,17 +307,13 @@ esp_err_t dac3100_init(audio_hal_codec_config_t *cfg)
 
 #endif
     dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
-    dac3100_write_reg(DAC_DATA_PATH_SETUP, 0xD5); // DAC power on, Left=left, Right=Right, DAC Softstep HP STEREO
-
     dac3100_write_reg(DAC_VOL_L_CTRL, 0xDC);
     dac3100_write_reg(DAC_VOL_R_CTRL, 0xDC);
-
-    // dac3100_write_reg(PAGE_CONTROL, DAC_OUT_VOL);
-    // dac3100_write_reg(L_VOL_TO_SPK, 0x80);
     dac3100_write_reg(DAC_VOL_CTRL, 0x00);
 
-    dac3100_set_gain(1);
-    dac3100_set_mute(true);
+    cur_output = DAC3100_OUT_NONE;
+    cur_muted = true;
+    dac3100_set_output(dac3100_headset_detected() ? DAC3100_OUT_HEADPHONE : DAC3100_OUT_SPEAKER);
 
     return ESP_OK;
 }
@@ -337,13 +335,112 @@ esp_err_t dac3100_config_i2s(audio_hal_codec_mode_t mode, audio_hal_codec_i2s_if
     return ESP_OK;
 }
 
+/* mutes the driver of the active output */
 esp_err_t dac3100_set_mute(bool mute)
 {
-    uint8_t reg_val = (reg_cache[1][0x2A] & ~0x04) | (mute ? 0 : 0x04);
+    cur_muted = mute;
+    dac3100_write_reg(PAGE_CONTROL, DAC_OUT_VOL);
+    if (cur_output == DAC3100_OUT_SPEAKER)
+    {
+        dac3100_write_reg(SPK_DRIVER, mute ? 0x00 : 0x04); /* 6 dB, unmuted */
+    }
+    else if (cur_output == DAC3100_OUT_HEADPHONE)
+    {
+        dac3100_write_reg(HPL_DRIVER, mute ? 0x02 : 0x06); /* 0 dB, unmuted */
+        dac3100_write_reg(HPR_DRIVER, mute ? 0x02 : 0x06);
+    }
+    return ESP_OK;
+}
+
+int dac3100_volume_index(int percent)
+{
+    if (percent < 0)
+    {
+        percent = 0;
+    }
+    if (percent > 100)
+    {
+        percent = 100;
+    }
+    return (percent * (DAC3100_VOL_STEPS - 1) + 50) / 100;
+}
+
+int dac3100_volume_percent(int index)
+{
+    return (index * 100 + (DAC3100_VOL_STEPS - 1) / 2) / (DAC3100_VOL_STEPS - 1);
+}
+
+int dac3100_volume_step(int percent, int dir)
+{
+    int idx = dac3100_volume_index(percent) + (dir > 0 ? 1 : -1);
+    if (idx < 0 || idx >= DAC3100_VOL_STEPS)
+    {
+        return -1;
+    }
+    return dac3100_volume_percent(idx);
+}
+
+static void dac3100_apply_volume(void)
+{
+    const int8_t *table = cur_output == DAC3100_OUT_HEADPHONE ? vol_table_hp : vol_table_spk;
+    int8_t v = table[dac3100_volume_index(cur_volume)];
+
+    /* beep level follows the volume, as in the original (1 dB units, 2 = 0 dB) */
+    beep_level = v < -43 ? 45 : (v >= 1 ? 0 : 2 - v);
+
+    dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
+    dac3100_write_reg(DAC_VOL_L_CTRL, (uint8_t)v);
+    dac3100_write_reg(DAC_VOL_R_CTRL, (uint8_t)v);
+}
+
+/* same sequence as the original firmware: everything off, then only the wanted output on */
+esp_err_t dac3100_set_output(dac3100_output_t output)
+{
+    if (output == cur_output)
+    {
+        return ESP_OK;
+    }
+    ESP_LOGI(TAG, "output: %s", output == DAC3100_OUT_HEADPHONE ? "headphones" : "speaker");
 
     dac3100_write_reg(PAGE_CONTROL, DAC_OUT_VOL);
-    dac3100_write_reg(SPK_DRIVER, reg_val);
+    dac3100_write_reg(L_VOL_TO_HPL, 0x7F);
+    dac3100_write_reg(R_VOL_TO_HPR, 0x7F);
+    dac3100_write_reg(L_VOL_TO_SPK, 0x7F);
+    vTaskDelay(50 / portTICK_RATE_MS);
+    dac3100_write_reg(HPL_DRIVER, 0x00);
+    dac3100_write_reg(HPR_DRIVER, 0x00);
+    dac3100_write_reg(SPK_DRIVER, 0x00);
+    vTaskDelay(50 / portTICK_RATE_MS);
+    dac3100_write_reg(HP_DRIVERS, 0x00);
+    dac3100_write_reg(SPK_AMP, 0x00);
+    vTaskDelay(50 / portTICK_RATE_MS);
+
+    cur_output = output;
+    uint8_t data_path;
+    if (output == DAC3100_OUT_HEADPHONE)
+    {
+        dac3100_write_reg(HP_DRIVERS, 0xC2);   /* HPL/HPR powered up */
+        dac3100_write_reg(L_VOL_TO_HPL, 0x92); /* routed, -9 dB */
+        dac3100_write_reg(R_VOL_TO_HPR, 0x92);
+        data_path = 0xD5; /* both DACs on, L=left, R=right */
+    }
+    else
+    {
+        dac3100_write_reg(SPK_AMP, 0x86);      /* class-D powered up */
+        dac3100_write_reg(L_VOL_TO_SPK, 0x92); /* routed, -9 dB */
+        data_path = 0xFD; /* both DACs get (L+R)/2, the speaker is fed from the left one */
+    }
+    dac3100_set_mute(cur_muted);
+    vTaskDelay(50 / portTICK_RATE_MS);
+    dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
+    dac3100_write_reg(DAC_DATA_PATH_SETUP, data_path);
+    dac3100_apply_volume();
     return ESP_OK;
+}
+
+dac3100_output_t dac3100_get_output(void)
+{
+    return cur_output;
 }
 
 esp_err_t dac3100_set_gain(int gain)
@@ -355,17 +452,11 @@ esp_err_t dac3100_set_gain(int gain)
     return ESP_OK;
 }
 
+/* volume in percent, mapped to the 16 steps of the original firmware */
 esp_err_t dac3100_set_volume(int volume)
 {
-    int value = -635 + (volume * 635 / 100);
-    uint8_t reg_val = value / 5;
-    int beep_value = ((100 - volume) * 0x3F / 100);
-    uint8_t reg_beep = beep_value & 0x3F;
-
-    dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
-    dac3100_write_reg(DAC_VOL_L_CTRL, reg_val);
-    dac3100_write_reg(DAC_VOL_R_CTRL, reg_val);
-    dac3100_write_reg(BEEP_R_GEN, 0x40 | (reg_beep));
+    cur_volume = volume;
+    dac3100_apply_volume();
     return ESP_OK;
 }
 

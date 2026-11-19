@@ -840,7 +840,8 @@ static esp_err_t pb_req_handle_default(pb_req_default_t *req)
 void pb_mainthread(void *arg)
 {
     pb_playing = false;
-    pb_headset = dac3100_headset_detected();
+    pb_headset = dac3100_headset_detected() != 0;
+    dac3100_set_output(pb_headset ? DAC3100_OUT_HEADPHONE : DAC3100_OUT_SPEAKER);
     ESP_LOGI(TAG, "Listen for all pipeline events");
 
     while (1)
@@ -852,7 +853,8 @@ void pb_mainthread(void *arg)
             uint8_t type = dac3100_headset_detected();
             pb_headset = type != 0;
             ESP_LOGI(TAG, "Headset detected: %s", type ? "YES" : "NO");
-            dac3100_set_mute(!pb_is_playing() || type);
+            dac3100_set_output(pb_headset ? DAC3100_OUT_HEADPHONE : DAC3100_OUT_SPEAKER);
+            dac3100_set_mute(!pb_is_playing());
         }
 
         pb_req_t *req = NULL;
@@ -954,7 +956,7 @@ void pb_mainthread(void *arg)
                     case AEL_STATUS_STATE_RUNNING:
                         ESP_LOGW(TAG, "[Event] [%s] Run", source);
                         pb_playing = true;
-                        dac3100_set_mute(dac3100_headset_detected());
+                        dac3100_set_mute(false);
                         if (!pb_default_content)
                         {
                             if (current_dl_req)

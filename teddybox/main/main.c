@@ -295,10 +295,11 @@ void app_main(void)
         if (ear_big && !ear_big_prev)
         {
             dac3100_set_mute(false);
-            if (rtc_storage.volume + 10 <= settings_get()->volume_max)
+            int vol_up = dac3100_volume_step(rtc_storage.volume, 1);
+            if (vol_up >= 0 && vol_up <= settings_get()->volume_max)
             {
                 ESP_LOGI(TAG, "Volume up");
-                rtc_storage.volume += 10;
+                rtc_storage.volume = vol_up;
                 audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
                 dac3100_beep(0, 0x140);
             }
@@ -313,10 +314,11 @@ void app_main(void)
         if (ear_small && !ear_small_prev)
         {
             dac3100_set_mute(false);
-            if (rtc_storage.volume >= 10)
+            int vol_down = dac3100_volume_step(rtc_storage.volume, -1);
+            if (vol_down >= 0)
             {
                 ESP_LOGI(TAG, "Volume down");
-                rtc_storage.volume -= 10;
+                rtc_storage.volume = vol_down;
                 audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
                 dac3100_beep(2, 0x140);
             }

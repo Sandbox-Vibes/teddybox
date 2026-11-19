@@ -4,6 +4,7 @@ CFLAGS := -Wall -Wextra -O1 -I$(MAIN)
 
 test: test_mqtt_ha_payload test_freshness test_settings
 	$(MAKE) -C nfc_sim
+	$(MAKE) -C dac_sim
 	./test_settings
 	./test_freshness
 	./test_mqtt_ha_payload
@@ -21,4 +22,5 @@ test_settings: test_settings.c $(MAIN)/settings.c
 
 clean:
 	$(MAKE) -C nfc_sim clean
+	$(MAKE) -C dac_sim clean
 	rm -f test_mqtt_ha_payload test_freshness test_settings

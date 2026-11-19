@@ -142,6 +142,22 @@ Topics: `teddybox/<mac>/state` (JSON), `teddybox/<mac>/availability`
 The box powers off when idle (`idle_timeout`), Home Assistant then shows it
 as unavailable. Needs about 16 KB of RAM.
 
+## Audio
+
+Output and volume work as in the original firmware (driver `CO3100.c`,
+read from the flash dump):
+
+- speaker: both channels mixed to mono (the class-D amplifier only gets
+  the left DAC, so stereo content used to lose its right channel), driver
+  gain 6 dB
+- headphones: stereo, the speaker is powered down while they are plugged in
+  (and the other way round)
+- 16 volume steps per output, speaker -20 dB to +2.5 dB, headphones -20 dB
+  to -2 dB; each ear press moves one step. The percent values in Home
+  Assistant and in the settings map onto these steps.
+- no equalizer or DRC, the original does not program them either
+- checked against a register model: `tests/host/dac_sim`
+
 ## Power
 
 - The NFC reader's RF field (70-130 mA while on) is only switched on for the
