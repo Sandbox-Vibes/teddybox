@@ -3,7 +3,10 @@
 #define NFC_TASK_PRIO 5
 #define NFC_UID_INVALID 0
 
-#define NFC_RETRIES 5
+/* missed presence checks before a tonie counts as removed; each takes
+   ~80-100 ms, so a tonie that does not answer for about 1 s (seen on the
+   box: ~0.6 s gap, playback and download restarted) still counts as there */
+#define NFC_RETRIES 12
 /* RF field duty cycle, see nfc.c */
 #define NFC_FIELD_SETTLE_MS 5
 #define NFC_SEARCH_INTERVAL_MS 250
