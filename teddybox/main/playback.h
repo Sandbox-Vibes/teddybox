@@ -6,6 +6,9 @@
 #include "toniebox.pb.taf-header.pb-c.h"
 
 #define PB_TASK_PRIO 10
+/* 2500 overflowed when a tonie was placed during the start jingle (stopping
+   the pipeline, then stat/fopen/TAF header parsing on the same stack) */
+#define PB_TASK_STACK 4096
 #define PB_QUEUE_SIZE 10
 
 /* minimum number of blocks to download before playback starts */

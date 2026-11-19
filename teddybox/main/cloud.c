@@ -21,6 +21,8 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 
+#include "memdiag.h"
+#include "mempeak.h"
 #include "cloud.h"
 #include "wifi.h"
 #include "playback.h"
@@ -129,7 +131,10 @@ static esp_err_t cloud_request(cloud_req_t *req)
         return ESP_FAIL;
     }
 
+    /* the handshake is one of the two big memory peaks, see mempeak.h */
+    bool peak = mempeak_enter("TLS handshake", 8000);
     struct esp_tls *tls = esp_tls_conn_http_new(url, &cfg);
+    mempeak_leave(peak);
     if (!tls)
     {
         ESP_LOGE(TAG, "Connection failed...");
@@ -223,6 +228,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
     }
 
     ESP_LOGI(TAG, "connection closed");
+    memdiag_log("after TLS");
     if (req->connection_closed_cbr)
     {
         req->connection_closed_cbr(req->connection_closed_ctx);
@@ -764,8 +770,11 @@ static void cloud_task(void *ctx)
             next_try = xTaskGetTickCount() + pdMS_TO_TICKS(10000);
         }
 
-        /* freshness check after boot and then every few hours, between downloads */
-        if (cloud_available && (!fc_done || xTaskGetTickCount() - fc_last >= pdMS_TO_TICKS(FRESHNESS_INTERVAL_MS)))
+        /* freshness check after boot and then every few hours, between downloads;
+           not while something plays, a TLS handshake next to the decoder is the
+           tightest spot for the internal RAM */
+        if (cloud_available && !pb_is_playing() &&
+            (!fc_done || xTaskGetTickCount() - fc_last >= pdMS_TO_TICKS(FRESHNESS_INTERVAL_MS)))
         {
             fc_last = xTaskGetTickCount();
             fc_done = freshness_run() == ESP_OK;

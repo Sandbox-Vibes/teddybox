@@ -27,6 +27,8 @@
 #include "math.h"
 #include "ledman.h"
 #include "cloud.h"
+#include "mempeak.h"
+#include "memdiag.h"
 
 audio_pipeline_handle_t pipeline;
 audio_element_handle_t i2s_stream_writer, music_decoder;
@@ -579,6 +581,20 @@ void pb_set_last(uint64_t nfc_uid, uint32_t play_position)
 /* helpers for main loop, only to be called from there  */
 /********************************************************/
 
+/* the decoder start is one of the two big memory peaks, see mempeak.h */
+static bool pb_mempeak_taken = false;
+static TickType_t pb_mempeak_since = 0;
+#define PB_MEMPEAK_MAX_MS 3000
+
+static void pb_mempeak_release(void)
+{
+    if (pb_mempeak_taken)
+    {
+        pb_mempeak_taken = false;
+        mempeak_leave(true);
+    }
+}
+
 static esp_err_t pb_int_abort_dl()
 {
     /* do a semi-atomic swap, so other threads do not interfere */
@@ -615,6 +631,10 @@ static void pb_int_stop()
     audio_pipeline_stop(pipeline);
     audio_pipeline_wait_for_stop(pipeline);
     audio_pipeline_terminate(pipeline);
+    /* the stop/finish events of this run must not hit the next playback:
+       their handler resets the pipeline and closes the (new) file */
+    audio_event_iface_discard(evt);
+    pb_mempeak_release();
 
     pb_playing = false;
     pb_default_content = false;
@@ -650,6 +670,10 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
         }
     }
 
+    /* events of a run that ended on its own (jingle just finished) are stale now */
+    audio_event_iface_discard(evt);
+    pb_mempeak_taken = mempeak_enter("playback start", 5000);
+    pb_mempeak_since = xTaskGetTickCount();
     audio_pipeline_run(pipeline);
     audio_pipeline_resume(pipeline);
 
@@ -848,6 +872,13 @@ void pb_mainthread(void *arg)
     {
         vTaskDelay(50 / portTICK_PERIOD_MS);
 
+        /* the decoder normally reports its format within a few 100 ms */
+        if (pb_mempeak_taken && xTaskGetTickCount() - pb_mempeak_since > pdMS_TO_TICKS(PB_MEMPEAK_MAX_MS))
+        {
+            ESP_LOGW(TAG, "No music info from the decoder yet");
+            pb_mempeak_release();
+        }
+
         if (board_headset_irq())
         {
             uint8_t type = dac3100_headset_detected();
@@ -923,6 +954,9 @@ void pb_mainthread(void *arg)
                     {
                         ESP_LOGI(TAG, "[ * ] Receive music info from decoder, sample_rates=%d, bits=%d, ch=%d",
                                  music_info.sample_rates, music_info.bits, music_info.channels);
+                        /* decoder buffers are allocated now */
+                        pb_mempeak_release();
+                        memdiag_log("playback running");
                         audio_element_setinfo(i2s_stream_writer, &music_info);
                         if (i2s_stream_set_clk(i2s_stream_writer, music_info.sample_rates, music_info.bits, music_info.channels) != ESP_OK)
                         {
@@ -972,6 +1006,7 @@ void pb_mainthread(void *arg)
                     case AEL_STATUS_STATE_STOPPED:
                     case AEL_STATUS_STATE_FINISHED:
                         ESP_LOGW(TAG, "[Event] [%s] Stop", source);
+                        pb_mempeak_release();
                         if (msg.source == (void *)i2s_stream_writer)
                         {
                             dac3100_set_mute(true);
@@ -993,6 +1028,10 @@ void pb_mainthread(void *arg)
                         break;
                     default:
                         ESP_LOGW(TAG, "[Event] [%s] %d", source, (int)msg.data);
+                        if ((int)msg.data == AEL_STATUS_ERROR_PROCESS || (int)msg.data == AEL_STATUS_ERROR_OPEN)
+                        {
+                            pb_mempeak_release();
+                        }
                         break;
                     }
                 }
@@ -1041,7 +1080,7 @@ void pb_init(esp_periph_set_handle_t set)
     audio_pipeline_set_listener(pipeline, evt);
     audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
 
-    xTaskCreatePinnedToCore(pb_mainthread, "[TB] Playback", 2500, NULL, PB_TASK_PRIO, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(pb_mainthread, "[TB] Playback", PB_TASK_STACK, NULL, PB_TASK_PRIO, NULL, tskNO_AFFINITY);
 }
 
 void pb_deinit()

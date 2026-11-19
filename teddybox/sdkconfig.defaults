@@ -36,3 +36,32 @@ CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 
 # the original bootloader supports rollback: new firmware boots on probation
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Memory: no PSRAM on the box, everything shares ~270 KB internal RAM.
+# Heap debugging was on (poisoning, tracing, task tracking: RAM and CPU on
+# every allocation) and turned any failed allocation into a crash.
+CONFIG_HEAP_POISONING_DISABLED=y
+CONFIG_HEAP_TRACING_OFF=y
+# CONFIG_HEAP_TASK_TRACKING is not set
+# CONFIG_HEAP_ABORT_WHEN_ALLOCATION_FAILS is not set
+# restart after a panic instead of halting (looked like a hang)
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+# WiFi: fewer buffers (bounds the peaks under traffic) and its code in flash;
+# the box needs ~100 kbit/s
+# CONFIG_ESP32_WIFI_IRAM_OPT is not set
+# CONFIG_ESP32_WIFI_RX_IRAM_OPT is not set
+CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=16
+CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+CONFIG_ESP32_WIFI_RX_BA_WIN=6
+CONFIG_ESP32_WIFI_MGMT_SBUF_NUM=16
+# TLS: teddyCloud sends records of up to 16 KB unless asked for less; with
+# 8192 every content download failed after the HTTP header. Buffers are
+# allocated per record (dynamic) and records are limited to 4 KB via
+# max_fragment_length (main/tls_mfl.c), which needs OUT_CONTENT_LEN >= 4096.
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_PEER_CERT=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y

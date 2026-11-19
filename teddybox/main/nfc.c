@@ -19,7 +19,12 @@ static uint8_t slix_get_rand[] = {0x02, 0xB2, 0x04};
 static uint8_t slix_get_inventory[] = {0x26, 0x01, 0x00};
 static uint8_t slix_set_pass[] = {0x02, 0xB3, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00};
 /* ISO15693 READ MULTIPLE BLOCKS: high data rate, first block 0, 8 blocks (value is count - 1) */
-static uint8_t iso_read_token[] = {0x02, 0x23, 0x00, 0x07};
+/* READ MULTIPLE BLOCKS, 2 blocks at a time: the TRF7962A FIFO holds 12 bytes
+   and the driver can not empty it during reception, so the answer (flags +
+   data + CRC) must fit: 1 + 8 + 2 = 11. All 8 blocks at once (35 bytes)
+   always failed on the box. */
+#define NFC_TOKEN_BLOCKS_PER_READ 2
+static uint8_t iso_read_token[] = {0x02, 0x23, 0x00, NFC_TOKEN_BLOCKS_PER_READ - 1};
 
 static const uint32_t passes[] = {0x0F0F0F0F, 0x7FFD6E5B, 0x00000000};
 static uint8_t received_data[256];
@@ -124,17 +129,26 @@ static esp_err_t nfc_read_token(trf7962a_t trf)
 {
     memset(nfc_current_token, 0, sizeof(nfc_current_token));
 
-    for (int retry = 0; retry < 3; retry++)
+    const int chunk = NFC_TOKEN_BLOCKS_PER_READ * 4;
+    for (int block = 0; block * 4 < (int)sizeof(nfc_current_token); block += NFC_TOKEN_BLOCKS_PER_READ)
     {
-        if (trf7962a_xmit(trf, iso_read_token, sizeof(iso_read_token), received_data, &received_length) == ESP_OK &&
-            received_length >= 1 + sizeof(nfc_current_token) && received_data[0] == 0)
+        bool ok = false;
+        for (int retry = 0; retry < 3 && !ok; retry++)
         {
-            memcpy(nfc_current_token, &received_data[1], sizeof(nfc_current_token));
-            return ESP_OK;
+            iso_read_token[2] = block;
+            ok = trf7962a_xmit(trf, iso_read_token, sizeof(iso_read_token), received_data, &received_length) == ESP_OK &&
+                 received_length >= 1 + chunk && received_data[0] == 0;
         }
+        if (!ok)
+        {
+            ESP_LOGW(TAG, "Could not read tag memory block %d (%d bytes, status %d)", block, received_length,
+                     received_length ? received_data[0] : -1);
+            memset(nfc_current_token, 0, sizeof(nfc_current_token));
+            return ESP_FAIL;
+        }
+        memcpy(&nfc_current_token[block * 4], &received_data[1], chunk);
     }
-    ESP_LOGW(TAG, "Could not read tag memory (%d bytes, status %d)", received_length, received_length ? received_data[0] : -1);
-    return ESP_FAIL;
+    return ESP_OK;
 }
 
 /* when token was detected, try to start playback using UID */

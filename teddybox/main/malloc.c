@@ -12,9 +12,12 @@ uint8_t malloc_buffers[MALLOC_BUFFERS][30 * 1024];
 bool malloc_buffers_used[MALLOC_BUFFERS];
 
 
+/* the Opus decoder's task stack (30720) and state (26764) */
+#define MALLOC_BUFFER_MIN 25000
+
 void *teddybox_custom_malloc(size_t size)
 {
-    if (size >= 25000)
+    if (size >= MALLOC_BUFFER_MIN && size <= sizeof(malloc_buffers[0]))
     {
         for (int buf = 0; buf < MALLOC_BUFFERS; buf++)
         {
@@ -30,7 +33,7 @@ void *teddybox_custom_malloc(size_t size)
 
 void *teddybox_custom_calloc(size_t n, size_t size)
 {
-    if (size >= 25000)
+    if (n == 1 && size >= MALLOC_BUFFER_MIN && size <= sizeof(malloc_buffers[0]))
     {
         for (int buf = 0; buf < MALLOC_BUFFERS; buf++)
         {

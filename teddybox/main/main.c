@@ -36,6 +36,7 @@
 #include "nfc.h"
 #include "cloud.h"
 #include "ledman.h"
+#include "memdiag.h"
 #include "settings.h"
 #include "sfx.h"
 #include "battery.h"
@@ -46,7 +47,6 @@
 
 #include "config.h"
 
-#include "esp_heap_trace.h"
 
 static const char *TAG = "[TB]";
 static wl_handle_t s_test_wl_handle;
@@ -182,6 +182,7 @@ void app_main(void)
 {
     esp_log_level_set("*", ESP_LOG_WARN);
     esp_log_level_set(TAG, ESP_LOG_INFO);
+    memdiag_init();
 
     /* The NVS partition belongs to the original firmware (WiFi, OTA slot table,
        hardware revision, settings). Never erase it, even if it looks unusable. */
@@ -298,11 +299,18 @@ void app_main(void)
     bool confirmed = false;
     bool low_battery_warned = false;
     const int64_t poweroff_timeout = (int64_t)settings_get()->idle_timeout_s * 1000000LL;
-    
+    int64_t memdiag_next = esp_timer_get_time() + MEMDIAG_INTERVAL_US;
+
     while (1)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
         int64_t cur_time = esp_timer_get_time();
+
+        if (cur_time >= memdiag_next)
+        {
+            memdiag_next = cur_time + MEMDIAG_INTERVAL_US;
+            memdiag_log_tasks();
+        }
 
         bool ear_big = audio_board_ear_big();
         bool ear_small = audio_board_ear_small();
