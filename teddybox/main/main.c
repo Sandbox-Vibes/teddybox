@@ -61,7 +61,11 @@ typedef struct
     uint32_t rtc_check;
 } rtc_mem_t;
 
-static RTC_DATA_ATTR rtc_mem_t rtc_storage;
+/* RTC_NOINIT: survives deep sleep and also software resets (OTA update,
+   switching firmware, panic). RTC_DATA would be loaded again from the image
+   on every boot except a deep sleep wake, losing the last tonie position.
+   After power-on it holds garbage, magic and checksum catch that. */
+static RTC_NOINIT_ATTR rtc_mem_t rtc_storage;
 
 /* requests from other tasks, see control.h */
 static volatile int ctrl_volume_request = -1;
@@ -500,6 +504,9 @@ void app_main(void)
 
         ear_big_prev = ear_big;
         ear_small_prev = ear_small;
+
+        /* keep it valid at all times, a software reset can come anytime */
+        rtc_checksum_update();
     }
 
     mqtt_ha_shutdown();
