@@ -3,6 +3,7 @@ MAIN := ../../teddybox/main
 CFLAGS := -Wall -Wextra -O1 -I$(MAIN)
 
 test: test_mqtt_ha_payload test_freshness test_settings
+	$(MAKE) -C nfc_sim
 	./test_settings
 	./test_freshness
 	./test_mqtt_ha_payload
@@ -19,4 +20,5 @@ test_settings: test_settings.c $(MAIN)/settings.c
 	$(CC) -Wall -Wextra -O1 -Wno-unused-parameter -Istub -I$(MAIN) -DSETTINGS_INI_PATH='"/tmp/teddybox_test.ini"' $^ -o $@
 
 clean:
+	$(MAKE) -C nfc_sim clean
 	rm -f test_mqtt_ha_payload test_freshness test_settings

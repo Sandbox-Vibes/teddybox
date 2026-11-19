@@ -126,6 +126,12 @@ audio_board_handle_t audio_board_init(void)
     gpio_config_t io_conf = {0};
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
 
+    /* the power switches were held in their off state during deep sleep,
+       release them first or they cannot be switched on again */
+    gpio_deep_sleep_hold_dis();
+    gpio_hold_dis(POWER_GPIO);
+    gpio_hold_dis(SD_POWER_GPIO);
+
     io_conf.mode = GPIO_MODE_OUTPUT;
     io_conf.pin_bit_mask =
         BIT64(LED_BLUE_GPIO) | BIT64(LED_GREEN_GPIO) | BIT64(LED_RED_GPIO) |
@@ -284,6 +290,10 @@ void audio_board_poweroff()
 {
     dac3100_deinit();
     audio_board_power(false);
+    /* digital pads lose their level in deep sleep: keep peripherals and SD card switched off */
+    gpio_hold_en(POWER_GPIO);
+    gpio_hold_en(SD_POWER_GPIO);
+    gpio_deep_sleep_hold_en();
     esp_sleep_enable_ext0_wakeup(WAKEUP_GPIO, 0);
     esp_deep_sleep_start();
 }

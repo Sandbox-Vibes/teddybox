@@ -142,6 +142,18 @@ Topics: `teddybox/<mac>/state` (JSON), `teddybox/<mac>/availability`
 The box powers off when idle (`idle_timeout`), Home Assistant then shows it
 as unavailable. Needs about 16 KB of RAM.
 
+## Power
+
+- The NFC reader's RF field (70-130 mA while on) is only switched on for the
+  moments a tag is queried: every 250 ms without a tonie, every 500 ms with
+  one. A Tonie returns to privacy mode without field, so each check unlocks
+  it again with the password that worked before. Simulated with a virtual
+  Tonie (`tests/host/nfc_sim`): field on 3-4 % of the time instead of
+  65-100 %, tonie removal noticed after about 0.7 s.
+- Peripheral power and SD card power are held off during deep sleep
+  (digital pads would lose their level otherwise).
+- Idle power off after 60 s by default (`idle_timeout`).
+
 ## Network traffic
 
 Without `boxine_fallback` the box only talks to what is configured:
