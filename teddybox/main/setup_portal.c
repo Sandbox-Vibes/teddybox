@@ -18,6 +18,7 @@
 #include "mbedtls/x509_crt.h"
 
 #include "setup_portal.h"
+#include "speaker_eq.h"
 #include "settings.h"
 #include "wifi.h"
 #include "ledman.h"
@@ -139,6 +140,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "lang_id", s->lang_id);
     cJSON_AddNumberToObject(j, "volume_max", s->volume_max);
     cJSON_AddNumberToObject(j, "idle_timeout", s->idle_timeout_s);
+    cJSON_AddStringToObject(j, "speaker_eq", speaker_eq_name(s->speaker_eq));
     esp_app_desc_t app;
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_get_partition_description(running, &app);
@@ -377,6 +379,11 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (get_int(o, "idle_timeout", 10, 86400, &v))
     {
         s->idle_timeout_s = v;
+    }
+    cJSON *eq = cJSON_GetObjectItemCaseSensitive(o, "speaker_eq");
+    if (cJSON_IsString(eq) && speaker_eq_parse(eq->valuestring) >= 0)
+    {
+        s->speaker_eq = speaker_eq_parse(eq->valuestring);
     }
     cJSON *b = cJSON_GetObjectItemCaseSensitive(o, "boxine_fallback");
     if (cJSON_IsBool(b))

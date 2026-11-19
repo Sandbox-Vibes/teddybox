@@ -65,6 +65,20 @@ static RTC_DATA_ATTR rtc_mem_t rtc_storage;
 /* requests from other tasks, see control.h */
 static volatile int ctrl_volume_request = -1;
 static volatile bool ctrl_poweroff_request = false;
+static volatile int ctrl_eq_request = -1;
+
+void ctrl_request_speaker_eq(int mode)
+{
+    if (mode >= 0 && mode < SPEAKER_EQ_COUNT)
+    {
+        ctrl_eq_request = mode;
+    }
+}
+
+int ctrl_get_speaker_eq(void)
+{
+    return dac3100_get_speaker_eq();
+}
 
 void ctrl_request_volume(int percent)
 {
@@ -184,6 +198,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Board init");
     audio_board_handle_t board_handle = audio_board_init();
+    dac3100_set_speaker_eq(settings_get()->speaker_eq);
     ledman_init();
 
     /* big ear held while switching on: open the setup page */
@@ -344,6 +359,21 @@ void app_main(void)
             rtc_storage.volume = vol_req;
             audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
             last_activity_time = cur_time;
+        }
+        int eq_req = ctrl_eq_request;
+        if (eq_req >= 0)
+        {
+            ctrl_eq_request = -1;
+            ESP_LOGI(TAG, "Speaker EQ: %s", speaker_eq_name(eq_req));
+            dac3100_set_speaker_eq(eq_req);
+            if (settings_get()->speaker_eq != eq_req)
+            {
+                settings_get_mutable()->speaker_eq = eq_req;
+                if (settings_save_ini(SETTINGS_INI_PATH) != 0)
+                {
+                    ESP_LOGW(TAG, "Could not save speaker EQ");
+                }
+            }
         }
         if (ctrl_poweroff_request)
         {

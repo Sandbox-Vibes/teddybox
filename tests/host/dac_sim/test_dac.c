@@ -7,13 +7,13 @@
 
 static uint8_t regs[256][128], page;
 static int headset;
-static int writes_to_coef_pages;
+static int writes_to_coef_pages, coef_writes_while_dac_on;
 i2c_bus_handle_t i2c_bus_create(int port, i2c_config_t *c) { return (void *)1; }
 esp_err_t i2c_bus_write_bytes(i2c_bus_handle_t h, int addr, uint8_t *reg, int rl, uint8_t *d, int dl)
 {
     assert(addr == 0x18 || addr == (0x18 << 1) || addr == 0x30);
     if (*reg == 0) page = *d; else regs[page][*reg & 0x7f] = *d;
-    if (page >= 8 && page <= 9) writes_to_coef_pages++;
+    if (page >= 8 && page <= 9 && *reg) { writes_to_coef_pages++; if (regs[0][63] & 0xC0) coef_writes_while_dac_on++; }
     return ESP_OK;
 }
 esp_err_t i2c_bus_read_bytes(i2c_bus_handle_t h, int addr, uint8_t *reg, int rl, uint8_t *d, int dl)
@@ -85,7 +85,28 @@ int main(void)
     dac3100_init(&cfg);
     CHECK(dac3100_get_output() == DAC3100_OUT_HEADPHONE && regs[0][63] == 0xD5 && regs[1][32] == 0, "headset at boot");
 
-    CHECK(writes_to_coef_pages == 0, "no filter coefficients written");
+    CHECK(coef_writes_while_dac_on == 0, "coefficients only written with the DAC off (%d)", coef_writes_while_dac_on);
+
+    /* EQ: speaker gets the designed biquads (left = right), headphones the flat defaults */
+    headset = 0; memset(regs, 0, sizeof(regs)); dac3100_init(&cfg);
+    dac3100_biquad_t bq[SPEAKER_EQ_BIQUADS];
+    speaker_eq_design(SPEAKER_EQ_DEFAULT, 48000, bq);
+    CHECK(dac3100_get_speaker_eq() == SPEAKER_EQ_DEFAULT, "default EQ");
+    CHECK((int16_t)(regs[8][2] << 8 | regs[8][3]) == bq[0].n0 && (int16_t)(regs[8][10] << 8 | regs[8][11]) == bq[0].d2 && (int16_t)(regs[8][8] << 8 | regs[8][9]) == bq[0].d1, "biquad A left");
+    CHECK((int16_t)(regs[8][66] << 8 | regs[8][67]) == bq[0].n0 && (int16_t)(regs[8][104] << 8 | regs[8][105]) == bq[3].d2, "right = left");
+    CHECK(regs[0][63] == 0xFD, "DAC back on after EQ");
+    dac3100_set_output(DAC3100_OUT_HEADPHONE);
+    CHECK(regs[8][2] == 0x7F && regs[8][3] == 0xFF && regs[8][4] == 0 && regs[8][12] == 0x7F, "headphones flat");
+    dac3100_set_output(DAC3100_OUT_SPEAKER);
+    dac3100_set_mute(false);
+    dac3100_set_speaker_eq(SPEAKER_EQ_OFF);
+    CHECK(regs[8][2] == 0x7F && regs[8][3] == 0xFF, "EQ off on the fly");
+    CHECK(regs[0][63] == 0xFD && regs[1][42] == 0x04, "playing again, unmuted");
+    dac3100_set_speaker_eq(SPEAKER_EQ_LOWCUT);
+    speaker_eq_design(SPEAKER_EQ_LOWCUT, 48000, bq);
+    CHECK((int16_t)(regs[8][12] << 8 | regs[8][13]) == bq[1].n0 && regs[8][22] == 0x7F, "lowcut: A,B set, C flat");
+    CHECK(coef_writes_while_dac_on == 0, "still never written with the DAC on");
+    CHECK(dac3100_set_speaker_eq(7) != ESP_OK, "invalid mode");
     printf("dac3100: %s\n", fails ? "FAILED" : "all tests ok");
     return fails != 0;
 }

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "settings.h"
+#include "speaker_eq.h"
 
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { printf("FAIL line %d: %s\n", __LINE__, #c); fails++; } } while (0)
@@ -23,6 +24,7 @@ int main(void)
     s->lang_id = 3;
     s->volume_max = 70;
     s->idle_timeout_s = 300;
+    s->speaker_eq = SPEAKER_EQ_LOWCUT;
     s->boxine_fallback = true;
     s->user_agent_original = true;
     CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
@@ -41,6 +43,7 @@ int main(void)
     CHECK(!strcmp(s->mqtt_pass, "p#ss=wo;rd"));
     CHECK(s->lang_id == 3 && s->volume_max == 70 && s->idle_timeout_s == 300);
     CHECK(s->boxine_fallback && s->user_agent_original);
+    CHECK(s->speaker_eq == SPEAKER_EQ_LOWCUT);
     CHECK(!strcmp(s->boxine_host, "prod.de.tbs.toys"));
 
     /* host set but cloud switched off must survive the round trip */
@@ -55,9 +58,16 @@ int main(void)
     memset(s, 0, sizeof(*s));
     settings_init();
     FILE *f = fopen(SETTINGS_INI_PATH, "w"); fputs("cloud_host = tc.local\n", f); fclose(f);
-    s->boxine_fallback = false; s->user_agent_original = false;
+    s->boxine_fallback = false; s->user_agent_original = false; s->speaker_eq = SPEAKER_EQ_DEFAULT;
     settings_load_ini();
     CHECK(!s->boxine_fallback && !s->user_agent_original);
+    CHECK(s->speaker_eq == SPEAKER_EQ_DEFAULT);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("speaker_eq = off\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->speaker_eq == SPEAKER_EQ_OFF);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("speaker_eq = loud\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->speaker_eq == SPEAKER_EQ_OFF); /* unknown value keeps the previous one */
 
     /* keys of older versions are accepted silently */
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("ota_enabled = 1\nota_allow_overwrite_pd = 1\n", f); fclose(f);

@@ -155,7 +155,18 @@ read from the flash dump):
 - 16 volume steps per output, speaker -20 dB to +2.5 dB, headphones -20 dB
   to -2 dB; each ear press moves one step. The percent values in Home
   Assistant and in the settings map onto these steps.
-- no equalizer or DRC, the original does not program them either
+- speaker EQ in the DAC's own biquads (no CPU load), headphones stay flat.
+  `speaker_eq` in teddybox.ini, on the setup page and as a select in Home
+  Assistant (applied immediately, saved to the INI):
+  - `full` (default): 4th order Butterworth high-pass at 150 Hz, -2.5 dB at
+    400 Hz (Q 1.0), -1.5 dB at 3.2 kHz (Q 1.4)
+  - `lowcut`: only the high-pass
+  - `off`: flat, as the original firmware
+  The speaker is specified for 180 Hz - 15 kHz; the high-pass removes what
+  it cannot play anyway and what makes it distort at high volume. The two
+  cuts are a best guess for a small closed enclosure, not measured. The EQ
+  only cuts, so it cannot clip. `tests/host/test_speaker_eq` checks the
+  response computed from the rounded 16 bit coefficients.
 - checked against a register model: `tests/host/dac_sim`
 
 ## Power

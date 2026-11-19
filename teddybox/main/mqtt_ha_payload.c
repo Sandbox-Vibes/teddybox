@@ -43,6 +43,9 @@ static const ha_entity_t entities[] = {
     {"sensor", "rssi", "WLAN-Signal",
      "\"value_template\":\"{{ value_json.rssi if value_json.rssi else None }}\",\"device_class\":\"signal_strength\","
      "\"unit_of_measurement\":\"dBm\",\"state_class\":\"measurement\",\"entity_category\":\"diagnostic\""},
+    {"select", "speaker_eq", "Lautsprecher-Klang",
+     "\"value_template\":\"{{ value_json.speaker_eq }}\",\"command_topic\":\"%s/cmd/speaker_eq\","
+     "\"options\":[\"Optimiert\",\"Nur Tiefenfilter\",\"Wie Original\"],\"icon\":\"mdi:tune-vertical\",\"entity_category\":\"config\""},
     {"button", "stop", "Stopp",
      "\"command_topic\":\"%s/cmd/stop\",\"icon\":\"mdi:stop\""},
     {"button", "next", "Nächstes Kapitel",
@@ -54,6 +57,13 @@ static const ha_entity_t entities[] = {
 };
 
 #define ENTITY_COUNT ((int)(sizeof(entities) / sizeof(entities[0])))
+
+static const char *const speaker_eq_labels[HA_SPEAKER_EQ_COUNT] = {"Wie Original", "Nur Tiefenfilter", "Optimiert"};
+
+const char *ha_speaker_eq_label(int mode)
+{
+    return (mode >= 0 && mode < HA_SPEAKER_EQ_COUNT) ? speaker_eq_labels[mode] : speaker_eq_labels[0];
+}
 
 int ha_discovery_count(void)
 {
@@ -130,10 +140,11 @@ int ha_state_json(const ha_state_t *st, char *buf, size_t size)
     int n = snprintf(buf, size,
                      "{\"status\":\"%s\",\"tonie\":\"%s\",\"chapter\":%d,\"chapters\":%d,\"volume\":%u,"
                      "\"battery_mv\":%u,\"battery\":%d,\"battery_state\":\"%s\",\"charging\":%s,"
-                     "\"headphones\":%s,\"rssi\":%d}",
+                     "\"headphones\":%s,\"rssi\":%d,\"speaker_eq\":\"%s\"}",
                      st->playing ? "playing" : "idle", tonie, st->chapter, st->chapters, st->volume,
                      st->battery_mv, st->battery_percent, st->battery_state ? st->battery_state : "unknown",
-                     st->charging ? "true" : "false", st->headphones ? "true" : "false", st->rssi);
+                     st->charging ? "true" : "false", st->headphones ? "true" : "false", st->rssi,
+                     ha_speaker_eq_label(st->speaker_eq));
     return (n < 0 || (size_t)n >= size) ? -1 : n;
 }
 
@@ -185,6 +196,18 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     if (IS("poweroff"))
     {
         return HA_CMD_POWEROFF;
+    }
+    if (IS("speaker_eq"))
+    {
+        for (int i = 0; i < HA_SPEAKER_EQ_COUNT; i++)
+        {
+            if (data_len == (int)strlen(speaker_eq_labels[i]) && !strncmp(data, speaker_eq_labels[i], data_len))
+            {
+                *value = i;
+                return HA_CMD_SPEAKER_EQ;
+            }
+        }
+        return HA_CMD_NONE;
     }
 #undef IS
     return HA_CMD_NONE;

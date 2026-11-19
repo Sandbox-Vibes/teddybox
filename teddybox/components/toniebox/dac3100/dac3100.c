@@ -30,6 +30,7 @@
 #include "board.h"
 
 #include "dac3100.h"
+#include "speaker_eq.h"
 
 static const char *TAG = "DAC3100";
 
@@ -50,6 +51,11 @@ static dac3100_output_t cur_output = DAC3100_OUT_NONE;
 static int cur_volume = 50;
 static bool cur_muted = true;
 static uint8_t beep_level = 0x3F;
+static speaker_eq_t cur_eq = SPEAKER_EQ_DEFAULT;
+static uint8_t cur_data_path = 0x14; /* DACs off */
+
+/* Opus always decodes to 48 kHz, that is all the box ever plays */
+#define SPEAKER_EQ_FS 48000.0
 
 uint16_t ofwButtonFreqTable[5][4][2] = {
     {
@@ -393,6 +399,80 @@ static void dac3100_apply_volume(void)
     dac3100_write_reg(DAC_VOL_R_CTRL, (uint8_t)v);
 }
 
+/* DAC channels off; filter coefficients can only be written in this state */
+static void dac3100_dac_off(void)
+{
+    dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
+    dac3100_write_reg(DAC_DATA_PATH_SETUP, cur_data_path & 0x3F);
+    for (int i = 0; i < 20; i++)
+    {
+        uint8_t flags = 0;
+        dac3100_read_reg(DAC_FLAG_REG1, &flags);
+        if (!(flags & 0x88)) /* left and right DAC powered down */
+        {
+            break;
+        }
+        vTaskDelay(5 / portTICK_RATE_MS);
+    }
+}
+
+/* biquads A-E for both channels; the speaker gets the EQ, headphones stay flat */
+static void dac3100_write_eq(bool speaker)
+{
+    dac3100_biquad_t bq[SPEAKER_EQ_BIQUADS];
+    speaker_eq_design(speaker ? cur_eq : SPEAKER_EQ_OFF, SPEAKER_EQ_FS, bq);
+
+    dac3100_write_reg(PAGE_CONTROL, DAC_FILTER_DRC_COE_1A);
+    for (int i = 0; i < SPEAKER_EQ_BIQUADS; i++)
+    {
+        const int16_t c[5] = {bq[i].n0, bq[i].n1, bq[i].n2, bq[i].d1, bq[i].d2};
+        for (int k = 0; k < 5; k++)
+        {
+            uint8_t reg_l = 2 + 10 * i + 2 * k;   /* left: page 8, registers 2-51 */
+            uint8_t reg_r = 66 + 10 * i + 2 * k;  /* right: page 8, registers 66-115 */
+            dac3100_write_reg(reg_l, (uint16_t)c[k] >> 8);
+            dac3100_write_reg(reg_l + 1, c[k] & 0xFF);
+            dac3100_write_reg(reg_r, (uint16_t)c[k] >> 8);
+            dac3100_write_reg(reg_r + 1, c[k] & 0xFF);
+        }
+    }
+    ESP_LOGI(TAG, "EQ: %s", speaker ? speaker_eq_name(cur_eq) : "flat (headphones)");
+}
+
+static void dac3100_dac_on(void)
+{
+    dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
+    dac3100_write_reg(DAC_DATA_PATH_SETUP, cur_data_path);
+}
+
+esp_err_t dac3100_set_speaker_eq(speaker_eq_t mode)
+{
+    if ((unsigned)mode >= SPEAKER_EQ_COUNT)
+    {
+        return ESP_FAIL;
+    }
+    if (mode == cur_eq)
+    {
+        return ESP_OK;
+    }
+    cur_eq = mode;
+    if (cur_output == DAC3100_OUT_SPEAKER)
+    {
+        bool muted = cur_muted;
+        dac3100_set_mute(true);
+        dac3100_dac_off();
+        dac3100_write_eq(true);
+        dac3100_dac_on();
+        dac3100_set_mute(muted);
+    }
+    return ESP_OK;
+}
+
+speaker_eq_t dac3100_get_speaker_eq(void)
+{
+    return cur_eq;
+}
+
 /* same sequence as the original firmware: everything off, then only the wanted output on */
 esp_err_t dac3100_set_output(dac3100_output_t output)
 {
@@ -411,29 +491,30 @@ esp_err_t dac3100_set_output(dac3100_output_t output)
     dac3100_write_reg(HPR_DRIVER, 0x00);
     dac3100_write_reg(SPK_DRIVER, 0x00);
     vTaskDelay(50 / portTICK_RATE_MS);
+    dac3100_dac_off();
+    dac3100_write_eq(output == DAC3100_OUT_SPEAKER);
+    dac3100_write_reg(PAGE_CONTROL, DAC_OUT_VOL);
     dac3100_write_reg(HP_DRIVERS, 0x00);
     dac3100_write_reg(SPK_AMP, 0x00);
     vTaskDelay(50 / portTICK_RATE_MS);
 
     cur_output = output;
-    uint8_t data_path;
     if (output == DAC3100_OUT_HEADPHONE)
     {
         dac3100_write_reg(HP_DRIVERS, 0xC2);   /* HPL/HPR powered up */
         dac3100_write_reg(L_VOL_TO_HPL, 0x92); /* routed, -9 dB */
         dac3100_write_reg(R_VOL_TO_HPR, 0x92);
-        data_path = 0xD5; /* both DACs on, L=left, R=right */
+        cur_data_path = 0xD5; /* both DACs on, L=left, R=right */
     }
     else
     {
         dac3100_write_reg(SPK_AMP, 0x86);      /* class-D powered up */
         dac3100_write_reg(L_VOL_TO_SPK, 0x92); /* routed, -9 dB */
-        data_path = 0xFD; /* both DACs get (L+R)/2, the speaker is fed from the left one */
+        cur_data_path = 0xFD; /* both DACs get (L+R)/2, the speaker is fed from the left one */
     }
     dac3100_set_mute(cur_muted);
     vTaskDelay(50 / portTICK_RATE_MS);
-    dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
-    dac3100_write_reg(DAC_DATA_PATH_SETUP, data_path);
+    dac3100_dac_on();
     dac3100_apply_volume();
     return ESP_OK;
 }

@@ -33,6 +33,10 @@ int main(int argc, char **argv)
         {"teddybox/aabbccddeeff/cmd/prev", "PRESS", HA_CMD_PREV, 0},
         {"teddybox/aabbccddeeff/cmd/poweroff", "PRESS", HA_CMD_POWEROFF, 0},
         {"teddybox/aabbccddeeff/cmd/stopx", "PRESS", HA_CMD_NONE, 0},
+        {"teddybox/aabbccddeeff/cmd/speaker_eq", "Optimiert", HA_CMD_SPEAKER_EQ, 2},
+        {"teddybox/aabbccddeeff/cmd/speaker_eq", "Nur Tiefenfilter", HA_CMD_SPEAKER_EQ, 1},
+        {"teddybox/aabbccddeeff/cmd/speaker_eq", "Wie Original", HA_CMD_SPEAKER_EQ, 0},
+        {"teddybox/aabbccddeeff/cmd/speaker_eq", "Optimier", HA_CMD_NONE, 0},
         {"teddybox/other/cmd/stop", "PRESS", HA_CMD_NONE, 0},
         {"teddybox/aabbccddeeff/cmd/", "", HA_CMD_NONE, 0},
     };
@@ -40,7 +44,7 @@ int main(int argc, char **argv)
     for (unsigned i = 0; i < sizeof c / sizeof c[0]; i++) {
         int v = 0;
         ha_cmd_t got = ha_parse_command(&ctx, c[i].t, strlen(c[i].t), c[i].d, strlen(c[i].d), &v);
-        int ok = got == c[i].want && (got != HA_CMD_VOLUME || v == c[i].val);
+        int ok = got == c[i].want && ((got != HA_CMD_VOLUME && got != HA_CMD_SPEAKER_EQ) || v == c[i].val);
         fails += !ok;
         printf("%s %-40s %-6s -> %d %d\n", ok ? "ok  " : "FAIL", c[i].t, c[i].d, got, v);
     }

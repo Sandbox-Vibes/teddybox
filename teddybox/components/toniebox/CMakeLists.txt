@@ -10,6 +10,7 @@ set(COMPONENT_SRCS
 ./toniebox_esp32_v1.6.C/board.c
 ./toniebox_esp32_v1.6.C/board_pins_config.c
 ./dac3100/dac3100.c
+./dac3100/speaker_eq.c
 )
 endif()
 

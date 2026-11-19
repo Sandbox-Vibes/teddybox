@@ -26,6 +26,7 @@
 #define __NEW_CODEC_H__
 
 #include "audio_hal.h"
+#include "speaker_eq.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -202,6 +203,9 @@ typedef enum
 /* powers down the other output, mono on the speaker, stereo on headphones */
 esp_err_t dac3100_set_output(dac3100_output_t output);
 dac3100_output_t dac3100_get_output(void);
+/* EQ for the speaker; applied right away if the speaker is active (short gap) */
+esp_err_t dac3100_set_speaker_eq(speaker_eq_t mode);
+speaker_eq_t dac3100_get_speaker_eq(void);
 /* percent <-> one of the DAC3100_VOL_STEPS steps */
 int dac3100_volume_index(int percent);
 int dac3100_volume_percent(int index);

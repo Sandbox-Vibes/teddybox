@@ -47,6 +47,9 @@ typedef struct
     uint8_t volume_max;
     uint8_t volume_default;
 
+    /* speaker EQ, speaker_eq_t: 0 off, 1 lowcut, 2 full */
+    uint8_t speaker_eq;
+
     /* idle time until power off, seconds */
     uint32_t idle_timeout_s;
 

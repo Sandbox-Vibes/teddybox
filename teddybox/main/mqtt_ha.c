@@ -70,6 +70,7 @@ static void mqtt_collect_state(ha_state_t *st)
     st->battery_percent = battery_get_state() == BATTERY_UNKNOWN ? -1 : ha_battery_percent(st->battery_mv, settings_get()->bat_critical_mv);
     st->charging = battery_is_charging();
     st->headphones = pb_headphones_connected();
+    st->speaker_eq = ctrl_get_speaker_eq();
 
     wifi_ap_record_t ap;
     st->rssi = (wifi_is_connected() && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) ? ap.rssi : 0;
@@ -79,7 +80,7 @@ static void mqtt_collect_state(ha_state_t *st)
 static bool state_differs(const ha_state_t *a, const ha_state_t *b)
 {
     return a->playing != b->playing || a->uid != b->uid || a->chapter != b->chapter || a->chapters != b->chapters ||
-           a->volume != b->volume || a->charging != b->charging || a->headphones != b->headphones ||
+           a->volume != b->volume || a->charging != b->charging || a->headphones != b->headphones || a->speaker_eq != b->speaker_eq ||
            strcmp(a->battery_state, b->battery_state);
 }
 
@@ -103,6 +104,10 @@ static void mqtt_handle_command(const char *topic, int topic_len, const char *da
     case HA_CMD_PREV:
         ESP_LOGI(TAG, "Command: previous chapter");
         pb_seek_chapter(-1);
+        break;
+    case HA_CMD_SPEAKER_EQ:
+        ESP_LOGI(TAG, "Command: speaker EQ %d", value);
+        ctrl_request_speaker_eq(value);
         break;
     case HA_CMD_POWEROFF:
         ESP_LOGI(TAG, "Command: power off");
