@@ -325,6 +325,14 @@ esp_err_t freshness_run(void)
         ptrs[i] = &infos[i];
     }
 
+    if (n == 0)
+    {
+        /* nothing to ask for; teddyCloud would also wait for a body that never comes */
+        ESP_LOGI(TAG, "No tonies on the SD card, nothing to check");
+        ret = ESP_OK;
+        goto out;
+    }
+
     TonieFreshnessCheckRequest req = TONIE_FRESHNESS_CHECK_REQUEST__INIT;
     req.n_tonie_infos = n;
     req.tonie_infos = ptrs;

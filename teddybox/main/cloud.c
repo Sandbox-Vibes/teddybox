@@ -26,16 +26,43 @@
 #include "playback.h"
 #include "settings.h"
 #include "freshness.h"
+#include "bootsel.h"
 
-#define CLOUD_HOST (settings_get()->cloud_host)
-#define CLOUD_PORT (settings_get()->cloud_port)
+/*
+ * Up to two backends: teddyCloud (preferred) and, only if boxine_fallback
+ * is enabled, the Boxine cloud with the original CA from the assets
+ * partition. The cloud task picks the first that answers /v1/time.
+ */
+typedef struct
+{
+    const char *name;
+    const char *host;
+    uint16_t port;
+    uint8_t *ca;
+    size_t ca_len;
+    /* server name for SNI and certificate check, NULL = neither (teddyCloud's
+       certificate is issued to "TeddyCloud Server", not to a host name) */
+    const char *tls_name;
+} cloud_backend_t;
+
+#define BACKEND_TEDDYCLOUD 0
+#define BACKEND_BOXINE 1
+/* while on Boxine, check every few minutes whether teddyCloud is back */
+#ifndef BACKEND_RETRY_PREFERRED_MS
+#define BACKEND_RETRY_PREFERRED_MS (5 * 60 * 1000)
+#endif
+
+static cloud_backend_t backends[2];
+static volatile int active_backend = BACKEND_TEDDYCLOUD;
+static char user_agent[64];
+
+#define CLOUD_HOST (backends[active_backend].host)
+#define CLOUD_PORT (backends[active_backend].port)
 
 static const char *TAG = "Cloud";
 
-uint8_t *ca_der = NULL;
 uint8_t *client_der = NULL;
 uint8_t *private_der = NULL;
-size_t ca_der_len = 0;
 size_t client_der_len = 0;
 size_t private_der_len = 0;
 static esp_app_desc_t running_app_info;
@@ -78,21 +105,22 @@ static esp_err_t cloud_request(cloud_req_t *req)
                        "%s"
                        "%s"
                        "%s"
-                       "User-Agent: toniebox-esp32-teddybox/%s\r\n"
+                       "User-Agent: %s\r\n"
                        "Connection: close\r\n"
                        "\r\n",
-             req->body ? "POST" : "GET", req->path, req->host, auth_line, range_line, body_line, running_app_info.version);
+             req->body ? "POST" : "GET", req->path, req->host, auth_line, range_line, body_line, user_agent);
 
     // ESP_LOGI(TAG, "Header %s...", request);
     esp_tls_cfg_t cfg = {
-        .cacert_buf = ca_der,
-        .cacert_bytes = ca_der_len,
+        .cacert_buf = backends[active_backend].ca,
+        .cacert_bytes = backends[active_backend].ca_len,
         .clientcert_buf = client_der,
         .clientcert_bytes = client_der_len,
         .clientkey_buf = private_der,
         .clientkey_bytes = private_der_len,
         .timeout_ms = 10000,
-        .skip_common_name = true};
+        .common_name = backends[active_backend].tls_name,
+        .skip_common_name = backends[active_backend].tls_name == NULL};
 
     uint8_t *receive_buffer = malloc(HTTP_RECEIVE_SIZE);
     if (!receive_buffer)
@@ -690,14 +718,49 @@ static void cloud_task(void *ctx)
     TickType_t next_try = 0;
     bool fc_done = false;
     TickType_t fc_last = 0;
+    TickType_t backend_since = 0;
     while (true)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
 
+        /* on the fallback: try to get back to teddyCloud from time to time */
+        if (cloud_available && active_backend != BACKEND_TEDDYCLOUD && backends[BACKEND_TEDDYCLOUD].host &&
+            xTaskGetTickCount() - backend_since >= pdMS_TO_TICKS(BACKEND_RETRY_PREFERRED_MS))
+        {
+            cloud_available = false;
+            next_try = 0;
+        }
+
         if (wifi_is_connected() && !cloud_available && (int32_t)(xTaskGetTickCount() - next_try) >= 0)
         {
-            ESP_LOGI(TAG, "Try to get time from %s:%d", CLOUD_HOST, CLOUD_PORT);
-            cloud_available = (cloud_set_time() == ESP_OK);
+            int previous = active_backend;
+            for (int b = 0; b < 2 && !cloud_available; b++)
+            {
+                if (!backends[b].host)
+                {
+                    continue;
+                }
+                active_backend = b;
+                ESP_LOGI(TAG, "Try to get time from %s (%s:%d)", backends[b].name, CLOUD_HOST, CLOUD_PORT);
+                cloud_available = (cloud_set_time() == ESP_OK);
+            }
+            if (cloud_available)
+            {
+                backend_since = xTaskGetTickCount();
+                if (active_backend == BACKEND_BOXINE)
+                {
+                    ESP_LOGW(TAG, "Using the Boxine cloud directly (fallback)");
+                }
+                if (active_backend != previous)
+                {
+                    /* other backend, other content versions: check freshness there too */
+                    fc_done = false;
+                }
+            }
+            else
+            {
+                active_backend = previous;
+            }
             next_try = xTaskGetTickCount() + pdMS_TO_TICKS(10000);
         }
 
@@ -750,25 +813,64 @@ static void cloud_task(void *ctx)
     vTaskDelete(NULL);
 }
 
+static void cloud_init_user_agent(void)
+{
+    esp_app_desc_t ofw;
+    if (settings_get()->user_agent_original && bootsel_get_original_desc(&ofw))
+    {
+        /* same format as the original firmware: "<project>/<version>" */
+        snprintf(user_agent, sizeof(user_agent), "%s/%s", ofw.project_name, ofw.version);
+        ESP_LOGW(TAG, "Sending the original firmware's user agent '%s'", user_agent);
+    }
+    else
+    {
+        if (settings_get()->user_agent_original)
+        {
+            ESP_LOGW(TAG, "No original firmware found, using the TeddyBox user agent");
+        }
+        snprintf(user_agent, sizeof(user_agent), "toniebox-esp32-teddybox/%s", running_app_info.version);
+    }
+}
+
 void cloud_init(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
     esp_ota_get_partition_description(esp_ota_get_running_partition(), &running_app_info);
+    cloud_init_user_agent();
 
-    if (!settings_get()->cloud_enabled)
+    const settings_t *s = settings_get();
+    if (s->cloud_enabled)
     {
-        ESP_LOGI(TAG, "Cloud disabled in settings, playing local content only");
+        backends[BACKEND_TEDDYCLOUD] = (cloud_backend_t){.name = "teddyCloud", .host = s->cloud_host, .port = s->cloud_port};
+        if (cloud_load_cert(s->ca_path, &backends[BACKEND_TEDDYCLOUD].ca, &backends[BACKEND_TEDDYCLOUD].ca_len) != ESP_OK)
+        {
+            cloud_load_cert("/spiflash/cert/ca.der", &backends[BACKEND_TEDDYCLOUD].ca, &backends[BACKEND_TEDDYCLOUD].ca_len);
+        }
+    }
+    if (s->boxine_fallback && s->boxine_host[0])
+    {
+        /* the CA in flash is the Boxine CA unless the box was patched for teddyCloud */
+        /* SNI and host name check like the original firmware */
+        backends[BACKEND_BOXINE] = (cloud_backend_t){.name = "Boxine", .host = s->boxine_host, .port = 443, .tls_name = s->boxine_host};
+        if (cloud_load_cert("/spiflash/cert/ca.der", &backends[BACKEND_BOXINE].ca, &backends[BACKEND_BOXINE].ca_len) != ESP_OK)
+        {
+            backends[BACKEND_BOXINE].host = NULL;
+        }
+    }
+
+    if (!backends[BACKEND_TEDDYCLOUD].host && !backends[BACKEND_BOXINE].host)
+    {
+        ESP_LOGI(TAG, "No cloud configured, playing local content only");
         return;
     }
+    active_backend = backends[BACKEND_TEDDYCLOUD].host ? BACKEND_TEDDYCLOUD : BACKEND_BOXINE;
 
     cloud_request_queue = xQueueCreate(4, sizeof(cloud_content_req_t *));
 
-    ESP_LOGI(TAG, "Loading certificates, cloud is %s:%d", CLOUD_HOST, CLOUD_PORT);
-    if (cloud_load_cert(settings_get()->ca_path, &ca_der, &ca_der_len) != ESP_OK)
-    {
-        cloud_load_cert("/spiflash/cert/ca.der", &ca_der, &ca_der_len);
-    }
+    ESP_LOGI(TAG, "Cloud: teddyCloud %s, Boxine fallback %s, user agent '%s'",
+             backends[BACKEND_TEDDYCLOUD].host ? backends[BACKEND_TEDDYCLOUD].host : "-",
+             backends[BACKEND_BOXINE].host ? backends[BACKEND_BOXINE].host : "off", user_agent);
     cloud_load_cert("/spiflash/cert/client.der", &client_der, &client_der_len);
     cloud_load_cert("/spiflash/cert/private.der", &private_der, &private_der_len);
 

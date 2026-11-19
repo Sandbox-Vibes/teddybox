@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include "esp_partition.h"
+#include "esp_ota_ops.h"
 
 /*
  * Knows which OTA slots hold the original Boxine firmware.
@@ -19,6 +20,9 @@ void bootsel_init(void);
 
 /* partition with the original EU app, NULL if none found */
 const esp_partition_t *bootsel_get_original(void);
+
+/* app description of the original EU app, false if none */
+bool bootsel_get_original_desc(esp_app_desc_t *desc);
 
 /* true if the partition holds an original Boxine app */
 bool bootsel_is_original(const esp_partition_t *part);

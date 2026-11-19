@@ -88,6 +88,19 @@ const esp_partition_t *bootsel_get_original(void)
     return NULL;
 }
 
+bool bootsel_get_original_desc(esp_app_desc_t *desc)
+{
+    for (int i = 0; i < slot_count; i++)
+    {
+        if (slot_is(&slots[i], OFW_EU))
+        {
+            *desc = slots[i].desc;
+            return true;
+        }
+    }
+    return false;
+}
+
 const esp_partition_t *bootsel_get_update_target(bool allow_overwrite_pd)
 {
     const esp_partition_t *running = esp_ota_get_running_partition();

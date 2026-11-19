@@ -138,6 +138,8 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "volume_max", s->volume_max);
     cJSON_AddNumberToObject(j, "idle_timeout", s->idle_timeout_s);
     cJSON_AddBoolToObject(j, "ota_allow_overwrite_pd", s->ota_allow_overwrite_pd);
+    cJSON_AddBoolToObject(j, "boxine_fallback", s->boxine_fallback);
+    cJSON_AddBoolToObject(j, "user_agent_original", s->user_agent_original);
     return send_json(req, j);
 }
 
@@ -370,10 +372,20 @@ static esp_err_t save_handler(httpd_req_t *req)
     {
         s->idle_timeout_s = v;
     }
-    cJSON *ota = cJSON_GetObjectItemCaseSensitive(o, "ota_allow_overwrite_pd");
-    if (cJSON_IsBool(ota))
+    cJSON *b = cJSON_GetObjectItemCaseSensitive(o, "ota_allow_overwrite_pd");
+    if (cJSON_IsBool(b))
     {
-        s->ota_allow_overwrite_pd = cJSON_IsTrue(ota);
+        s->ota_allow_overwrite_pd = cJSON_IsTrue(b);
+    }
+    b = cJSON_GetObjectItemCaseSensitive(o, "boxine_fallback");
+    if (cJSON_IsBool(b))
+    {
+        s->boxine_fallback = cJSON_IsTrue(b);
+    }
+    b = cJSON_GetObjectItemCaseSensitive(o, "user_agent_original");
+    if (cJSON_IsBool(b))
+    {
+        s->user_agent_original = cJSON_IsTrue(b);
     }
     cJSON_Delete(o);
 

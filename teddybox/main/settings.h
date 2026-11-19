@@ -35,6 +35,14 @@ typedef struct
     uint16_t cloud_port;
     char ca_path[64];
 
+    /* Boxine cloud: used directly when teddyCloud is not configured or not
+       reachable. Off by default, see README (box certificate could be blocked) */
+    bool boxine_fallback;
+    char boxine_host[48];
+    /* send the original firmware's user agent ("toniebox-esp32-eu/v5.x")
+       instead of "toniebox-esp32-teddybox/<version>"; teddyCloud passes it on */
+    bool user_agent_original;
+
     /* volume limits in percent (0..100) */
     uint8_t volume_max;
     uint8_t volume_default;

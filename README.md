@@ -73,6 +73,29 @@ idle_timeout = 60          # seconds until power off
 The cloud is off by default on purpose: the box certificate would otherwise
 be used against the Boxine cloud by a non-original firmware.
 
+### Optional: Boxine fallback and original user agent
+
+Both are off by default and can be switched on in the setup page
+("Erweitert") or in `teddybox.ini`:
+
+```ini
+boxine_fallback = 1          # use the Boxine cloud when teddyCloud is missing or down
+boxine_host = prod.de.tbs.toys
+user_agent_original = 1      # send "toniebox-esp32-eu/v5.x" (read from the original app)
+```
+
+- With `boxine_fallback`, the box tries teddyCloud first and uses the Boxine
+  cloud only if teddyCloud does not answer; every 5 minutes it checks whether
+  teddyCloud is back. Boxine connections use the original CA from the assets
+  partition, send SNI and verify the server name, like the original firmware.
+- teddyCloud passes the box's user agent on to Boxine. Without
+  `user_agent_original`, Boxine therefore sees `toniebox-esp32-teddybox/...`
+  whenever teddyCloud fetches content for TeddyBox.
+- The user agent is not the only difference: TLS handshake (mbedTLS 2.28 from
+  IDF 4.4 instead of the original's IDF 5.0) and behaviour (no log upload, no
+  firmware checks) differ as well. If Boxine blocks the box certificate, the
+  Boxine cloud stops working for the original firmware and teddyCloud too.
+
 ## teddyCloud
 
 TeddyBox uses the same protocol as the original firmware: `GET /v1/time`,
