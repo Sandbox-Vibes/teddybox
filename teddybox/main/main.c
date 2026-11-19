@@ -200,9 +200,20 @@ static bool rtc_checksum_valid()
 
 void app_main(void)
 {
+    /* woken only to see whether the box is still on the charger */
+    audio_board_sleep_check();
+
     esp_log_level_set("*", ESP_LOG_WARN);
     esp_log_level_set(TAG, ESP_LOG_INFO);
     memdiag_init();
+    {
+        esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+        /* EXT0 is the wake line, or the small ear while on the charger */
+        ESP_LOGI(TAG, "Wake cause: %s", cause == ESP_SLEEP_WAKEUP_EXT0   ? "wake line / small ear"
+                                        : cause == ESP_SLEEP_WAKEUP_EXT1 ? "big ear"
+                                        : cause == ESP_SLEEP_WAKEUP_UNDEFINED ? "power on / reset"
+                                                                           : "other");
+    }
 
     /* The NVS partition belongs to the original firmware (WiFi, OTA slot table,
        hardware revision, settings). Never erase it, even if it looks unusable. */

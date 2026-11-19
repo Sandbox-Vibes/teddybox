@@ -32,6 +32,7 @@
 #include "esp_sleep.h"
 
 #include "driver/rtc_io.h"
+#include "esp_rom_sys.h"
 #include "soc/rtc.h"
 #include "esp_sleep.h"
 
@@ -294,6 +295,72 @@ void audio_board_poweroff()
     gpio_hold_en(POWER_GPIO);
     gpio_hold_en(SD_POWER_GPIO);
     gpio_deep_sleep_hold_en();
-    esp_sleep_enable_ext0_wakeup(WAKEUP_GPIO, 0);
+    audio_board_deep_sleep();
+}
+
+/* The wake line (GPIO7, low = wake) is held low while the box is on the
+   charging station, so with it as wake source the box woke up again right
+   after going to sleep, every minute. In that case the box wakes on the ears
+   instead and checks every few minutes (silently, see audio_board_sleep_check)
+   whether it was taken off the charger, to arm the wake line again. */
+#define CHARGER_CHECK_US (5ULL * 60 * 1000 * 1000)
+/* which wake sources the last deep sleep used */
+#define SLEEP_MODE_LINE 0x4C494E45u /* "LINE": wake line */
+#define SLEEP_MODE_EARS 0x45415253u /* "EARS": ears + charger check timer */
+static RTC_NOINIT_ATTR uint32_t sleep_mode;
+
+static bool sleep_pin_low(gpio_num_t pin);
+
+void audio_board_deep_sleep(void)
+{
+    if (!sleep_pin_low(WAKEUP_GPIO))
+    {
+        sleep_mode = SLEEP_MODE_LINE;
+        esp_sleep_enable_ext0_wakeup(WAKEUP_GPIO, 0);
+    }
+    else
+    {
+        sleep_mode = SLEEP_MODE_EARS;
+        ESP_LOGI(TAG, "Wake line held low (charger?): wake on the ears, check again in %llu s", CHARGER_CHECK_US / 1000000);
+        /* IDF 4.4 has no "any low" for ext1 on this chip: one ear on ext0
+           (free now), the other alone on ext1 ("all low" of one pin) */
+        esp_sleep_enable_ext0_wakeup(EAR_SMALL_GPIO, 0);
+        esp_sleep_enable_ext1_wakeup(BIT64(EAR_BIG_GPIO), ESP_EXT1_WAKEUP_ALL_LOW);
+        /* keep the pull-ups of the (active low) ears in deep sleep */
+        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+        rtc_gpio_pullup_en(EAR_BIG_GPIO);
+        rtc_gpio_pulldown_dis(EAR_BIG_GPIO);
+        rtc_gpio_pullup_en(EAR_SMALL_GPIO);
+        rtc_gpio_pulldown_dis(EAR_SMALL_GPIO);
+        esp_sleep_enable_timer_wakeup(CHARGER_CHECK_US);
+    }
     esp_deep_sleep_start();
+}
+
+static bool sleep_pin_low(gpio_num_t pin)
+{
+    /* a wake source of the last sleep is still routed to the RTC domain */
+    rtc_gpio_deinit(pin);
+    gpio_set_direction(pin, GPIO_MODE_INPUT);
+    gpio_pullup_en(pin);
+    esp_rom_delay_us(100);
+    return gpio_get_level(pin) == 0;
+}
+
+void audio_board_sleep_check(void)
+{
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    /* woken by the wake line while it stays low and no ear is pressed: the box
+       was put on the charger. Do not start, sleep on (waking on the ears). */
+    bool put_on_charger = cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE &&
+                          sleep_pin_low(WAKEUP_GPIO) && !sleep_pin_low(EAR_BIG_GPIO) && !sleep_pin_low(EAR_SMALL_GPIO);
+    if (cause == ESP_SLEEP_WAKEUP_TIMER || put_on_charger)
+    {
+        /* only the charger check: straight back to sleep, peripherals stay off
+           (their pins are still held from the last sleep) */
+        gpio_hold_en(POWER_GPIO);
+        gpio_hold_en(SD_POWER_GPIO);
+        gpio_deep_sleep_hold_en();
+        audio_board_deep_sleep();
+    }
 }

@@ -143,6 +143,10 @@ bool audio_board_ear_small(void);
 bool board_headset_irq(void);
 void audio_board_power(bool state);
 void audio_board_poweroff(void);
+/* deep sleep with the right wake sources (wake line, or ears while on the charger) */
+void audio_board_deep_sleep(void);
+/* call first in app_main: a timer wake (charger check) goes straight back to sleep */
+void audio_board_sleep_check(void);
 esp_err_t audio_board_sdcard_unmount(void);
 
 #ifdef __cplusplus
