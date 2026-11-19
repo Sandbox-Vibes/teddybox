@@ -179,6 +179,23 @@ read from the flash dump):
 - `LED-Helligkeit` 0 (off) to 3, also `led_brightness` in teddybox.ini and on
   the setup page. The setup mode lights up at level 1 at least.
 
+## SD card errors
+
+The SD card occasionally times out (`0x107`), with or without a download.
+FATFS then marks the open file as broken, so every later access fails.
+
+- Downloads are written in 4 KiB blocks aligned to the file offset. A failed
+  write reopens the file and retries up to 3 times. `received` only counts
+  data that reached the card, so a resume continues at the right place.
+- Playback reopens and retries failed reads. While the tonie is still
+  downloading it waits up to 3 s for data instead of treating it as the end.
+- Opus PCM ring buffer is 8 KiB.
+- Log lines: `SD write … ms/s` (download line), `SD write/read at … failed,
+  reopening`, `Waited … for the download's file lock`,
+  `Playback caught up with the download`.
+- `tests/host` does not cover this; the download path was tested on a PC
+  against a local teddyCloud with injected write errors.
+
 ## Power
 
 - The NFC reader's RF field (70-130 mA while on) is only switched on for the
