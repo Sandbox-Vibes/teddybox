@@ -27,6 +27,7 @@
 #include "math.h"
 #include "ledman.h"
 #include "cloud.h"
+#include "esp_timer.h"
 #include "mempeak.h"
 #include "ogg_pos.h"
 #include "memdiag.h"
@@ -200,7 +201,46 @@ static int pb_percent(int64_t part, int64_t whole)
     return p < 0 ? 0 : (p > 100 ? 100 : (int)p);
 }
 
-static size_t pb_ensure_block(pb_toniefile_t *info, FILE *fd)
+/* waiting for data of a running download */
+#define PB_DL_WAIT_STEP_MS 50
+#define PB_DL_WAIT_MAX_MS 3000
+#define PB_LOCK_WAIT_WARN_US 100000
+
+/* reads one block; on an SD error (FATFS then refuses every further access
+   to that file) the file is opened again and the read retried */
+#define PB_SD_RETRIES 3
+static int pb_read_block(FILE **fdp, const char *filename, const char *mode, long offset, uint8_t *buf, int want)
+{
+    for (int attempt = 0; attempt < PB_SD_RETRIES; attempt++)
+    {
+        if (attempt)
+        {
+            ESP_LOGW(TAG, "SD read at %ld failed, reopening the file (attempt %d)", offset, attempt + 1);
+            if (*fdp)
+            {
+                fclose(*fdp);
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+            *fdp = fopen(filename, mode);
+            if (!*fdp)
+            {
+                continue;
+            }
+        }
+        if (*fdp && fseek(*fdp, offset, SEEK_SET) == 0)
+        {
+            int n = fread(buf, 1, want, *fdp);
+            /* short without error: end of the data written so far */
+            if (n == want || !ferror(*fdp))
+            {
+                return n;
+            }
+        }
+    }
+    return 0;
+}
+
+static size_t pb_ensure_block(pb_toniefile_t *info, FILE **fdp, const char *mode)
 {
     bool read = false;
 
@@ -215,15 +255,15 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE *fd)
     {
         if (info->current_pos == TONIEFILE_FRAME_SIZE)
         {
-            fseek(fd, TONIEFILE_FRAME_SIZE, SEEK_SET);
-            info->current_block_avail = fread(info->current_block_buffer, 1, 0x200, fd);
+            info->current_block_avail = pb_read_block(fdp, info->filename, mode, TONIEFILE_FRAME_SIZE,
+                                                      info->current_block_buffer, 0x200);
         }
 
         /* before we continue, first consume the initial Ogg block */
-        size_t remain = info->current_block_avail - (info->current_pos % TONIEFILE_FRAME_SIZE);
-        if (remain)
+        int32_t offset = info->current_pos % TONIEFILE_FRAME_SIZE;
+        if (info->current_block_avail > offset)
         {
-            return remain;
+            return info->current_block_avail - offset;
         }
 
         /* consumed the 0x200 bytes "first-block", proceed to normal operation */
@@ -240,16 +280,18 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE *fd)
     {
         read = true;
     }
+    /* a block that was not complete yet (download still running): read it again */
+    if (info->current_block_avail < TONIEFILE_FRAME_SIZE &&
+        (info->current_pos % TONIEFILE_FRAME_SIZE) >= info->current_block_avail)
+    {
+        read = true;
+    }
 
     if (read)
     {
         info->current_block = info->current_pos / TONIEFILE_FRAME_SIZE;
-        fseek(fd, info->current_block * TONIEFILE_FRAME_SIZE, SEEK_SET);
-        info->current_block_avail = fread(info->current_block_buffer, 1, TONIEFILE_FRAME_SIZE, fd);
-        if (info->current_block_avail < 0)
-        {
-            info->current_block_avail = 0;
-        }
+        info->current_block_avail = pb_read_block(fdp, info->filename, mode, info->current_block * TONIEFILE_FRAME_SIZE,
+                                                  info->current_block_buffer, TONIEFILE_FRAME_SIZE);
         /* every TAF block starts with an Ogg page */
         uint64_t g = pb_ogg_granule(info->current_block_buffer, info->current_block_avail);
         if (g != PB_NO_GRANULE)
@@ -262,9 +304,9 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE *fd)
         pb_last_play_position = info->current_block;
     }
 
-    size_t remain = info->current_block_avail - (info->current_pos % TONIEFILE_FRAME_SIZE);
-
-    return remain;
+    /* nothing (more) in this block: 0, never a wrapped around size_t */
+    int32_t offset = info->current_pos % TONIEFILE_FRAME_SIZE;
+    return info->current_block_avail > offset ? (size_t)(info->current_block_avail - offset) : 0;
 }
 
 int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickType_t ticks_to_wait, void *context)
@@ -388,16 +430,40 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
     int avail = 0;
     if (current_dl_req)
     {
-        while (!xSemaphoreTake(current_dl_req->file_sem, 1000 / portTICK_PERIOD_MS))
+        /* while the download runs, missing data means "not yet", not "end";
+           wait a while for it (bounded, so a stop request is not held up) */
+        cloud_content_req_t *dl = current_dl_req;
+        for (int waited = 0;; waited += PB_DL_WAIT_STEP_MS)
         {
-            ESP_LOGE(TAG, "Playback: Timed out waiting for file lock...");
+            int64_t t0 = esp_timer_get_time();
+            while (!xSemaphoreTake(dl->file_sem, 1000 / portTICK_PERIOD_MS))
+            {
+                ESP_LOGE(TAG, "Playback: Timed out waiting for file lock...");
+            }
+            int64_t wait_us = esp_timer_get_time() - t0;
+            if (wait_us > PB_LOCK_WAIT_WARN_US)
+            {
+                ESP_LOGW(TAG, "Waited %d ms for the download's file lock", (int)(wait_us / 1000));
+            }
+            avail = pb_ensure_block(info, &dl->handle, "rb+");
+            xSemaphoreGive(dl->file_sem);
+            bool more_coming = dl->state == CC_STATE_RECEIVING && !dl->abort &&
+                               (uint32_t)info->current_pos < dl->content_length;
+            if (avail > 0 || !more_coming || waited >= PB_DL_WAIT_MAX_MS)
+            {
+                break;
+            }
+            if (!waited)
+            {
+                ESP_LOGW(TAG, "Playback caught up with the download (%u of %u), waiting", (unsigned)dl->received,
+                         (unsigned)dl->content_length);
+            }
+            vTaskDelay(pdMS_TO_TICKS(PB_DL_WAIT_STEP_MS));
         }
-        avail = pb_ensure_block(info, current_dl_req->handle);
-        xSemaphoreGive(current_dl_req->file_sem);
     }
     else
     {
-        avail = pb_ensure_block(info, info->fd);
+        avail = pb_ensure_block(info, &info->fd, "rb");
     }
 
     if (len > avail)
@@ -1143,7 +1209,9 @@ void pb_init(esp_periph_set_handle_t set)
     opus_decoder_cfg_t opus_dec_cfg = DEFAULT_OPUS_DECODER_CONFIG();
     opus_dec_cfg.stack_in_ext = false;
     opus_dec_cfg.task_prio = 200;
-    opus_dec_cfg.out_rb_size = 4096;
+    /* PCM between decoder and I2S: 4096 bytes were only 21 ms at 48 kHz stereo,
+       an SD access that took longer while a download wrote was audible */
+    opus_dec_cfg.out_rb_size = 8 * 1024;
     music_decoder = decoder_opus_init(&opus_dec_cfg);
 
     audio_pipeline_register(pipeline, music_decoder, "dec");

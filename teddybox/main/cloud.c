@@ -62,6 +62,10 @@ static char user_agent[64];
 #define CLOUD_HOST (backends[active_backend].host)
 #define CLOUD_PORT (backends[active_backend].port)
 
+/* download write block = TAF block, and how often an SD access is retried */
+#define CLOUD_WRITE_BLOCK 4096
+#define CLOUD_SD_RETRIES 3
+
 static const char *TAG = "Cloud";
 
 uint8_t *client_der = NULL;
@@ -382,6 +386,17 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
     ESP_LOGI(TAG, "[CDL] download %u-%u to '%s'%s", req->received, req->content_length, req->filename, resume ? " (resume)" : "");
 
     cloud_create_directories(req->filename);
+    if (!req->wbuf)
+    {
+        req->wbuf = malloc(CLOUD_WRITE_BLOCK);
+        if (!req->wbuf)
+        {
+            ESP_LOGE(TAG, "[CDL] No memory for the write buffer");
+            return ESP_FAIL;
+        }
+    }
+    req->wbuf_len = 0;
+    req->sd_write_us = 0;
     /* "wb+" would truncate the part we already have */
     req->handle = fopen(req->filename, resume ? "rb+" : "wb+");
     if (!req->handle)
@@ -392,6 +407,59 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
 
     req->state = CC_STATE_RECEIVING;
 
+    return ESP_OK;
+}
+
+/* writes wbuf at "received"; an SD error (seen on the box: read timeout
+   0x107 while FATFS looks up clusters) marks the FATFS file as broken, so
+   the file is opened again before retrying */
+static esp_err_t cloud_content_flush(cloud_content_req_t *req)
+{
+    if (!req->wbuf_len)
+    {
+        return ESP_OK;
+    }
+    while (!xSemaphoreTake(req->file_sem, 1000 / portTICK_PERIOD_MS))
+    {
+        ESP_LOGE(TAG, "[CDL] Timed out waiting for file lock...");
+    }
+    int64_t t0 = esp_timer_get_time();
+    bool ok = false;
+    for (int attempt = 0; attempt < CLOUD_SD_RETRIES && !ok; attempt++)
+    {
+        if (attempt)
+        {
+            ESP_LOGW(TAG, "[CDL] SD write at %u failed, reopening the file (attempt %d)", (unsigned)req->received, attempt + 1);
+            if (req->handle)
+            {
+                fclose(req->handle);
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+            req->handle = fopen(req->filename, "rb+");
+            if (!req->handle)
+            {
+                continue;
+            }
+        }
+        ok = req->handle && fseek(req->handle, req->received, SEEK_SET) == 0 &&
+             fwrite(req->wbuf, req->wbuf_len, 1, req->handle) == 1 && fflush(req->handle) == 0;
+    }
+    req->sd_write_us += esp_timer_get_time() - t0;
+    if (ok)
+    {
+        /* only now the data is in the file */
+        req->received += req->wbuf_len;
+        req->wbuf_len = 0;
+    }
+    xSemaphoreGive(req->file_sem);
+    if (!ok)
+    {
+        ESP_LOGE(TAG, "[CDL] Write failed, bailing out");
+        return ESP_FAIL;
+    }
+    xSemaphoreGive(req->update_sem);
+    /* give others the chance to react */
+    vTaskDelay(1 / portTICK_RATE_MS);
     return ESP_OK;
 }
 
@@ -412,24 +480,24 @@ esp_err_t cloud_content_cbr(void *ctx, uint8_t *data, size_t length)
         return ESP_FAIL;
     }
 
-    while (!xSemaphoreTake(req->file_sem, 1000 / portTICK_PERIOD_MS))
+    while (length > 0)
     {
-        ESP_LOGE(TAG, "[CDL] Timed out waiting for file lock...");
+        /* the first block may be shorter so that all others start at a 4 KB boundary */
+        uint32_t target = CLOUD_WRITE_BLOCK - (req->received % CLOUD_WRITE_BLOCK);
+        uint32_t n = target - req->wbuf_len;
+        if (n > length)
+        {
+            n = length;
+        }
+        memcpy(req->wbuf + req->wbuf_len, data, n);
+        req->wbuf_len += n;
+        data += n;
+        length -= n;
+        if (req->wbuf_len == target && cloud_content_flush(req) != ESP_OK)
+        {
+            return ESP_FAIL;
+        }
     }
-    fseek(req->handle, req->received, SEEK_SET);
-
-    req->received += length;
-    if (fwrite(data, length, 1, req->handle) != 1)
-    {
-        xSemaphoreGive(req->file_sem);
-        ESP_LOGE(TAG, "[CDL] Write failed, bailing out");
-        return ESP_FAIL;
-    }
-    xSemaphoreGive(req->file_sem);
-    xSemaphoreGive(req->update_sem);
-
-    /* give others the chance to react */
-    vTaskDelay(1 / portTICK_RATE_MS);
 
     /* once a second; the speed only counts this connection (a resumed
        download starts in the middle, an earlier download is not part of it) */
@@ -442,8 +510,10 @@ esp_err_t cloud_content_cbr(void *ctx, uint8_t *data, size_t length)
         uint32_t bytes = req->received - req->speed_start_bytes;
         float speed = elapsed > 0.5f ? bytes / elapsed : 0; /* bytes/s */
         float percent_complete = req->received * 100.0f / req->content_length;
-        ESP_LOGI(TAG, "[CDL] %u bytes received (%.2f%%), Speed: %.1f KiB/s, ETA: %.0f s", (unsigned)req->received,
-                 percent_complete, speed / 1024, speed > 0 ? (req->content_length - req->received) / speed : -1.0f);
+        ESP_LOGI(TAG, "[CDL] %u bytes received (%.2f%%), Speed: %.1f KiB/s, ETA: %.0f s, SD write %d ms/s", (unsigned)req->received,
+                 percent_complete, speed / 1024, speed > 0 ? (req->content_length - req->received) / speed : -1.0f,
+                 (int)(req->sd_write_us / 1000));
+        req->sd_write_us = 0;
     }
     return ESP_OK;
 }
@@ -451,6 +521,11 @@ esp_err_t cloud_content_cbr(void *ctx, uint8_t *data, size_t length)
 esp_err_t cloud_content_end_cbr(void *ctx)
 {
     cloud_content_req_t *req = (cloud_content_req_t *)ctx;
+    /* the last block, if the transfer is complete; a cut off rest is fetched again on resume */
+    if (req->state == CC_STATE_RECEIVING && req->received + req->wbuf_len >= req->content_length)
+    {
+        cloud_content_flush(req);
+    }
     ESP_LOGI(TAG, "[CDL] End transfer, %d/%d received", req->received, req->content_length);
 
 /* playback handler initiated the download, it shall close handles
@@ -497,11 +572,7 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
         .connection_closed_ctx = &http_parser_handler_ctx};
 
     content_req->state = CC_STATE_CONNECTING;
-    /* WiFi power save (wake up only at the router's beacons) slows a long
-       download down; off while it runs, a bit more current for that time */
-    esp_wifi_set_ps(WIFI_PS_NONE);
     esp_err_t ret = cloud_request(&req);
-    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
 
     free(http_parser_handler_ctx.header_buffer);
 
@@ -671,6 +742,7 @@ cloud_content_state_t cloud_content_get_state(cloud_content_req_t *req)
 
 void cloud_content_cleanup(cloud_content_req_t *req)
 {
+    free(req->wbuf);
     vSemaphoreDelete(req->update_sem);
     free(req->filename);
     free(req);

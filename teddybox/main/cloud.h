@@ -54,6 +54,13 @@ typedef struct
     /* for the speed in the log: when this connection started and at which byte */
     int64_t speed_start_us;
     uint32_t speed_start_bytes;
+    /* data is written in 4 KB blocks aligned to the file (= TAF blocks):
+       fewer SD accesses, no partial sectors, the file lock is held less often.
+       "received" only counts what is in the file; whatever is still in wbuf
+       when a download is cut off is fetched again on resume */
+    uint8_t *wbuf;
+    uint32_t wbuf_len;
+    int64_t sd_write_us; /* time spent writing to SD since the last log line */
     SemaphoreHandle_t file_sem;
     FILE *handle;
 } cloud_content_req_t;
