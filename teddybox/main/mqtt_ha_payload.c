@@ -5,8 +5,6 @@
 
 #include "mqtt_ha_payload.h"
 
-/* full NiMH pack without charger, see battery table in the tonies wiki */
-#define BATTERY_FULL_MV 4250
 
 typedef struct
 {
@@ -261,9 +259,26 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     return HA_CMD_NONE;
 }
 
+/* State of charge of the 3 cell NiMH pack (50AA5S, 3.6 V) from the voltage
+   at light load. NiMH stays nearly flat around 1.23-1.27 V per cell for most
+   of its capacity, rises steeply when full and falls steeply when empty, so a
+   straight line shows "almost empty" far too early. The points are mV above
+   the critical threshold from the original firmware's NVS (default 3600 mV,
+   where the box switches off = 0 %); 3670 mV ("battery low" in the original
+   firmware) gives 10 %. An estimate from typical NiMH curves, not measured
+   on this box. */
+static const struct
+{
+    uint16_t above_critical_mv;
+    uint8_t percent;
+} nimh_curve[] = {
+    {0, 0}, {70, 10}, {100, 20}, {130, 30}, {160, 45}, {200, 60}, {250, 75}, {300, 85}, {400, 95}, {550, 100},
+};
+
 int ha_battery_percent(unsigned mv, unsigned critical_mv)
 {
-    if (mv == 0 || critical_mv >= BATTERY_FULL_MV)
+    const int n = sizeof(nimh_curve) / sizeof(nimh_curve[0]);
+    if (mv == 0)
     {
         return -1;
     }
@@ -271,9 +286,15 @@ int ha_battery_percent(unsigned mv, unsigned critical_mv)
     {
         return 0;
     }
-    if (mv >= BATTERY_FULL_MV)
+    unsigned d = mv - critical_mv;
+    for (int i = 1; i < n; i++)
     {
-        return 100;
+        if (d < nimh_curve[i].above_critical_mv)
+        {
+            unsigned d0 = nimh_curve[i - 1].above_critical_mv, d1 = nimh_curve[i].above_critical_mv;
+            unsigned p0 = nimh_curve[i - 1].percent, p1 = nimh_curve[i].percent;
+            return (int)(p0 + ((d - d0) * (p1 - p0) + (d1 - d0) / 2) / (d1 - d0));
+        }
     }
-    return (int)((mv - critical_mv) * 100 / (BATTERY_FULL_MV - critical_mv));
+    return 100;
 }

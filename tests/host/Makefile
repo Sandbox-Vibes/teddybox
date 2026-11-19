@@ -7,6 +7,7 @@ test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg
 	./test_ogg_pos
 	./test_speaker_eq
 	$(MAKE) -C nfc_sim
+	$(MAKE) -C battery_sim
 	$(MAKE) -C dac_sim
 	./test_settings
 	./test_freshness
@@ -33,5 +34,6 @@ test_speaker_eq: test_speaker_eq.c $(DAC)/speaker_eq.c
 
 clean:
 	$(MAKE) -C nfc_sim clean
+	$(MAKE) -C battery_sim clean
 	$(MAKE) -C dac_sim clean
 	rm -f test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos

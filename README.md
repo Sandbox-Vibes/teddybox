@@ -130,7 +130,7 @@ With `mqtt_host` set, the box registers itself via MQTT discovery as device
 | `sensor.<id>_tonie` | UID of the current tonie |
 | `sensor.<id>_chapter`, `_chapters` | current chapter, number of chapters |
 | `number.<id>_volume` | volume, settable, limited by `volume_max` |
-| `sensor.<id>_battery` | charge, rough estimate from the voltage |
+| `sensor.<id>_battery` | charge, estimate from the voltage (NiMH curve, amplifier load added back, unknown while charging) |
 | `sensor.<id>_battery_voltage` | battery voltage |
 | `binary_sensor.<id>_charging`, `_battery_low` | on the charger, battery low |
 | `binary_sensor.<id>_headphones` | headphones connected |

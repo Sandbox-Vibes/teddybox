@@ -69,7 +69,10 @@ static void mqtt_collect_state(ha_state_t *st)
     st->volume = ctrl_get_volume();
     st->battery_mv = battery_get_mv();
     st->battery_state = battery_state_name(battery_get_state());
-    st->battery_percent = battery_get_state() == BATTERY_UNKNOWN ? -1 : ha_battery_percent(st->battery_mv, settings_get()->bat_critical_mv);
+    /* unknown while charging: the charger lifts the voltage */
+    st->battery_percent = battery_get_state() == BATTERY_UNKNOWN || battery_is_charging()
+                              ? -1
+                              : ha_battery_percent(battery_get_rest_mv(), settings_get()->bat_critical_mv);
     st->charging = battery_is_charging();
     st->headphones = pb_headphones_connected();
     st->speaker_eq = ctrl_get_speaker_eq();

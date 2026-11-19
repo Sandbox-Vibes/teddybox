@@ -54,7 +54,22 @@ int main(int argc, char **argv)
         fails += !ok;
         printf("%s %-40s %-6s -> %d %d\n", ok ? "ok  " : "FAIL", c[i].t, c[i].d, got, v);
     }
-    printf("battery%%: 3600->%d 3925->%d 4250->%d 4400->%d 0->%d\n", ha_battery_percent(3600,3600), ha_battery_percent(3925,3600),
-           ha_battery_percent(4250,3600), ha_battery_percent(4400,3600), ha_battery_percent(0,3600));
+    /* NiMH curve: thresholds, monotonic, interpolation, shift with a different critical value */
+    struct { unsigned mv, crit; int want; } b[] = {
+        {0, 3600, -1}, {3500, 3600, 0}, {3600, 3600, 0}, {3670, 3600, 10}, {3700, 3600, 20},
+        {3747, 3600, 39}, {3800, 3600, 60}, {3850, 3600, 75}, {4000, 3600, 95}, {4150, 3600, 100},
+        {4634, 3600, 100}, {3720, 3650, 10},
+    };
+    for (unsigned i = 0; i < sizeof b / sizeof b[0]; i++) {
+        int got = ha_battery_percent(b[i].mv, b[i].crit);
+        int ok = got == b[i].want;
+        fails += !ok;
+        printf("%s battery %u mV (critical %u) -> %d %%\n", ok ? "ok  " : "FAIL", b[i].mv, b[i].crit, got);
+    }
+    for (unsigned mv = 3600, last = 0; mv <= 4200; mv += 5) {
+        int p = ha_battery_percent(mv, 3600);
+        if (p < (int)last) { fails++; printf("FAIL battery curve not monotonic at %u\n", mv); }
+        last = p;
+    }
     return fails;
 }

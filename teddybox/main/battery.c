@@ -17,6 +17,7 @@
 
 #include "battery.h"
 #include "settings.h"
+#include "playback.h"
 
 static const char *TAG = "Battery";
 
@@ -40,6 +41,63 @@ static esp_adc_cal_characteristics_t cal_vchg;
 static volatile uint32_t vbat_mv = 0;
 static volatile bool charging = false;
 static volatile battery_state_t state = BATTERY_UNKNOWN;
+/* estimated voltage without the load of the speaker amplifier, for the
+   percentage (0 = unknown, e.g. while charging) */
+static volatile uint32_t rest_mv = 0;
+
+/* samples after a play/pause change until the filtered value has settled
+   (24 s; the IIR filter below has then moved 97 % of the way) */
+#define SETTLE_SAMPLES 12
+#define MAX_SAG_MV 250
+
+/* While idle the measured voltage is the rest voltage. While playing it sags
+   with the amplifier load: the sag is measured at the last change between
+   playing and idle (voltage before vs. after settling) and added back. */
+static void update_rest(uint32_t filtered)
+{
+    static bool was_playing = false;
+    static int settle = 0;
+    static uint32_t ref_mv = 0;
+    static uint32_t sag_mv = 0;
+    static uint32_t last_mv = 0;
+
+    if (charging)
+    {
+        /* the charger lifts the voltage; start over when it is removed */
+        rest_mv = 0;
+        ref_mv = 0;
+        settle = 0;
+        last_mv = 0;
+        return;
+    }
+
+    bool playing = pb_is_playing();
+    uint32_t prev_mv = last_mv;
+    last_mv = filtered;
+    if (playing != was_playing)
+    {
+        /* idle -> playing: reference is the rest voltage; playing -> idle: the
+           loaded one, from before this sample (the filter already moves) */
+        ref_mv = playing ? rest_mv : prev_mv;
+        settle = 0;
+        was_playing = playing;
+    }
+    if (settle < SETTLE_SAMPLES)
+    {
+        settle++;
+        if (settle == SETTLE_SAMPLES && ref_mv)
+        {
+            int32_t sag = playing ? (int32_t)ref_mv - (int32_t)filtered : (int32_t)filtered - (int32_t)ref_mv;
+            sag_mv = sag < 0 ? 0 : (sag > MAX_SAG_MV ? MAX_SAG_MV : sag);
+            ESP_LOGI(TAG, "Voltage drop while playing: %lu mV", (unsigned long)sag_mv);
+        }
+        else if (rest_mv)
+        {
+            return; /* keep the last estimate while the voltage moves */
+        }
+    }
+    rest_mv = playing ? filtered + sag_mv : filtered;
+}
 
 static uint32_t read_mv(adc1_channel_t ch, esp_adc_cal_characteristics_t *cal, uint32_t ratio_x1000)
 {
@@ -109,6 +167,11 @@ static void battery_task(void *arg)
             }
         }
 
+        if (filtered >= IMPLAUSIBLE_MV)
+        {
+            update_rest(filtered);
+        }
+
         if (state != prev)
         {
             ESP_LOGI(TAG, "%s -> %s at %lu mV", battery_state_name(prev), battery_state_name(state), (unsigned long)filtered);
@@ -137,6 +200,11 @@ void battery_init(void)
 uint32_t battery_get_mv(void)
 {
     return vbat_mv;
+}
+
+uint32_t battery_get_rest_mv(void)
+{
+    return rest_mv;
 }
 
 bool battery_is_charging(void)
