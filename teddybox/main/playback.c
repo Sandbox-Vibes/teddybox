@@ -43,6 +43,13 @@ static bool pb_playing = false;
 static pb_toniefile_t pb_toniefile_info;
 static volatile bool pb_headset = false;
 static cloud_content_req_t *current_dl_req = NULL;
+/* the LED shows "playing download" while the download of the playing tonie runs */
+static bool pb_led_download = false;
+
+static bool pb_dl_running(const cloud_content_req_t *dl)
+{
+    return dl && dl->state != CC_STATE_FINISHED && dl->state != CC_STATE_ERROR && dl->state != CC_STATE_ABORTED;
+}
 
 static uint64_t pb_last_nfc_uid = 0;
 static uint32_t pb_last_play_position = 0;
@@ -785,6 +792,7 @@ static void pb_int_stop()
 
     pb_playing = false;
     pb_default_content = false;
+    pb_led_download = false;
 
     /* close local file handles and free stuff */
     pb_toniefile_close(&pb_toniefile_info);
@@ -1030,6 +1038,12 @@ void pb_mainthread(void *arg)
         {
             cloud_content_req_t *dl = current_dl_req;
             pb_prog_dl = (dl && dl->content_length) ? pb_percent(dl->received, dl->content_length) : -1;
+            /* the download ended (complete or not) while playing: back to the normal colour */
+            if (pb_led_download && !pb_dl_running(dl))
+            {
+                pb_led_download = false;
+                ledman_change("playing");
+            }
         }
 
         /* the decoder normally reports its format within a few 100 ms */
@@ -1142,6 +1156,7 @@ void pb_mainthread(void *arg)
                         ESP_LOGW(TAG, "[Event] [%s] Pause", source);
                         pb_playing = true;
                         dac3100_set_mute(true);
+                        pb_led_download = false;
                         if (!pb_default_content)
                         {
                             ledman_change("idle");
@@ -1153,14 +1168,8 @@ void pb_mainthread(void *arg)
                         dac3100_set_mute(false);
                         if (!pb_default_content)
                         {
-                            if (current_dl_req)
-                            {
-                                ledman_change("playing download");
-                            }
-                            else
-                            {
-                                ledman_change("playing");
-                            }
+                            pb_led_download = pb_dl_running(current_dl_req);
+                            ledman_change(pb_led_download ? "playing download" : "playing");
                         }
                         break;
                     case AEL_STATUS_STATE_STOPPED:
@@ -1170,6 +1179,7 @@ void pb_mainthread(void *arg)
                         if (msg.source == (void *)i2s_stream_writer)
                         {
                             dac3100_set_mute(true);
+                            pb_led_download = false;
                             if (!pb_default_content)
                             {
                                 ledman_change("idle");
