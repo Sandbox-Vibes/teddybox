@@ -33,3 +33,6 @@ CONFIG_BOOTLOADER_HOLD_TIME_GPIO=5
 
 # phones send long headers when probing for a captive portal
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+
+# the original bootloader supports rollback: new firmware boots on probation
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

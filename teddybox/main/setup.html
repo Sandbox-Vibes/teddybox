@@ -82,12 +82,24 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <div><label for="idle">Ausschalten nach (Sek.)</label><input id="idle" type="number" min="10" step="10"></div>
 </div>
 <details><summary>Erweitert</summary>
-<label><input id="otaen" type="checkbox" style="width:auto"> Firmware-Updates übers WLAN annehmen (Port 63660, ohne Passwort)</label>
-<label><input id="otapd" type="checkbox" style="width:auto"> Updates übers WLAN dürfen den Slot der Notfall-App (PD) benutzen</label>
 <label><input id="boxfb" type="checkbox" style="width:auto"> Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist</label>
 <label><input id="uaorig" type="checkbox" style="width:auto"> Als Original-Firmware ausgeben (User-Agent)</label>
 <p class="hint">Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.</p>
 </details>
+</section>
+
+<section>
+<h2>Firmware aktualisieren</h2>
+<p class="hint" id="fwinfo"></p>
+<label for="fwfile">Neue TeddyBox-Firmware (teddybox.bin)</label>
+<input id="fwfile" type="file" accept=".bin">
+<div id="pdask" hidden>
+<p class="hint">Für das erste Update wird der Slot der Notfall-App (PD) gebraucht. Die normale Original-Firmware bleibt erhalten, die PD-App ist in deinem Flash-Dump gesichert.</p>
+<label><input id="pdok" type="checkbox" style="width:auto"> Notfall-App (PD) dafür überschreiben</label>
+</div>
+<div class="status" id="fwstatus"></div>
+<button class="main" id="fwbtn" type="button" style="background:var(--text)">Firmware hochladen</button>
+<p class="hint">Die neue Version startet auf Probe. Läuft sie nicht sauber an, startet die Box beim nächsten Mal wieder die bisherige.</p>
 </section>
 
 <div class="status" id="status"></div>
@@ -124,7 +136,7 @@ async function load(){
     $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
     if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
     $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('idle').value=cfg.idle_timeout||60;
-    $('otapd').checked=!!cfg.ota_allow_overwrite_pd;$('otaen').checked=!!cfg.ota_enabled;
+    $('fwinfo').textContent='Läuft: TeddyBox '+(cfg.fw_version||'?')+' aus Slot '+(cfg.fw_slot||'?');
     $('boxfb').checked=!!cfg.boxine_fallback;$('uaorig').checked=!!cfg.user_agent_original;
   }catch(e){setStatus($('status'),'Einstellungen konnten nicht geladen werden.','err');}
   scan();
@@ -139,12 +151,27 @@ $('cafile').onchange=async()=>{
     setStatus($('castatus'),j.ok?'Zertifikat gespeichert: '+j.subject:'Fehler: '+j.error,j.ok?'ok':'err');
   }catch(e){setStatus($('castatus'),'Upload fehlgeschlagen.','err');}
 };
+$('fwbtn').onclick=()=>{
+  const f=$('fwfile').files[0];
+  if(!f){setStatus($('fwstatus'),'Bitte eine Datei auswählen.','err');return;}
+  const x=new XMLHttpRequest();
+  x.open('POST','/api/firmware'+($('pdok').checked?'?pd=1':''));
+  x.upload.onprogress=e=>{if(e.lengthComputable)setStatus($('fwstatus'),'Lade hoch … '+Math.round(e.loaded*100/e.total)+' %');};
+  x.onload=()=>{
+    let j={};try{j=JSON.parse(x.responseText);}catch(e){}
+    if(j.ok){setStatus($('fwstatus'),'Installiert. Die Box startet mit der neuen Version neu.','ok');$('fwbtn').disabled=true;$('save').disabled=true;}
+    else{setStatus($('fwstatus'),'Fehler: '+(j.error||'unbekannt'),'err');if(j.needs_pd)$('pdask').hidden=false;}
+  };
+  x.onerror=()=>setStatus($('fwstatus'),'Upload fehlgeschlagen.','err');
+  setStatus($('fwstatus'),'Lade hoch …');
+  x.send(f);
+};
 $('save').onclick=async()=>{
   if(!$('ssid').value.trim()&&!cfg.wifi_ssid){setStatus($('status'),'Bitte ein WLAN auswählen.','err');return;}
   const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
     cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
-    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,idle_timeout:+$('idle').value||60,ota_allow_overwrite_pd:$('otapd').checked,ota_enabled:$('otaen').checked,
+    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,idle_timeout:+$('idle').value||60,
     boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked};
   setStatus($('status'),'Speichere …');
   try{

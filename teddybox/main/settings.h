@@ -59,11 +59,7 @@ typedef struct
     char mqtt_topic[48];
     char ha_discovery_prefix[32];
 
-        /* accept firmware updates on TCP port 63660; off by default, the port has no authentication */
-    bool ota_enabled;
-    /* OTA may overwrite the slot holding the factory "PD" app if no free slot is left */
-    bool ota_allow_overwrite_pd;
-} settings_t;
+    } settings_t;
 
 /* load NVS part, call after nvs_flash_init() */
 void settings_init(void);

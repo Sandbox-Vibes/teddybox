@@ -27,7 +27,7 @@ booted again at any time.
 - **Freshness check** like the original firmware: changed content (new
   episodes, creative tonies, live content) is detected and downloaded again
 - **Home Assistant** via MQTT discovery (see below)
-- OTA over TCP that never overwrites the original firmware
+- Firmware updates through the setup page with rollback, never touching the original firmware
 
 ## Setup page
 
@@ -67,7 +67,6 @@ lang_id = 1                # system sounds: 0=EN-GB 1=DE 2=EN-US 3=FR
 volume_max = 80            # percent
 volume_default = 50
 idle_timeout = 60          # seconds until power off
-# ota_allow_overwrite_pd = 1   # see OTA below
 ```
 
 The cloud is off by default on purpose: the box certificate would otherwise
@@ -150,7 +149,7 @@ teddyCloud (`cloud_host`) and the MQTT broker (`mqtt_host`), plus WiFi,
 DHCP, ARP and DNS lookups for those host names in the local network. No
 time servers (the time comes from teddyCloud), no mDNS, no telemetry.
 It shows up in the router as `teddybox-xxxx`. Inbound, nothing listens
-unless `ota_enabled = 1` (TCP 63660, no authentication). Checked with a
+in normal mode. Checked with a
 packet capture in QEMU (Ethernet instead of WiFi). Note that teddyCloud
 itself contacts the Boxine cloud if its `cloud.enabled` is on.
 
@@ -205,17 +204,25 @@ esptool.py write_flash 0x16f000 otadata_original.bin
 make -C tests/host     # host unit tests, no ESP-IDF needed
 ```
 
-## OTA
+## Firmware updates
 
-Off by default because the port has no authentication: anyone in the
-network could install a firmware. Enable with `ota_enabled = 1` (or on the
-setup page) only while you need it.
+Updates of TeddyBox itself are uploaded on the setup page (hold the big ear
+while switching on, section "Firmware aktualisieren"). There is no network
+port for updates, so physical access to the box is required.
 
-```sh
-nc -q 2 <box-ip> 63660 < teddybox/build/teddybox.bin
-```
+- The upload is checked before anything is written: ESP32-S3 image with
+  project name `teddybox` (original Boxine apps are refused), fits the slot,
+  SHA-256 verified at the end.
+- The first update needs the slot of the PD app (stock layout: PD,
+  TeddyBox, EU app); the page asks before using it. After that TeddyBox
+  alternates between the two slots, the EU app is never touched.
+- Rollback: the original bootloader supports it. A new version boots "on
+  probation" and confirms itself after running 10 seconds (or once the setup
+  page is up). If it crashes or restarts before that, the bootloader starts
+  the previous version again.
+- Switching to the original firmware (both ears) marks it valid right away,
+  so it does not fall back to TeddyBox after its first restart.
 
-The update goes to a slot that does not hold an original app. In the default
-layout no such slot is left besides the running one, so OTA refuses. Set
-`ota_allow_overwrite_pd = 1` to allow using the PD slot; the box then has no
-factory fallback anymore.
+Tested in QEMU with the original bootloader from a flash dump: refused
+images, PD consent, update, rollback of an unconfirmed version, alternating
+updates, switch to the original firmware.

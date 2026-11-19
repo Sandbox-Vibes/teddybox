@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
+#include "esp_spi_flash.h"
 
 #include "bootsel.h"
 
@@ -134,6 +135,38 @@ const esp_partition_t *bootsel_get_update_target(bool allow_overwrite_pd)
     return NULL;
 }
 
+/* esp_ota_select_entry_t layout: seq (4), label (20), state (4), crc (4); one entry per 4 KiB sector */
+#define OTADATA_STATE_OFFSET 24
+
+static void otadata_mark_newest_valid(void)
+{
+    const esp_partition_t *otadata = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, NULL);
+    if (!otadata)
+    {
+        return;
+    }
+    uint8_t entry[2][32];
+    if (esp_partition_read(otadata, 0, entry[0], 32) != ESP_OK || esp_partition_read(otadata, SPI_FLASH_SEC_SIZE, entry[1], 32) != ESP_OK)
+    {
+        return;
+    }
+    uint32_t seq0, seq1;
+    memcpy(&seq0, entry[0], 4);
+    memcpy(&seq1, entry[1], 4);
+    /* the entry just written has the higher sequence number (0xFFFFFFFF = empty) */
+    int newest = (seq1 != 0xFFFFFFFF && (seq0 == 0xFFFFFFFF || seq1 > seq0)) ? 1 : 0;
+
+    uint32_t valid = ESP_OTA_IMG_VALID;
+    memcpy(&entry[newest][OTADATA_STATE_OFFSET], &valid, 4);
+    /* the CRC only covers the sequence number; if power fails between erase and
+       write, the bootloader uses the other (TeddyBox) entry */
+    if (esp_partition_erase_range(otadata, newest * SPI_FLASH_SEC_SIZE, SPI_FLASH_SEC_SIZE) == ESP_OK &&
+        esp_partition_write(otadata, newest * SPI_FLASH_SEC_SIZE, entry[newest], 32) == ESP_OK)
+    {
+        ESP_LOGI(TAG, "Original firmware marked as valid, no probation");
+    }
+}
+
 esp_err_t bootsel_boot_original(void)
 {
     const esp_partition_t *ofw = bootsel_get_original();
@@ -149,6 +182,10 @@ esp_err_t bootsel_boot_original(void)
         ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)", esp_err_to_name(err));
         return err;
     }
+    /* with rollback enabled the original app would start "on probation" and the
+       bootloader would come back to TeddyBox unless it confirms itself in time.
+       It is a known good image, so mark it valid right away. */
+    otadata_mark_newest_valid();
 
     ESP_LOGW(TAG, "Rebooting into original firmware in %s", ofw->label);
     esp_restart();

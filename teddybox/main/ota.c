@@ -1,193 +1,139 @@
-/*
- * Minimal OTA: send a raw teddybox.bin to TCP port 63660, e.g.
- *     nc -q 2 <box-ip> 63660 < teddybox.bin
- *
- * The target slot is chosen by bootsel so that the original Boxine firmware
- * (EU app, and the PD app unless ota_allow_overwrite_pd=1) is never touched.
- */
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_event.h"
+
 #include "esp_log.h"
 #include "esp_ota_ops.h"
-#include "esp_flash_partitions.h"
+#include "esp_image_format.h"
+#include "esp_app_format.h"
 #include "esp_partition.h"
-#include "errno.h"
-
-#include "lwip/err.h"
-#include "lwip/sockets.h"
-#include "lwip/sys.h"
-#include <lwip/netdb.h>
 
 #include "ota.h"
 #include "bootsel.h"
-#include "settings.h"
-
-#define OTA_PORT 63660
-#define BUFFSIZE 1024
-#define OTA_RECV_TIMEOUT_S 10
 
 static const char *TAG = "OTA";
-static char rx_buffer[BUFFSIZE];
-static esp_app_desc_t running_app_info;
 
-/* receives one image from sock into part, returns ESP_OK if it was written and validated */
-static esp_err_t ota_receive(int sock, const esp_partition_t *part)
+#define PROJECT_NAME "teddybox"
+
+const char *ota_check_header(const uint8_t *data, size_t len, size_t total_len, esp_app_desc_t *desc)
 {
-    esp_ota_handle_t update_handle = 0;
-    esp_err_t err = esp_ota_begin(part, OTA_WITH_SEQUENTIAL_WRITES, &update_handle);
+    const size_t desc_off = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t);
+    if (len < desc_off + sizeof(esp_app_desc_t))
+    {
+        return "Datei ist zu klein";
+    }
+
+    const esp_image_header_t *hdr = (const esp_image_header_t *)data;
+    if (hdr->magic != ESP_IMAGE_HEADER_MAGIC)
+    {
+        return "Keine ESP32-Firmware";
+    }
+    if (hdr->chip_id != ESP_CHIP_ID_ESP32S3)
+    {
+        return "Firmware ist nicht für den ESP32-S3";
+    }
+
+    memcpy(desc, data + desc_off, sizeof(*desc));
+    if (desc->magic_word != ESP_APP_DESC_MAGIC_WORD)
+    {
+        return "Firmware ohne App-Beschreibung";
+    }
+    desc->project_name[sizeof(desc->project_name) - 1] = 0;
+    desc->version[sizeof(desc->version) - 1] = 0;
+    if (strcmp(desc->project_name, PROJECT_NAME))
+    {
+        /* also keeps original Boxine apps out of the TeddyBox slots */
+        return "Das ist keine TeddyBox-Firmware";
+    }
+    if (total_len == 0)
+    {
+        return "Leere Datei";
+    }
+    return NULL;
+}
+
+const char *ota_session_begin(ota_session_t *s, size_t image_len, bool allow_pd, bool *needs_pd)
+{
+    memset(s, 0, sizeof(*s));
+    *needs_pd = false;
+
+    s->target = bootsel_get_update_target(false);
+    if (!s->target)
+    {
+        if (!bootsel_get_update_target(true))
+        {
+            return "Kein freier Slot für ein Update";
+        }
+        if (!allow_pd)
+        {
+            *needs_pd = true;
+            return "Für das erste Update wird der Slot der Notfall-App (PD) gebraucht";
+        }
+        s->target = bootsel_get_update_target(true);
+    }
+    if (image_len > s->target->size)
+    {
+        return "Firmware ist zu groß für den Slot";
+    }
+
+    esp_err_t err = esp_ota_begin(s->target, image_len, &s->handle);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
-        return err;
+        return "Slot konnte nicht vorbereitet werden";
     }
+    s->started = true;
+    ESP_LOGI(TAG, "Writing %u bytes to %s @0x%06x", (unsigned)image_len, s->target->label, s->target->address);
+    return NULL;
+}
 
-    bool header_checked = false;
-    size_t total = 0;
-
-    while (true)
-    {
-        int len = recv(sock, rx_buffer, sizeof(rx_buffer), 0);
-        if (len < 0)
-        {
-            ESP_LOGE(TAG, "recv failed: errno %d", errno);
-            esp_ota_abort(update_handle);
-            return ESP_FAIL;
-        }
-        if (len == 0)
-        {
-            break;
-        }
-
-        if (!header_checked)
-        {
-            const size_t desc_off = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t);
-            if (len < desc_off + sizeof(esp_app_desc_t) || (uint8_t)rx_buffer[0] != ESP_IMAGE_HEADER_MAGIC)
-            {
-                ESP_LOGE(TAG, "Not an ESP32 app image");
-                esp_ota_abort(update_handle);
-                return ESP_ERR_INVALID_ARG;
-            }
-            esp_app_desc_t new_app_info;
-            memcpy(&new_app_info, &rx_buffer[desc_off], sizeof(new_app_info));
-            if (!strncmp(new_app_info.project_name, "toniebox-esp32-", 15))
-            {
-                ESP_LOGE(TAG, "Refusing to install original firmware '%s' via TeddyBox OTA", new_app_info.project_name);
-                esp_ota_abort(update_handle);
-                return ESP_ERR_INVALID_ARG;
-            }
-            ESP_LOGI(TAG, "Receiving '%s' %s (running %s)", new_app_info.project_name, new_app_info.version, running_app_info.version);
-            header_checked = true;
-        }
-
-        err = esp_ota_write(update_handle, rx_buffer, len);
-        if (err != ESP_OK)
-        {
-            ESP_LOGE(TAG, "esp_ota_write failed (%s)", esp_err_to_name(err));
-            esp_ota_abort(update_handle);
-            return err;
-        }
-        total += len;
-    }
-
-    ESP_LOGI(TAG, "Received %u bytes, validating", total);
-    err = esp_ota_end(update_handle);
+const char *ota_session_write(ota_session_t *s, const uint8_t *data, size_t len)
+{
+    esp_err_t err = esp_ota_write(s->handle, data, len);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "esp_ota_end failed (%s)", err == ESP_ERR_OTA_VALIDATE_FAILED ? "image corrupted" : esp_err_to_name(err));
-        return err;
+        ESP_LOGE(TAG, "esp_ota_write failed (%s)", esp_err_to_name(err));
+        return "Schreiben fehlgeschlagen";
     }
-    return ESP_OK;
+    s->written += len;
+    return NULL;
 }
 
-static void ota_mainthread(void *arg)
+const char *ota_session_finish(ota_session_t *s)
 {
-    struct sockaddr_in dest_addr = {
-        .sin_addr.s_addr = htonl(INADDR_ANY),
-        .sin_family = AF_INET,
-        .sin_port = htons(OTA_PORT),
-    };
-
-    int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (listen_sock < 0)
+    s->started = false;
+    esp_err_t err = esp_ota_end(s->handle);
+    if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-        vTaskDelete(NULL);
-        return;
+        ESP_LOGE(TAG, "esp_ota_end failed (%s)", esp_err_to_name(err));
+        return err == ESP_ERR_OTA_VALIDATE_FAILED ? "Firmware ist beschädigt (Prüfsumme falsch)" : "Prüfung fehlgeschlagen";
     }
-    int opt = 1;
-    setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    if (bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) != 0 || listen(listen_sock, 1) != 0)
+    err = esp_ota_set_boot_partition(s->target);
+    if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Socket unable to bind/listen: errno %d", errno);
-        close(listen_sock);
-        vTaskDelete(NULL);
-        return;
+        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)", esp_err_to_name(err));
+        return "Konnte die neue Firmware nicht als Start auswählen";
     }
+    ESP_LOGW(TAG, "Update in %s installed, it boots on probation", s->target->label);
+    return NULL;
+}
 
-    while (1)
+void ota_session_abort(ota_session_t *s)
+{
+    if (s->started)
     {
-        ESP_LOGI(TAG, "Listening on port %d", OTA_PORT);
-        struct sockaddr_storage source_addr;
-        socklen_t addr_len = sizeof(source_addr);
-        int sock = accept(listen_sock, (struct sockaddr *)&source_addr, &addr_len);
-        if (sock < 0)
-        {
-            ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-            continue;
-        }
-
-        struct timeval tv = {.tv_sec = OTA_RECV_TIMEOUT_S};
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-        const esp_partition_t *target = bootsel_get_update_target(settings_get()->ota_allow_overwrite_pd);
-        esp_err_t err = ESP_FAIL;
-        if (!target)
-        {
-            ESP_LOGE(TAG, "No safe slot for an update: all other slots hold the original firmware. "
-                          "Set ota_allow_overwrite_pd=1 in teddybox.ini to use the PD slot.");
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Writing update to %s @0x%06x", target->label, target->address);
-            err = ota_receive(sock, target);
-        }
-        shutdown(sock, 0);
-        close(sock);
-
-        if (err != ESP_OK)
-        {
-            continue;
-        }
-
-        err = esp_ota_set_boot_partition(target);
-        if (err != ESP_OK)
-        {
-            ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)", esp_err_to_name(err));
-            continue;
-        }
-        ESP_LOGW(TAG, "Update installed, restarting");
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        esp_restart();
+        esp_ota_abort(s->handle);
+        s->started = false;
     }
 }
 
-void ota_init()
+void ota_confirm_running(void)
 {
-    esp_log_level_set(TAG, ESP_LOG_INFO);
-
+    esp_ota_img_states_t state;
     const esp_partition_t *running = esp_ota_get_running_partition();
-    if (esp_ota_get_partition_description(running, &running_app_info) != ESP_OK)
+    if (esp_ota_get_state_partition(running, &state) == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY)
     {
-        ESP_LOGE(TAG, "Failed to fetch firmware version");
-        return;
+        if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK)
+        {
+            ESP_LOGW(TAG, "New firmware in %s confirmed, rollback cancelled", running->label);
+        }
     }
-    ESP_LOGI(TAG, "Running %s from %s", running_app_info.version, running->label);
-
-    /* esp_ota_end() validates the image (SHA256), needs more than 2k stack */
-    xTaskCreatePinnedToCore(ota_mainthread, "[TB] OTA", 4096, NULL, 5, NULL, 0);
 }

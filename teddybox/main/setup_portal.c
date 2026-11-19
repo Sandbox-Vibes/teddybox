@@ -22,6 +22,8 @@
 #include "wifi.h"
 #include "ledman.h"
 #include "playback.h"
+#include "ota.h"
+#include "esp_ota_ops.h"
 
 static const char *TAG = "Setup";
 
@@ -137,8 +139,11 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "lang_id", s->lang_id);
     cJSON_AddNumberToObject(j, "volume_max", s->volume_max);
     cJSON_AddNumberToObject(j, "idle_timeout", s->idle_timeout_s);
-    cJSON_AddBoolToObject(j, "ota_allow_overwrite_pd", s->ota_allow_overwrite_pd);
-    cJSON_AddBoolToObject(j, "ota_enabled", s->ota_enabled);
+    esp_app_desc_t app;
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_get_partition_description(running, &app);
+    cJSON_AddStringToObject(j, "fw_version", app.version);
+    cJSON_AddStringToObject(j, "fw_slot", running->label);
     cJSON_AddBoolToObject(j, "boxine_fallback", s->boxine_fallback);
     cJSON_AddBoolToObject(j, "user_agent_original", s->user_agent_original);
     return send_json(req, j);
@@ -373,17 +378,7 @@ static esp_err_t save_handler(httpd_req_t *req)
     {
         s->idle_timeout_s = v;
     }
-    cJSON *b = cJSON_GetObjectItemCaseSensitive(o, "ota_allow_overwrite_pd");
-    if (cJSON_IsBool(b))
-    {
-        s->ota_allow_overwrite_pd = cJSON_IsTrue(b);
-    }
-    b = cJSON_GetObjectItemCaseSensitive(o, "ota_enabled");
-    if (cJSON_IsBool(b))
-    {
-        s->ota_enabled = cJSON_IsTrue(b);
-    }
-    b = cJSON_GetObjectItemCaseSensitive(o, "boxine_fallback");
+    cJSON *b = cJSON_GetObjectItemCaseSensitive(o, "boxine_fallback");
     if (cJSON_IsBool(b))
     {
         s->boxine_fallback = cJSON_IsTrue(b);
@@ -404,6 +399,111 @@ static esp_err_t save_handler(httpd_req_t *req)
     return send_result(req, true, NULL);
 }
 
+/* firmware upload: raw file as request body, "?pd=1" allows using the PD slot */
+static esp_err_t firmware_handler(httpd_req_t *req)
+{
+    touch();
+    char query[16] = "", pd[4] = "";
+    httpd_req_get_url_query_str(req, query, sizeof(query));
+    httpd_query_key_value(query, "pd", pd, sizeof(pd));
+    bool allow_pd = !strcmp(pd, "1");
+
+    const size_t BUF = 4096;
+    uint8_t *buf = malloc(BUF);
+    if (!buf)
+    {
+        return send_result(req, false, "Kein Speicher frei");
+    }
+
+    size_t total = req->content_len;
+    size_t got = 0;
+    const char *err = NULL;
+    bool needs_pd = false;
+    ota_session_t ota;
+    bool begun = false;
+
+    while (got < total && !err)
+    {
+        /* fill the buffer completely, the first block must contain the whole header */
+        size_t fill = 0;
+        size_t want = (total - got) < BUF ? (total - got) : BUF;
+        while (fill < want)
+        {
+            int r = httpd_req_recv(req, (char *)buf + fill, want - fill);
+            if (r == HTTPD_SOCK_ERR_TIMEOUT)
+            {
+                continue;
+            }
+            if (r <= 0)
+            {
+                err = "Verbindung abgebrochen";
+                break;
+            }
+            fill += r;
+        }
+        if (err)
+        {
+            break;
+        }
+        touch();
+
+        if (!begun)
+        {
+            esp_app_desc_t desc;
+            err = ota_check_header(buf, fill, total, &desc);
+            if (!err)
+            {
+                ESP_LOGI(TAG, "Firmware upload: %s %s, %u bytes", desc.project_name, desc.version, (unsigned)total);
+                err = ota_session_begin(&ota, total, allow_pd, &needs_pd);
+                begun = !err;
+            }
+            if (err)
+            {
+                break;
+            }
+        }
+        err = ota_session_write(&ota, buf, fill);
+        got += fill;
+    }
+    free(buf);
+
+    if (!err && begun)
+    {
+        err = ota_session_finish(&ota);
+    }
+    else if (begun)
+    {
+        ota_session_abort(&ota);
+    }
+
+    if (err)
+    {
+        ESP_LOGE(TAG, "Firmware upload failed: %s", err);
+        /* drain the rest so the browser gets the answer */
+        char tmp[256];
+        while (got < total)
+        {
+            int r = httpd_req_recv(req, tmp, sizeof(tmp));
+            if (r <= 0 && r != HTTPD_SOCK_ERR_TIMEOUT)
+            {
+                break;
+            }
+            if (r > 0)
+            {
+                got += r;
+            }
+        }
+        cJSON *j = cJSON_CreateObject();
+        cJSON_AddBoolToObject(j, "ok", false);
+        cJSON_AddStringToObject(j, "error", err);
+        cJSON_AddBoolToObject(j, "needs_pd", needs_pd);
+        return send_json(req, j);
+    }
+
+    saved = true; /* restarts into the new firmware */
+    return send_result(req, true, NULL);
+}
+
 /* everything unknown, including the captive portal probes of phones, goes to the setup page */
 static esp_err_t redirect_handler(httpd_req_t *req, httpd_err_code_t err)
 {
@@ -421,6 +521,7 @@ esp_err_t setup_portal_register(httpd_handle_t server)
         {.uri = "/api/scan", .method = HTTP_GET, .handler = scan_handler},
         {.uri = "/api/ca", .method = HTTP_POST, .handler = ca_handler},
         {.uri = "/api/save", .method = HTTP_POST, .handler = save_handler},
+        {.uri = "/api/firmware", .method = HTTP_POST, .handler = firmware_handler},
     };
     for (int i = 0; i < sizeof(uris) / sizeof(uris[0]); i++)
     {
@@ -541,6 +642,10 @@ void setup_portal_run(void)
         ESP_LOGE(TAG, "Web server failed to start");
         return;
     }
+
+    /* the setup page works, that is enough to confirm a new firmware;
+       a further update would otherwise be refused while on probation */
+    ota_confirm_running();
 
     bool led_set = false;
     while (!saved)

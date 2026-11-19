@@ -273,15 +273,14 @@ void app_main(void)
     mqtt_ha_init();
     /* already too much memory consumption, do not enable by default */
     // www_init();
-    /* the OTA port has no authentication, so it is only opened on request */
-    if (settings_get()->ota_enabled)
-    {
-        ota_init();
-    }
+    /* updates come through the setup page, see ota.h */
 
     int64_t last_activity_time = esp_timer_get_time();
     int64_t remute_time = 0;
     int64_t both_ears_since = 0;
+    /* a new firmware runs on probation until it confirms itself, see ota.h */
+    const int64_t confirm_time = esp_timer_get_time() + OTA_CONFIRM_AFTER_US;
+    bool confirmed = false;
     bool low_battery_warned = false;
     const int64_t poweroff_timeout = (int64_t)settings_get()->idle_timeout_s * 1000000LL;
     
@@ -327,6 +326,12 @@ void app_main(void)
                 dac3100_beep(3, 0x140);
             }
             remute_time = cur_time + 800;
+        }
+
+        if (!confirmed && cur_time > confirm_time)
+        {
+            ota_confirm_running();
+            confirmed = true;
         }
 
         int vol_req = ctrl_volume_request;
