@@ -32,6 +32,7 @@ static settings_t settings = {
     .volume_default = 50,
     .idle_timeout_s = 60,
     .speaker_eq = SPEAKER_EQ_DEFAULT,
+    .led_brightness = 3,
     .mqtt_host = "",
     .mqtt_port = 1883,
     .mqtt_user = "",
@@ -101,7 +102,9 @@ int settings_save_ini(const char *path)
                      "volume_default = %u\n"
                      "idle_timeout = %u\n"
                      "# speaker EQ: off, lowcut (high-pass 150 Hz) or full (plus gentle cuts at 400 Hz and 3.2 kHz)\n"
-                     "speaker_eq = %s\n",
+                     "speaker_eq = %s\n"
+                     "# LED brightness: 0 (off) to 3 (full)\n"
+                     "led_brightness = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -111,7 +114,7 @@ int settings_save_ini(const char *path)
                      s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
-                     speaker_eq_name(s->speaker_eq)) > 0;
+                     speaker_eq_name(s->speaker_eq), s->led_brightness) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -258,6 +261,10 @@ void settings_load_ini(void)
         else if (!strcmp(key, "volume_default") && num >= 0 && num <= 100)
         {
             settings.volume_default = num;
+        }
+        else if (!strcmp(key, "led_brightness") && num >= 0 && num <= 3 && val[0] >= '0' && val[0] <= '3' && !val[1])
+        {
+            settings.led_brightness = num;
         }
         else if (!strcmp(key, "speaker_eq"))
         {

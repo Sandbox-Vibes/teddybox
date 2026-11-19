@@ -51,6 +51,9 @@ typedef struct
     uint32_t status_code;
     uint32_t content_length;
     uint32_t received;
+    /* for the speed in the log: when this connection started and at which byte */
+    int64_t speed_start_us;
+    uint32_t speed_start_bytes;
     SemaphoreHandle_t file_sem;
     FILE *handle;
 } cloud_content_req_t;

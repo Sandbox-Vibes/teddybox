@@ -9,6 +9,7 @@
  *   BASE/state              JSON with all values (retained)
  *   BASE/cmd/volume         0..volume_max
  *   BASE/cmd/speaker_eq     one of the HA_SPEAKER_EQ_OPTIONS labels
+ *   BASE/cmd/led            0..3
  *   BASE/cmd/stop|next|prev|poweroff   any payload
  *   <prefix>/<component>/<device id>/<object>/config   discovery (retained)
  */
@@ -40,6 +41,13 @@ typedef struct
     bool headphones;
     int rssi;                /* 0 = unknown */
     int speaker_eq;          /* 0 off, 1 lowcut, 2 full (speaker_eq_t) */
+    int led;                 /* 0..3 */
+    /* progress, -1 = unknown (sent as null) */
+    int progress;            /* % of the tonie */
+    int chapter_progress;    /* % of the chapter */
+    int position_ds;         /* played, 1/10 s */
+    int duration_ds;         /* total, 1/10 s */
+    int download;            /* % of a running download */
 } ha_state_t;
 
 typedef enum
@@ -51,6 +59,7 @@ typedef enum
     HA_CMD_PREV,
     HA_CMD_POWEROFF,
     HA_CMD_SPEAKER_EQ,
+    HA_CMD_LED,
 } ha_cmd_t;
 
 /* select labels, index = speaker_eq_t */

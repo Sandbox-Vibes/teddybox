@@ -206,5 +206,6 @@ void accel_init(audio_board_handle_t board)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
-    xTaskCreatePinnedToCore(accel_mainthread, "[TB] accel", 2048, (void *)board, ACCEL_TASK_PRIO, NULL, tskNO_AFFINITY);
+    /* 2048 left only 200 bytes on the box after the first tilt (log output) */
+    xTaskCreatePinnedToCore(accel_mainthread, "[TB] accel", 3072, (void *)board, ACCEL_TASK_PRIO, NULL, tskNO_AFFINITY);
 }

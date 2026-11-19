@@ -81,6 +81,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <div><label for="vmax">Max. Lautstärke (%)</label><input id="vmax" type="number" min="10" max="100" step="5"></div>
 <div><label for="idle">Ausschalten nach (Sek.)</label><input id="idle" type="number" min="10" step="10"></div>
 <div><label for="speq">Lautsprecher-Klang</label><select id="speq"><option value="full">Optimiert (empfohlen)</option><option value="lowcut">Nur Tiefenfilter</option><option value="off">Wie Original (ohne Filter)</option></select></div>
+<div><label for="led">LED-Helligkeit</label><select id="led"><option value="3">3 (hell)</option><option value="2">2</option><option value="1">1 (gedimmt)</option><option value="0">Aus</option></select></div>
 </div>
 <details><summary>Erweitert</summary>
 <label><input id="boxfb" type="checkbox" style="width:auto"> Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist</label>
@@ -136,7 +137,7 @@ async function load(){
     if(cfg.ca_custom)setStatus($('castatus'),'Eigenes CA-Zertifikat ist gespeichert.','ok');
     $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
     if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
-    $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('idle').value=cfg.idle_timeout||60;$('speq').value=cfg.speaker_eq||'full';
+    $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('idle').value=cfg.idle_timeout||60;$('speq').value=cfg.speaker_eq||'full';$('led').value=String(cfg.led_brightness??3);
     $('fwinfo').textContent='Läuft: TeddyBox '+(cfg.fw_version||'?')+' aus Slot '+(cfg.fw_slot||'?');
     $('boxfb').checked=!!cfg.boxine_fallback;$('uaorig').checked=!!cfg.user_agent_original;
   }catch(e){setStatus($('status'),'Einstellungen konnten nicht geladen werden.','err');}
@@ -172,7 +173,7 @@ $('save').onclick=async()=>{
   const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
     cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
-    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,idle_timeout:+$('idle').value||60,speaker_eq:$('speq').value,
+    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,idle_timeout:+$('idle').value||60,speaker_eq:$('speq').value,led_brightness:+$('led').value,
     boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked};
   setStatus($('status'),'Speichere …');
   try{

@@ -169,6 +169,16 @@ read from the flash dump):
   response computed from the rounded 16 bit coefficients.
 - checked against a register model: `tests/host/dac_sim`
 
+## Home Assistant: progress and LED
+
+- `Fortschritt` (% of the tonie), `Kapitel-Fortschritt`, `Gespielt` and
+  `Gesamtdauer` (minutes, from the Ogg granule positions; every TAF block
+  starts with an Ogg page, the duration is the last page of the file) and
+  `Download` (% of a running download). Unknown values are sent as null and
+  show as "unknown". Progress alone goes out at most every 10 s.
+- `LED-Helligkeit` 0 (off) to 3, also `led_brightness` in teddybox.ini and on
+  the setup page. The setup mode lights up at level 1 at least.
+
 ## Power
 
 - The NFC reader's RF field (70-130 mA while on) is only switched on for the

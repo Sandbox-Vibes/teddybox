@@ -20,6 +20,8 @@
 static const char *TAG = "MQTT";
 
 #define STATE_INTERVAL_MS 30000
+/* progress values change every second, they alone go out at most this often */
+#define PROGRESS_INTERVAL_MS 10000
 #define POLL_INTERVAL_MS 1000
 
 static esp_mqtt_client_handle_t client = NULL;
@@ -71,6 +73,15 @@ static void mqtt_collect_state(ha_state_t *st)
     st->charging = battery_is_charging();
     st->headphones = pb_headphones_connected();
     st->speaker_eq = ctrl_get_speaker_eq();
+    st->led = ctrl_get_led_brightness();
+
+    pb_progress_t p;
+    pb_get_progress(&p);
+    st->progress = st->playing ? p.progress : -1;
+    st->chapter_progress = st->playing ? p.chapter_progress : -1;
+    st->position_ds = st->playing ? p.position_ds : -1;
+    st->duration_ds = st->playing ? p.duration_ds : -1;
+    st->download = p.download;
 
     wifi_ap_record_t ap;
     st->rssi = (wifi_is_connected() && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) ? ap.rssi : 0;
@@ -80,7 +91,10 @@ static void mqtt_collect_state(ha_state_t *st)
 static bool state_differs(const ha_state_t *a, const ha_state_t *b)
 {
     return a->playing != b->playing || a->uid != b->uid || a->chapter != b->chapter || a->chapters != b->chapters ||
-           a->volume != b->volume || a->charging != b->charging || a->headphones != b->headphones || a->speaker_eq != b->speaker_eq ||
+           a->volume != b->volume || a->charging != b->charging || a->headphones != b->headphones || a->speaker_eq != b->speaker_eq || a->led != b->led ||
+           /* a value appearing or disappearing (download starts/ends, duration known) goes out at once */
+           (a->download < 0) != (b->download < 0) || (a->duration_ds < 0) != (b->duration_ds < 0) ||
+           (a->download == 100) != (b->download == 100) ||
            strcmp(a->battery_state, b->battery_state);
 }
 
@@ -108,6 +122,10 @@ static void mqtt_handle_command(const char *topic, int topic_len, const char *da
     case HA_CMD_SPEAKER_EQ:
         ESP_LOGI(TAG, "Command: speaker EQ %d", value);
         ctrl_request_speaker_eq(value);
+        break;
+    case HA_CMD_LED:
+        ESP_LOGI(TAG, "Command: LED brightness %d", value);
+        ctrl_request_led_brightness(value);
         break;
     case HA_CMD_POWEROFF:
         ESP_LOGI(TAG, "Command: power off");
@@ -166,7 +184,7 @@ static void mqtt_ha_task(void *arg)
 {
     ha_state_t last = {.battery_state = ""};
     ha_state_t now;
-    char json[320];
+    char json[512];
     TickType_t last_sent = 0;
 
     while (true)
@@ -186,8 +204,12 @@ static void mqtt_ha_task(void *arg)
         }
 
         mqtt_collect_state(&now);
-        bool periodic = (xTaskGetTickCount() - last_sent) >= pdMS_TO_TICKS(STATE_INTERVAL_MS);
-        if (force || periodic || state_differs(&now, &last))
+        TickType_t since = xTaskGetTickCount() - last_sent;
+        bool periodic = since >= pdMS_TO_TICKS(STATE_INTERVAL_MS);
+        bool progress = since >= pdMS_TO_TICKS(PROGRESS_INTERVAL_MS) &&
+                        (now.progress != last.progress || now.chapter_progress != last.chapter_progress ||
+                         now.position_ds / 10 != last.position_ds / 10 || now.download != last.download);
+        if (force || periodic || progress || state_differs(&now, &last))
         {
             int len = ha_state_json(&now, json, sizeof(json));
             if (len > 0 && esp_mqtt_client_publish(client, state_topic, json, len, 0, 1) >= 0)
@@ -266,7 +288,7 @@ void mqtt_ha_init(void)
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
 
-    xTaskCreate(&mqtt_ha_task, "[TB] mqtt_ha", 3584, NULL, 4, NULL);
+    xTaskCreate(&mqtt_ha_task, "[TB] mqtt_ha", 4096, NULL, 4, NULL);
     ESP_LOGI(TAG, "Home Assistant integration started, topic %s", base_topic);
 }
 

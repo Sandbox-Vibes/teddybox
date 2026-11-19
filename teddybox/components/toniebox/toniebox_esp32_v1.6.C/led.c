@@ -8,6 +8,12 @@
 
 static const char *TAG = "LED";
 
+/* brightness levels 0..LED_BRIGHTNESS_MAX as share of the PWM duty; the eye
+   is far from linear, equal steps would look almost the same at the top */
+static const float led_levels[LED_BRIGHTNESS_MAX + 1] = {0.0f, 0.10f, 0.35f, 1.0f};
+static int led_level = LED_BRIGHTNESS_MAX;
+static float led_last_r, led_last_g, led_last_b;
+
 void led_init(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -52,7 +58,31 @@ void led_set(led_t led, float pct)
 
 void led_set_rgb(float r, float g, float b)
 {
-    led_set(LED_RED, r);
-    led_set(LED_GREEN, g);
-    led_set(LED_BLUE, b);
+    led_last_r = r;
+    led_last_g = g;
+    led_last_b = b;
+    float k = led_levels[led_level];
+    led_set(LED_RED, r * k);
+    led_set(LED_GREEN, g * k);
+    led_set(LED_BLUE, b * k);
+}
+
+void led_set_brightness(int level)
+{
+    if (level < 0)
+    {
+        level = 0;
+    }
+    if (level > LED_BRIGHTNESS_MAX)
+    {
+        level = LED_BRIGHTNESS_MAX;
+    }
+    led_level = level;
+    /* apply to what is shown right now */
+    led_set_rgb(led_last_r, led_last_g, led_last_b);
+}
+
+int led_get_brightness(void)
+{
+    return led_level;
 }

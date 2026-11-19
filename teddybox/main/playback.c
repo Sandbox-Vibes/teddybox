@@ -28,6 +28,7 @@
 #include "ledman.h"
 #include "cloud.h"
 #include "mempeak.h"
+#include "ogg_pos.h"
 #include "memdiag.h"
 
 audio_pipeline_handle_t pipeline;
@@ -127,6 +128,8 @@ esp_err_t pb_toniefile_open(pb_toniefile_t *info, const char *filepath)
             free(info->filename);
             return ESP_FAIL;
         }
+        /* the block buffer is free until playback starts */
+        info->total_granule = pb_ogg_total_granule(info->fd, info->current_block_buffer, sizeof(info->current_block_buffer));
     }
 
     ESP_LOGI(TAG, "  Audio ID: %08X", info->taf->audio_id);
@@ -168,6 +171,33 @@ void pb_toniefile_close(pb_toniefile_t *info)
     info->taf = NULL;
     free(info->filename);
     info->filename = NULL;
+}
+
+/* progress for MQTT: written by the playback side only, read as plain ints */
+static volatile int pb_prog_total = -1, pb_prog_chapter = -1, pb_prog_pos_ds = -1, pb_prog_dur_ds = -1, pb_prog_dl = -1;
+
+static void pb_progress_reset(void)
+{
+    pb_prog_total = pb_prog_chapter = pb_prog_pos_ds = pb_prog_dur_ds = -1;
+}
+
+void pb_get_progress(pb_progress_t *p)
+{
+    p->progress = pb_prog_total;
+    p->chapter_progress = pb_prog_chapter;
+    p->position_ds = pb_prog_pos_ds;
+    p->duration_ds = pb_prog_dur_ds;
+    p->download = pb_prog_dl;
+}
+
+static int pb_percent(int64_t part, int64_t whole)
+{
+    if (whole <= 0)
+    {
+        return -1;
+    }
+    int64_t p = part * 100 / whole;
+    return p < 0 ? 0 : (p > 100 ? 100 : (int)p);
 }
 
 static size_t pb_ensure_block(pb_toniefile_t *info, FILE *fd)
@@ -219,6 +249,12 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE *fd)
         if (info->current_block_avail < 0)
         {
             info->current_block_avail = 0;
+        }
+        /* every TAF block starts with an Ogg page */
+        uint64_t g = pb_ogg_granule(info->current_block_buffer, info->current_block_avail);
+        if (g != PB_NO_GRANULE)
+        {
+            info->granule = g;
         }
     }
     if (!pb_default_content)
@@ -305,17 +341,46 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
     {
         int32_t current_block = (info->current_pos / TONIEFILE_FRAME_SIZE) - 1;
 
+        /* the chapter is the last one that starts at or before this block
+           (the old loop never reached the last chapter) */
+        int found = 0;
         for (int chap = 0; chap < info->taf->n_track_page_nums; chap++)
         {
-            if (current_block < info->taf->track_page_nums[chap])
+            if (current_block >= (int32_t)info->taf->track_page_nums[chap])
             {
-                if (info->current_chapter != chap - 1)
-                {
-                    info->current_chapter = chap - 1;
-                    ESP_LOGI(TAG, "Current chapter: %d", info->current_chapter);
-                }
-                break;
+                found = chap;
             }
+        }
+        if (info->current_chapter != found)
+        {
+            info->current_chapter = found;
+            ESP_LOGI(TAG, "Current chapter: %d", info->current_chapter);
+        }
+    }
+
+    /* progress: by time if the duration is known, else by position in the file */
+    if (!pb_default_content)
+    {
+        int32_t audio_blocks = info->taf->num_bytes / TONIEFILE_FRAME_SIZE;
+        int32_t block = (info->current_pos / TONIEFILE_FRAME_SIZE) - 1;
+        if (block < 0)
+        {
+            block = 0;
+        }
+        pb_prog_pos_ds = info->granule ? (int)(info->granule * 10 / PB_OPUS_RATE) : 0;
+        pb_prog_dur_ds = info->total_granule ? (int)(info->total_granule * 10 / PB_OPUS_RATE) : -1;
+        pb_prog_total = info->total_granule ? pb_percent(info->granule, info->total_granule) : pb_percent(block, audio_blocks);
+        int chap = info->current_chapter;
+        int n = info->taf->n_track_page_nums;
+        if (chap >= 0 && chap < n)
+        {
+            int32_t start = info->taf->track_page_nums[chap];
+            int32_t end = chap + 1 < n ? (int32_t)info->taf->track_page_nums[chap + 1] : audio_blocks;
+            pb_prog_chapter = pb_percent(block - start, end - start);
+        }
+        else
+        {
+            pb_prog_chapter = -1;
         }
     }
 
@@ -635,6 +700,7 @@ static void pb_int_stop()
        their handler resets the pipeline and closes the (new) file */
     audio_event_iface_discard(evt);
     pb_mempeak_release();
+    pb_progress_reset();
 
     pb_playing = false;
     pb_default_content = false;
@@ -657,10 +723,17 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
 
     if (!pb_default_content)
     {
-        if (nfc_uid == pb_last_nfc_uid)
+        /* resuming needs block 2 or later: block 1 starts with the Opus header
+           again, after the initial header the decoder would see the stream
+           twice ("Apparent chaining without changing serial number") */
+        if (nfc_uid == pb_last_nfc_uid && pb_last_play_position + 1 >= 2)
         {
             ESP_LOGI(TAG, "UID %16llX match, set last play position to %d", nfc_uid, pb_last_play_position);
             pb_toniefile_info.current_block = pb_last_play_position + 1;
+        }
+        else if (nfc_uid == pb_last_nfc_uid)
+        {
+            ESP_LOGI(TAG, "UID %16llX match, but still at the start, play from start", nfc_uid);
         }
         else
         {
@@ -872,6 +945,12 @@ void pb_mainthread(void *arg)
     {
         vTaskDelay(50 / portTICK_PERIOD_MS);
 
+        /* current_dl_req belongs to this thread, so it is safe to look at here */
+        {
+            cloud_content_req_t *dl = current_dl_req;
+            pb_prog_dl = (dl && dl->content_length) ? pb_percent(dl->received, dl->content_length) : -1;
+        }
+
         /* the decoder normally reports its format within a few 100 ms */
         if (pb_mempeak_taken && xTaskGetTickCount() - pb_mempeak_since > pdMS_TO_TICKS(PB_MEMPEAK_MAX_MS))
         {
@@ -1016,6 +1095,7 @@ void pb_mainthread(void *arg)
                             }
                             pb_default_content = false;
                             pb_playing = false;
+                            pb_progress_reset();
                             audio_pipeline_reset_ringbuffer(pipeline);
                             audio_pipeline_reset_elements(pipeline);
                             audio_pipeline_change_state(pipeline, AEL_STATE_INIT);

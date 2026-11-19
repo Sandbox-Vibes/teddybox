@@ -25,6 +25,19 @@ static const ha_entity_t entities[] = {
      "\"value_template\":\"{{ value_json.chapter if value_json.chapters else 0 }}\",\"icon\":\"mdi:book-open-page-variant\""},
     {"sensor", "chapters", "Kapitel gesamt",
      "\"value_template\":\"{{ value_json.chapters }}\",\"icon\":\"mdi:book-multiple\",\"entity_category\":\"diagnostic\""},
+    /* progress: null in the state JSON renders as "None", which HA shows as unknown */
+    {"sensor", "progress", "Fortschritt",
+     "\"value_template\":\"{{ value_json.progress }}\",\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:progress-clock\""},
+    {"sensor", "chapter_progress", "Kapitel-Fortschritt",
+     "\"value_template\":\"{{ value_json.chapter_progress }}\",\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:progress-helper\""},
+    {"sensor", "position", "Gespielt",
+     "\"value_template\":\"{{ value_json.position }}\",\"device_class\":\"duration\",\"unit_of_measurement\":\"min\","
+     "\"suggested_display_precision\":0"},
+    {"sensor", "duration", "Gesamtdauer",
+     "\"value_template\":\"{{ value_json.duration }}\",\"device_class\":\"duration\",\"unit_of_measurement\":\"min\","
+     "\"suggested_display_precision\":0"},
+    {"sensor", "download", "Download",
+     "\"value_template\":\"{{ value_json.download }}\",\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:download\""},
     {"number", "volume", "Lautstärke",
      "\"value_template\":\"{{ value_json.volume }}\",\"command_topic\":\"%s/cmd/volume\",\"min\":0,\"max\":%d,\"step\":5,"
      "\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:volume-high\""},
@@ -43,6 +56,9 @@ static const ha_entity_t entities[] = {
     {"sensor", "rssi", "WLAN-Signal",
      "\"value_template\":\"{{ value_json.rssi if value_json.rssi else None }}\",\"device_class\":\"signal_strength\","
      "\"unit_of_measurement\":\"dBm\",\"state_class\":\"measurement\",\"entity_category\":\"diagnostic\""},
+    {"number", "led", "LED-Helligkeit",
+     "\"value_template\":\"{{ value_json.led }}\",\"command_topic\":\"%s/cmd/led\",\"min\":0,\"max\":3,\"step\":1,"
+     "\"mode\":\"slider\",\"icon\":\"mdi:led-on\",\"entity_category\":\"config\""},
     {"select", "speaker_eq", "Lautsprecher-Klang",
      "\"value_template\":\"{{ value_json.speaker_eq }}\",\"command_topic\":\"%s/cmd/speaker_eq\","
      "\"options\":[\"Optimiert\",\"Nur Tiefenfilter\",\"Wie Original\"],\"icon\":\"mdi:tune-vertical\",\"entity_category\":\"config\""},
@@ -129,8 +145,31 @@ int ha_discovery(const ha_ctx_t *ctx, int idx, char *topic, size_t topic_size, c
     return (n < 0 || (size_t)n >= payload_size) ? -1 : n;
 }
 
+/* -1 = unknown -> null */
+static const char *ha_int_or_null(char *buf, size_t size, int v)
+{
+    if (v < 0)
+    {
+        return "null";
+    }
+    snprintf(buf, size, "%d", v);
+    return buf;
+}
+
+/* tenths of a second -> minutes with one decimal, -1 -> null */
+static const char *ha_minutes_or_null(char *buf, size_t size, int ds)
+{
+    if (ds < 0)
+    {
+        return "null";
+    }
+    snprintf(buf, size, "%d.%d", ds / 600, (ds % 600) / 60);
+    return buf;
+}
+
 int ha_state_json(const ha_state_t *st, char *buf, size_t size)
 {
+    char prog[8], chprog[8], pos[16], dur[16], dl[8];
     char tonie[20] = "";
     if (st->uid)
     {
@@ -140,11 +179,15 @@ int ha_state_json(const ha_state_t *st, char *buf, size_t size)
     int n = snprintf(buf, size,
                      "{\"status\":\"%s\",\"tonie\":\"%s\",\"chapter\":%d,\"chapters\":%d,\"volume\":%u,"
                      "\"battery_mv\":%u,\"battery\":%d,\"battery_state\":\"%s\",\"charging\":%s,"
-                     "\"headphones\":%s,\"rssi\":%d,\"speaker_eq\":\"%s\"}",
+                     "\"headphones\":%s,\"rssi\":%d,\"speaker_eq\":\"%s\",\"led\":%d,"
+                     "\"progress\":%s,\"chapter_progress\":%s,\"position\":%s,\"duration\":%s,\"download\":%s}",
                      st->playing ? "playing" : "idle", tonie, st->chapter, st->chapters, st->volume,
                      st->battery_mv, st->battery_percent, st->battery_state ? st->battery_state : "unknown",
                      st->charging ? "true" : "false", st->headphones ? "true" : "false", st->rssi,
-                     ha_speaker_eq_label(st->speaker_eq));
+                     ha_speaker_eq_label(st->speaker_eq), st->led,
+                     ha_int_or_null(prog, sizeof(prog), st->progress), ha_int_or_null(chprog, sizeof(chprog), st->chapter_progress),
+                     ha_minutes_or_null(pos, sizeof(pos), st->position_ds), ha_minutes_or_null(dur, sizeof(dur), st->duration_ds),
+                     ha_int_or_null(dl, sizeof(dl), st->download));
     return (n < 0 || (size_t)n >= size) ? -1 : n;
 }
 
@@ -162,7 +205,7 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     int name_len = topic_len - (int)(name - topic);
 
 #define IS(s) (name_len == (int)strlen(s) && !strncmp(name, s, name_len))
-    if (IS("volume"))
+    if (IS("volume") || IS("led"))
     {
         char num[12];
         if (data_len <= 0 || data_len >= (int)sizeof(num))
@@ -178,7 +221,12 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
         {
             return HA_CMD_NONE;
         }
-        *value = (int)(v + 0.5);
+        /* round half away from zero, (int)(v + 0.5) would turn -1 into 0 */
+        *value = (int)(v + (v >= 0 ? 0.5 : -0.5));
+        if (IS("led"))
+        {
+            return (*value >= 0 && *value <= 3) ? HA_CMD_LED : HA_CMD_NONE;
+        }
         return HA_CMD_VOLUME;
     }
     if (IS("stop"))

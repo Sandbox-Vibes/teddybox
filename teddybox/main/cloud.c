@@ -21,6 +21,7 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 
+#include "esp_timer.h"
 #include "memdiag.h"
 #include "mempeak.h"
 #include "cloud.h"
@@ -375,6 +376,8 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
     bool resume = range_start > 0 && range_start == req->received;
     req->received = range_start;
     req->content_length = total_length;
+    req->speed_start_us = esp_timer_get_time();
+    req->speed_start_bytes = range_start;
 
     ESP_LOGI(TAG, "[CDL] download %u-%u to '%s'%s", req->received, req->content_length, req->filename, resume ? " (resume)" : "");
 
@@ -428,24 +431,19 @@ esp_err_t cloud_content_cbr(void *ctx, uint8_t *data, size_t length)
     /* give others the chance to react */
     vTaskDelay(1 / portTICK_RATE_MS);
 
-    time_t current = time(NULL);
-    static time_t start = 0;
-    static time_t last = 0;
-    if (start == 0)
+    /* once a second; the speed only counts this connection (a resumed
+       download starts in the middle, an earlier download is not part of it) */
+    static int64_t last_us = 0;
+    int64_t now_us = esp_timer_get_time();
+    if (now_us - last_us >= 1000000)
     {
-        start = current;
-    }
-
-    if (last != current)
-    {
-        last = current;
-
-        float elapsed = difftime(current, start);
-        float speed = (req->received / elapsed) / 1024.0; // KiB/s
-        float percent_complete = (req->received * 100.0f / req->content_length);
-        float eta = ((req->content_length - req->received) / (req->received / elapsed));
-
-        ESP_LOGI(TAG, "[CDL] %d bytes received (%2.2f%%), Speed: %2.2f KiB/s, ETA: %2.2f s", req->received, percent_complete, speed, eta);
+        last_us = now_us;
+        float elapsed = (now_us - req->speed_start_us) / 1e6f;
+        uint32_t bytes = req->received - req->speed_start_bytes;
+        float speed = elapsed > 0.5f ? bytes / elapsed : 0; /* bytes/s */
+        float percent_complete = req->received * 100.0f / req->content_length;
+        ESP_LOGI(TAG, "[CDL] %u bytes received (%.2f%%), Speed: %.1f KiB/s, ETA: %.0f s", (unsigned)req->received,
+                 percent_complete, speed / 1024, speed > 0 ? (req->content_length - req->received) / speed : -1.0f);
     }
     return ESP_OK;
 }
@@ -499,7 +497,11 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
         .connection_closed_ctx = &http_parser_handler_ctx};
 
     content_req->state = CC_STATE_CONNECTING;
+    /* WiFi power save (wake up only at the router's beacons) slows a long
+       download down; off while it runs, a bit more current for that time */
+    esp_wifi_set_ps(WIFI_PS_NONE);
     esp_err_t ret = cloud_request(&req);
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
 
     free(http_parser_handler_ctx.header_buffer);
 

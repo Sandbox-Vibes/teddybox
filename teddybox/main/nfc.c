@@ -19,12 +19,12 @@ static uint8_t slix_get_rand[] = {0x02, 0xB2, 0x04};
 static uint8_t slix_get_inventory[] = {0x26, 0x01, 0x00};
 static uint8_t slix_set_pass[] = {0x02, 0xB3, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00};
 /* ISO15693 READ MULTIPLE BLOCKS: high data rate, first block 0, 8 blocks (value is count - 1) */
-/* READ MULTIPLE BLOCKS, 2 blocks at a time: the TRF7962A FIFO holds 12 bytes
-   and the driver can not empty it during reception, so the answer (flags +
-   data + CRC) must fit: 1 + 8 + 2 = 11. All 8 blocks at once (35 bytes)
-   always failed on the box. */
-#define NFC_TOKEN_BLOCKS_PER_READ 2
-static uint8_t iso_read_token[] = {0x02, 0x23, 0x00, NFC_TOKEN_BLOCKS_PER_READ - 1};
+/* READ SINGLE BLOCK. The ICODE SLIX-L in a tonie does not implement READ
+   MULTIPLE BLOCKS and stays silent on it in non-addressed mode (NXP data
+   sheet, 9.5.2), which is why every token read failed on the box with 0 bytes.
+   One block answers with flags + 4 data + CRC = 7 bytes. */
+#define NFC_TOKEN_BLOCKS_PER_READ 1
+static uint8_t iso_read_token[] = {0x02, 0x20, 0x00};
 
 static const uint32_t passes[] = {0x0F0F0F0F, 0x7FFD6E5B, 0x00000000};
 static uint8_t received_data[256];

@@ -99,6 +99,10 @@ typedef struct
     int32_t target_chapter;
     int32_t seek_blocks;
     bool initialized;
+    /* Ogg granule position (48 kHz samples) of the block being read, and of
+       the last page of the file (0 = unknown, e.g. while it downloads) */
+    uint64_t granule;
+    uint64_t total_granule;
     TonieboxAudioFileHeader *taf;
 } pb_toniefile_t;
 
@@ -127,3 +131,14 @@ esp_err_t pb_check_file(const char *filename);
 uint32_t pb_get_play_position();
 uint64_t pb_get_current_uid();
 void pb_set_last(uint64_t nfc_uid, uint32_t play_position);
+
+/* playback and download progress, -1 = unknown / nothing playing */
+typedef struct
+{
+    int progress;         /* whole tonie, % */
+    int chapter_progress; /* current chapter, % */
+    int position_ds;      /* played time, 1/10 s */
+    int duration_ds;      /* total time, 1/10 s (unknown while downloading) */
+    int download;         /* running download, % */
+} pb_progress_t;
+void pb_get_progress(pb_progress_t *p);

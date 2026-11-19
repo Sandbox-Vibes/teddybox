@@ -274,6 +274,8 @@ static void park_outdated(uint64_t uid)
     struct stat st;
     if (stat(file, &st) != 0)
     {
+        /* teddyCloud may report tonies it knows for this box that were never played here */
+        ESP_LOGI(TAG, "  %016llX not on this box, nothing to do", (unsigned long long)uid);
         free(file);
         return;
     }

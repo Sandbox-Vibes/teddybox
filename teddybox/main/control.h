@@ -13,6 +13,9 @@ void ctrl_request_volume(int percent);
 /* speaker EQ (speaker_eq_t), applied and saved to the INI by the main loop */
 void ctrl_request_speaker_eq(int mode);
 int ctrl_get_speaker_eq(void);
+/* LED brightness 0..3, applied and saved to the INI by the main loop */
+void ctrl_request_led_brightness(int level);
+int ctrl_get_led_brightness(void);
 uint32_t ctrl_get_volume(void);
 
 void ctrl_request_poweroff(void);

@@ -14,7 +14,7 @@ double sim_now(void) { return now_ms / 1000.0; }
 
 /* scenario: tonie A from 5 s to 35 s, tonie B from 35.2 s to 50 s, nothing until 60 s */
 static uint64_t tag_at(double t) { if (t >= 5000 && t < 35000) return 0xE004035000112233ULL; if (t >= 35200 && t < 50000) return 0xE004035044556677ULL; return 0; }
-static int fifo_overflows = 0, tokens_ok = 0, tokens_bad = 0;
+static int unsupported = 0, fifo_overflows = 0, tokens_ok = 0, tokens_bad = 0;
 static uint8_t tag_mem(uint64_t uid, int i) { return (uint8_t)(uid >> (8 * (i % 8))) ^ (uint8_t)(0x11 * i); }
 static bool tag_powered = false, tag_unlocked = false; static uint8_t rnd[2];
 static uint64_t last_tag = 0;
@@ -49,15 +49,17 @@ esp_err_t trf7962a_xmit(trf7962a_t c, uint8_t *tx, uint8_t txl, uint8_t *rx, uin
     case 0xB3: { uint32_t p = (tx[4]^rnd[0]) | (tx[5]^rnd[1])<<8 | (tx[6]^rnd[0])<<16 | (uint32_t)(tx[7]^rnd[1])<<24;
                  if (p != TONIE_PASS) return ESP_FAIL; tag_unlocked = true; rx[0]=0; rx[1]=rx[2]=0; *rxl=3; return ESP_OK; }
     case 0x01: if (!tag_unlocked) return ESP_FAIL; rx[0]=0; rx[1]=0; for (int i=0;i<8;i++) rx[2+i]=t>>(8*i); rx[10]=rx[11]=0; *rxl=12; return ESP_OK;
-    case 0x23: { /* READ MULTIPLE BLOCKS: first block, count-1; 8 blocks of 4 bytes */
+    case 0x23: /* READ MULTIPLE BLOCKS: not implemented by the SLIX-L, silent in non-addressed mode */
+        unsupported++; return ESP_FAIL;
+    case 0x20: { /* READ SINGLE BLOCK: 8 blocks of 4 bytes */
         if (!tag_unlocked) return ESP_FAIL;
-        int first = tx[2], n = tx[3] + 1, len = 1 + 4 * n + 2;
-        if (first + n > 8) return ESP_FAIL;
-        /* the TRF7962A FIFO holds 12 bytes, longer answers fail with this driver (seen on the box) */
+        int first = tx[2], len = 1 + 4 + 2;
+        if (txl != 3 || first > 7) return ESP_FAIL;
+        /* the TRF7962A FIFO holds 12 bytes, longer answers fail with this driver */
         if (len > 12) { fifo_overflows++; return ESP_FAIL; }
         rx[0] = 0;
-        for (int i = 0; i < 4 * n; i++) rx[1 + i] = tag_mem(t, 4 * first + i);
-        rx[1 + 4 * n] = rx[2 + 4 * n] = 0xCC; /* CRC, the chip passes it on */
+        for (int i = 0; i < 4; i++) rx[1 + i] = tag_mem(t, 4 * first + i);
+        rx[5] = rx[6] = 0xCC; /* CRC, the chip passes it on */
         *rxl = len; return ESP_OK; }
     }
     return ESP_FAIL;
@@ -84,7 +86,7 @@ int main(int argc, char **argv)
         now_ms = 0; field = false; field_ms = 0; n_play = n_stop = 0; last_tag = 0; tag_powered = tag_unlocked = false;
         sim_end_ms = phase[i].from; double f0 = 0;
         if (phase[i].from > 0) { if (!setjmp(sim_end)) nfc_mainthread((void *)1); f0 = field_ms; }
-        now_ms = 0; field = false; field_ms = 0; n_play = n_stop = 0; tokens_ok = tokens_bad = fifo_overflows = 0; last_tag = 0; tag_powered = tag_unlocked = false;
+        now_ms = 0; field = false; field_ms = 0; n_play = n_stop = 0; tokens_ok = tokens_bad = fifo_overflows = unsupported = 0; last_tag = 0; tag_powered = tag_unlocked = false;
         sim_end_ms = phase[i].to;
         int v = sim_verbose; sim_verbose = v && i == 2;
         if (!setjmp(sim_end)) nfc_mainthread((void *)1);
@@ -94,8 +96,8 @@ int main(int argc, char **argv)
             printf("  Ereignisse: Start A bei %.2f s, Start B bei %.2f s, Stopp nach Entfernen bei %.2f s (Tonie weg bei 50.00 s)\n",
                    n_play > 0 ? play_events[0]/1000 : -1, n_play > 1 ? play_events[1]/1000 : -1, n_stop > 0 ? stop_at[n_stop-1]/1000 : -1);
             printf("  Anzahl Starts: %d (erwartet 2), Stopps: %d\n", n_play, n_stop);
-            printf("  Token: %d korrekt gelesen, %d falsch (erwartet 2 / 0), FIFO-Überläufe: %d\n", tokens_ok, tokens_bad, fifo_overflows);
-            if (tokens_ok != 2 || tokens_bad || fifo_overflows) { printf("  FAIL token\n"); return 1; }
+            printf("  Token: %d korrekt gelesen, %d falsch (erwartet 2 / 0), FIFO-Überläufe: %d, nicht unterstützte Befehle: %d\n", tokens_ok, tokens_bad, fifo_overflows, unsupported);
+            if (tokens_ok != 2 || tokens_bad || fifo_overflows || unsupported) { printf("  FAIL token\n"); return 1; }
         }
     }
     return 0;

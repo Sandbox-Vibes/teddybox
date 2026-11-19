@@ -25,6 +25,7 @@ int main(void)
     s->volume_max = 70;
     s->idle_timeout_s = 300;
     s->speaker_eq = SPEAKER_EQ_LOWCUT;
+    s->led_brightness = 1;
     s->boxine_fallback = true;
     s->user_agent_original = true;
     CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
@@ -44,6 +45,7 @@ int main(void)
     CHECK(s->lang_id == 3 && s->volume_max == 70 && s->idle_timeout_s == 300);
     CHECK(s->boxine_fallback && s->user_agent_original);
     CHECK(s->speaker_eq == SPEAKER_EQ_LOWCUT);
+    CHECK(s->led_brightness == 1);
     CHECK(!strcmp(s->boxine_host, "prod.de.tbs.toys"));
 
     /* host set but cloud switched off must survive the round trip */
@@ -68,6 +70,12 @@ int main(void)
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("speaker_eq = loud\n", f); fclose(f);
     settings_load_ini();
     CHECK(s->speaker_eq == SPEAKER_EQ_OFF); /* unknown value keeps the previous one */
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("led_brightness = 0\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->led_brightness == 0);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("led_brightness = 7\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->led_brightness == 0);
 
     /* keys of older versions are accepted silently */
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("ota_enabled = 1\nota_allow_overwrite_pd = 1\n", f); fclose(f);

@@ -36,6 +36,7 @@
 #include "nfc.h"
 #include "cloud.h"
 #include "ledman.h"
+#include "led.h"
 #include "memdiag.h"
 #include "settings.h"
 #include "sfx.h"
@@ -78,6 +79,21 @@ void ctrl_request_speaker_eq(int mode)
 int ctrl_get_speaker_eq(void)
 {
     return dac3100_get_speaker_eq();
+}
+
+static volatile int ctrl_led_request = -1;
+
+void ctrl_request_led_brightness(int level)
+{
+    if (level >= 0 && level <= LED_BRIGHTNESS_MAX)
+    {
+        ctrl_led_request = level;
+    }
+}
+
+int ctrl_get_led_brightness(void)
+{
+    return led_get_brightness();
 }
 
 void ctrl_request_volume(int percent)
@@ -200,6 +216,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Board init");
     audio_board_handle_t board_handle = audio_board_init();
     dac3100_set_speaker_eq(settings_get()->speaker_eq);
+    led_set_brightness(settings_get()->led_brightness);
     ledman_init();
 
     /* big ear held while switching on: open the setup page */
@@ -267,6 +284,11 @@ void app_main(void)
     if (setup_mode)
     {
         ESP_LOGI(TAG, "Setup mode%s", setup_requested ? " (big ear held)" : " (no settings yet)");
+        /* the setup mode must be visible even with the LED switched off */
+        if (led_get_brightness() == 0)
+        {
+            led_set_brightness(1);
+        }
         ledman_change(SETUP_LED_PATTERN);
         /* "Hallo, nicht erschrecken ... brauche ich Hilfe bei der Installation" */
         dac3100_set_mute(false);
@@ -368,6 +390,22 @@ void app_main(void)
             audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
             last_activity_time = cur_time;
         }
+        int led_req = ctrl_led_request;
+        if (led_req >= 0)
+        {
+            ctrl_led_request = -1;
+            ESP_LOGI(TAG, "LED brightness: %d", led_req);
+            led_set_brightness(led_req);
+            if (settings_get()->led_brightness != led_req)
+            {
+                settings_get_mutable()->led_brightness = led_req;
+                if (settings_save_ini(SETTINGS_INI_PATH) != 0)
+                {
+                    ESP_LOGW(TAG, "Could not save LED brightness");
+                }
+            }
+        }
+
         int eq_req = ctrl_eq_request;
         if (eq_req >= 0)
         {

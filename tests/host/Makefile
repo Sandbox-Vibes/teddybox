@@ -3,7 +3,8 @@ MAIN := ../../teddybox/main
 DAC := ../../teddybox/components/toniebox/dac3100
 CFLAGS := -Wall -Wextra -O1 -I$(MAIN)
 
-test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq
+test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos
+	./test_ogg_pos
 	./test_speaker_eq
 	$(MAKE) -C nfc_sim
 	$(MAKE) -C dac_sim
@@ -11,6 +12,7 @@ test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq
 	./test_freshness
 	./test_mqtt_ha_payload
 	./test_mqtt_ha_payload discovery | python3 -c "import sys,json; [json.loads(l.split('\t')[1]) for l in sys.stdin]; print('discovery JSON ok')"
+	./test_mqtt_ha_payload state | python3 check_state.py
 
 test_mqtt_ha_payload: test_mqtt_ha_payload.c $(MAIN)/mqtt_ha_payload.c
 	$(CC) $(CFLAGS) $^ -o $@
@@ -22,6 +24,9 @@ test_freshness: test_freshness.c $(MAIN)/freshness.c
 test_settings: test_settings.c $(MAIN)/settings.c $(DAC)/speaker_eq.c
 	$(CC) -Wall -Wextra -O1 -Wno-unused-parameter -Istub -I$(MAIN) -I$(DAC) -DSETTINGS_INI_PATH='"/tmp/teddybox_test.ini"' $^ -lm -o $@
 
+test_ogg_pos: test_ogg_pos.c $(MAIN)/ogg_pos.c
+	$(CC) $(CFLAGS) $^ -o $@
+
 # EQ response computed from the quantized DAC coefficients
 test_speaker_eq: test_speaker_eq.c $(DAC)/speaker_eq.c
 	$(CC) $(CFLAGS) -I$(DAC) $^ -lm -o $@
@@ -29,4 +34,4 @@ test_speaker_eq: test_speaker_eq.c $(DAC)/speaker_eq.c
 clean:
 	$(MAKE) -C nfc_sim clean
 	$(MAKE) -C dac_sim clean
-	rm -f test_mqtt_ha_payload test_freshness test_settings test_speaker_eq
+	rm -f test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos
