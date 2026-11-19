@@ -31,6 +31,7 @@ static settings_t settings = {
     .volume_default = 50,
     .idle_timeout_s = 60,
     .ota_allow_overwrite_pd = false,
+    .ota_enabled = false,
     .mqtt_host = "",
     .mqtt_port = 1883,
     .mqtt_user = "",
@@ -99,6 +100,8 @@ int settings_save_ini(const char *path)
                      "volume_max = %u\n"
                      "volume_default = %u\n"
                      "idle_timeout = %u\n"
+                     "# firmware updates over WiFi on port 63660 (no password, anyone in the network can flash)\n"
+                     "ota_enabled = %d\n"
                      "ota_allow_overwrite_pd = %d\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
@@ -109,6 +112,7 @@ int settings_save_ini(const char *path)
                      s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
+                     s->ota_enabled ? 1 : 0,
                      s->ota_allow_overwrite_pd ? 1 : 0) > 0;
     ok = (fclose(f) == 0) && ok;
 
@@ -296,6 +300,10 @@ void settings_load_ini(void)
         else if (!strcmp(key, "ha_discovery_prefix"))
         {
             copy_str(settings.ha_discovery_prefix, sizeof(settings.ha_discovery_prefix), val);
+        }
+        else if (!strcmp(key, "ota_enabled"))
+        {
+            settings.ota_enabled = parse_bool(val);
         }
         else if (!strcmp(key, "ota_allow_overwrite_pd"))
         {

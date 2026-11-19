@@ -273,7 +273,11 @@ void app_main(void)
     mqtt_ha_init();
     /* already too much memory consumption, do not enable by default */
     // www_init();
-    ota_init();
+    /* the OTA port has no authentication, so it is only opened on request */
+    if (settings_get()->ota_enabled)
+    {
+        ota_init();
+    }
 
     int64_t last_activity_time = esp_timer_get_time();
     int64_t remute_time = 0;

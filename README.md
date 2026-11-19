@@ -143,6 +143,17 @@ Topics: `teddybox/<mac>/state` (JSON), `teddybox/<mac>/availability`
 The box powers off when idle (`idle_timeout`), Home Assistant then shows it
 as unavailable. Needs about 16 KB of RAM.
 
+## Network traffic
+
+Without `boxine_fallback` the box only talks to what is configured:
+teddyCloud (`cloud_host`) and the MQTT broker (`mqtt_host`), plus WiFi,
+DHCP, ARP and DNS lookups for those host names in the local network. No
+time servers (the time comes from teddyCloud), no mDNS, no telemetry.
+It shows up in the router as `teddybox-xxxx`. Inbound, nothing listens
+unless `ota_enabled = 1` (TCP 63660, no authentication). Checked with a
+packet capture in QEMU (Ethernet instead of WiFi). Note that teddyCloud
+itself contacts the Boxine cloud if its `cloud.enabled` is on.
+
 ## Flash layout
 
 Identical to the original firmware, the partition table is not changed:
@@ -195,6 +206,10 @@ make -C tests/host     # host unit tests, no ESP-IDF needed
 ```
 
 ## OTA
+
+Off by default because the port has no authentication: anyone in the
+network could install a firmware. Enable with `ota_enabled = 1` (or on the
+setup page) only while you need it.
 
 ```sh
 nc -q 2 <box-ip> 63660 < teddybox/build/teddybox.bin

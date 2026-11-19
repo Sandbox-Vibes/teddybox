@@ -26,6 +26,7 @@ int main(void)
     s->ota_allow_overwrite_pd = true;
     s->boxine_fallback = true;
     s->user_agent_original = true;
+    s->ota_enabled = true;
     CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
     CHECK(settings_ini_exists());
 
@@ -42,7 +43,7 @@ int main(void)
     CHECK(!strcmp(s->mqtt_pass, "p#ss=wo;rd"));
     CHECK(s->lang_id == 3 && s->volume_max == 70 && s->idle_timeout_s == 300);
     CHECK(s->ota_allow_overwrite_pd);
-    CHECK(s->boxine_fallback && s->user_agent_original);
+    CHECK(s->boxine_fallback && s->user_agent_original && s->ota_enabled);
     CHECK(!strcmp(s->boxine_host, "prod.de.tbs.toys"));
 
     /* host set but cloud switched off must survive the round trip */
@@ -57,9 +58,9 @@ int main(void)
     memset(s, 0, sizeof(*s));
     settings_init();
     FILE *f = fopen(SETTINGS_INI_PATH, "w"); fputs("cloud_host = tc.local\n", f); fclose(f);
-    s->boxine_fallback = false; s->user_agent_original = false;
+    s->boxine_fallback = false; s->user_agent_original = false; s->ota_enabled = false;
     settings_load_ini();
-    CHECK(!s->boxine_fallback && !s->user_agent_original);
+    CHECK(!s->boxine_fallback && !s->user_agent_original && !s->ota_enabled);
 
     remove(SETTINGS_INI_PATH);
     printf(fails ? "settings: %d FAILED\n" : "settings: all tests ok\n", fails);

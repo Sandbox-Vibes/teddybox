@@ -59,7 +59,9 @@ typedef struct
     char mqtt_topic[48];
     char ha_discovery_prefix[32];
 
-        /* OTA may overwrite the slot holding the factory "PD" app if no free slot is left */
+        /* accept firmware updates on TCP port 63660; off by default, the port has no authentication */
+    bool ota_enabled;
+    /* OTA may overwrite the slot holding the factory "PD" app if no free slot is left */
     bool ota_allow_overwrite_pd;
 } settings_t;
 
