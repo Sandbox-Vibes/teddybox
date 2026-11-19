@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -30,6 +31,7 @@
 #include "settings.h"
 #include "freshness.h"
 #include "bootsel.h"
+#include "sd_retry.h"
 
 /*
  * Up to two backends: teddyCloud (preferred) and, only if boxine_fallback
@@ -64,7 +66,7 @@ static char user_agent[64];
 
 /* download write block = TAF block, and how often an SD access is retried */
 #define CLOUD_WRITE_BLOCK 4096
-#define CLOUD_SD_RETRIES 3
+#define CLOUD_SYNC_BYTES (128 * 1024)
 
 static const char *TAG = "Cloud";
 
@@ -397,6 +399,7 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
     }
     req->wbuf_len = 0;
     req->sd_write_us = 0;
+    req->synced = req->received;
     /* "wb+" would truncate the part we already have */
     req->handle = fopen(req->filename, resume ? "rb+" : "wb+");
     if (!req->handle)
@@ -412,7 +415,9 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
 
 /* writes wbuf at "received"; an SD error (seen on the box: read timeout
    0x107 while FATFS looks up clusters) marks the FATFS file as broken, so
-   the file is opened again before retrying */
+   the file is opened again before retrying. The reopened file has the size
+   of the last sync; if that is less than "received", the download stops
+   there and a resume continues at that size. */
 static esp_err_t cloud_content_flush(cloud_content_req_t *req)
 {
     if (!req->wbuf_len)
@@ -424,8 +429,10 @@ static esp_err_t cloud_content_flush(cloud_content_req_t *req)
         ESP_LOGE(TAG, "[CDL] Timed out waiting for file lock...");
     }
     int64_t t0 = esp_timer_get_time();
+    uint32_t end = req->received + req->wbuf_len;
+    bool sync = end - req->synced >= CLOUD_SYNC_BYTES || end >= req->content_length;
     bool ok = false;
-    for (int attempt = 0; attempt < CLOUD_SD_RETRIES && !ok; attempt++)
+    for (int attempt = 0; attempt < SD_RETRIES && !ok; attempt++)
     {
         if (attempt)
         {
@@ -434,22 +441,40 @@ static esp_err_t cloud_content_flush(cloud_content_req_t *req)
             {
                 fclose(req->handle);
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
+            vTaskDelay(pdMS_TO_TICKS(sd_retry_delay_ms(attempt)));
             req->handle = fopen(req->filename, "rb+");
             if (!req->handle)
             {
                 continue;
             }
+            long size = fseek(req->handle, 0, SEEK_END) == 0 ? ftell(req->handle) : -1;
+            if (size < 0)
+            {
+                continue;
+            }
+            if ((uint32_t)size < req->received)
+            {
+                ESP_LOGW(TAG, "[CDL] File on the card ends at %ld instead of %u, stopping; a resume continues there",
+                         size, (unsigned)req->received);
+                req->received = size;
+                req->synced = size;
+                break;
+            }
         }
         ok = req->handle && fseek(req->handle, req->received, SEEK_SET) == 0 &&
-             fwrite(req->wbuf, req->wbuf_len, 1, req->handle) == 1 && fflush(req->handle) == 0;
+             fwrite(req->wbuf, req->wbuf_len, 1, req->handle) == 1 && fflush(req->handle) == 0 &&
+             (!sync || fsync(fileno(req->handle)) == 0);
     }
     req->sd_write_us += esp_timer_get_time() - t0;
     if (ok)
     {
         /* only now the data is in the file */
-        req->received += req->wbuf_len;
+        req->received = end;
         req->wbuf_len = 0;
+        if (sync)
+        {
+            req->synced = end;
+        }
     }
     xSemaphoreGive(req->file_sem);
     if (!ok)
@@ -691,8 +716,25 @@ cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc
     struct stat st;
     if (stat(req->filename, &st) == 0)
     {
-        req->received = st.st_size;
-        ESP_LOGI(TAG, "[CDL] Partial file, continue at %d", req->received);
+        /* only resume behind a valid TAF header (4 byte big endian length of
+           the protobuf header, which fits into the first 4 KB block) */
+        uint8_t be[4];
+        FILE *f = st.st_size >= 4096 ? fopen(req->filename, "rb") : NULL;
+        bool valid = f && fread(be, 4, 1, f) == 1 &&
+                     ((uint32_t)be[0] << 24 | be[1] << 16 | be[2] << 8 | be[3]) <= 4096 - 4;
+        if (f)
+        {
+            fclose(f);
+        }
+        if (valid)
+        {
+            req->received = st.st_size;
+            ESP_LOGI(TAG, "[CDL] Partial file, continue at %d", req->received);
+        }
+        else
+        {
+            ESP_LOGW(TAG, "[CDL] Existing file (%ld bytes) has no valid header, downloading it again", (long)st.st_size);
+        }
     }
 
     xSemaphoreGive(req->file_sem);

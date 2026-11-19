@@ -30,6 +30,7 @@
 #include "esp_timer.h"
 #include "mempeak.h"
 #include "ogg_pos.h"
+#include "sd_retry.h"
 #include "memdiag.h"
 
 audio_pipeline_handle_t pipeline;
@@ -163,8 +164,9 @@ void pb_toniefile_close(pb_toniefile_t *info)
     FILE *fd = info->fd;
     info->valid = false;
     info->fd = NULL;
-    /* ToDo: all of that remote/local playback thing has to be coordinated. for now just leave handles open */
-    if (!current_dl_req)
+    /* the download's handle is closed with the download; an own read
+       handle (opened after an SD error) always here */
+    if (fd)
     {
         fclose(fd);
     }
@@ -206,33 +208,39 @@ static int pb_percent(int64_t part, int64_t whole)
 #define PB_DL_WAIT_MAX_MS 3000
 #define PB_LOCK_WAIT_WARN_US 100000
 
-/* reads one block; on an SD error (FATFS then refuses every further access
-   to that file) the file is opened again and the read retried */
-#define PB_SD_RETRIES 3
-static int pb_read_block(FILE **fdp, const char *filename, const char *mode, long offset, uint8_t *buf, int want)
+/* reads one block. "shared" is the download's write handle (or NULL); "own"
+   is a read-only handle of the playback. On an SD error (FATFS then refuses
+   every further access to that file) a read-only handle is opened and the
+   read retried. Never the shared handle: reopened for writing, seeking
+   beyond the size in the directory entry would extend the file. */
+static int pb_read_block(FILE *shared, FILE **own, const char *filename, long offset, uint8_t *buf, int want)
 {
-    for (int attempt = 0; attempt < PB_SD_RETRIES; attempt++)
+    for (int attempt = 0; attempt < SD_RETRIES; attempt++)
     {
         if (attempt)
         {
             ESP_LOGW(TAG, "SD read at %ld failed, reopening the file (attempt %d)", offset, attempt + 1);
-            if (*fdp)
-            {
-                fclose(*fdp);
-            }
-            vTaskDelay(pdMS_TO_TICKS(100));
-            *fdp = fopen(filename, mode);
-            if (!*fdp)
-            {
-                continue;
-            }
+            vTaskDelay(pdMS_TO_TICKS(sd_retry_delay_ms(attempt)));
         }
-        if (*fdp && fseek(*fdp, offset, SEEK_SET) == 0)
+        if (attempt || (!*own && !shared))
         {
-            int n = fread(buf, 1, want, *fdp);
-            /* short without error: end of the data written so far */
-            if (n == want || !ferror(*fdp))
+            if (*own)
             {
+                fclose(*own);
+            }
+            *own = fopen(filename, "rb");
+        }
+        FILE *fd = *own ? *own : shared;
+        if (fd && fseek(fd, offset, SEEK_SET) == 0)
+        {
+            int n = fread(buf, 1, want, fd);
+            /* short without error: end of the data written so far */
+            if (n == want || !ferror(fd))
+            {
+                if (attempt)
+                {
+                    ESP_LOGI(TAG, "SD read at %ld worked again", offset);
+                }
                 return n;
             }
         }
@@ -240,7 +248,7 @@ static int pb_read_block(FILE **fdp, const char *filename, const char *mode, lon
     return 0;
 }
 
-static size_t pb_ensure_block(pb_toniefile_t *info, FILE **fdp, const char *mode)
+static size_t pb_ensure_block(pb_toniefile_t *info, FILE *shared)
 {
     bool read = false;
 
@@ -255,7 +263,7 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE **fdp, const char *mode
     {
         if (info->current_pos == TONIEFILE_FRAME_SIZE)
         {
-            info->current_block_avail = pb_read_block(fdp, info->filename, mode, TONIEFILE_FRAME_SIZE,
+            info->current_block_avail = pb_read_block(shared, &info->fd, info->filename, TONIEFILE_FRAME_SIZE,
                                                       info->current_block_buffer, 0x200);
         }
 
@@ -290,7 +298,7 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE **fdp, const char *mode
     if (read)
     {
         info->current_block = info->current_pos / TONIEFILE_FRAME_SIZE;
-        info->current_block_avail = pb_read_block(fdp, info->filename, mode, info->current_block * TONIEFILE_FRAME_SIZE,
+        info->current_block_avail = pb_read_block(shared, &info->fd, info->filename, info->current_block * TONIEFILE_FRAME_SIZE,
                                                   info->current_block_buffer, TONIEFILE_FRAME_SIZE);
         /* every TAF block starts with an Ogg page */
         uint64_t g = pb_ogg_granule(info->current_block_buffer, info->current_block_avail);
@@ -445,10 +453,17 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
             {
                 ESP_LOGW(TAG, "Waited %d ms for the download's file lock", (int)(wait_us / 1000));
             }
-            avail = pb_ensure_block(info, &dl->handle, "rb+");
-            xSemaphoreGive(dl->file_sem);
+            avail = pb_ensure_block(info, dl->handle);
             bool more_coming = dl->state == CC_STATE_RECEIVING && !dl->abort &&
                                (uint32_t)info->current_pos < dl->content_length;
+            if (avail <= 0 && more_coming && info->fd)
+            {
+                /* the own read handle (after an SD error) only knows the size
+                   at its opening; back to the download's handle */
+                fclose(info->fd);
+                info->fd = NULL;
+            }
+            xSemaphoreGive(dl->file_sem);
             if (avail > 0 || !more_coming || waited >= PB_DL_WAIT_MAX_MS)
             {
                 break;
@@ -463,7 +478,7 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
     }
     else
     {
-        avail = pb_ensure_block(info, &info->fd, "rb");
+        avail = pb_ensure_block(info, NULL);
     }
 
     if (len > avail)

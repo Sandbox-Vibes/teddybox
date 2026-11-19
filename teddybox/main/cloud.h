@@ -61,6 +61,11 @@ typedef struct
     uint8_t *wbuf;
     uint32_t wbuf_len;
     int64_t sd_write_us; /* time spent writing to SD since the last log line */
+    /* FATFS only writes the file size to the directory entry on fsync/fclose.
+       A file opened again sees that size, so it is synced regularly; after an
+       SD error the download never seeks beyond it (that would extend the file
+       with whatever is in the new clusters) */
+    uint32_t synced;
     SemaphoreHandle_t file_sem;
     FILE *handle;
 } cloud_content_req_t;
