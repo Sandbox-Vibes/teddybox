@@ -21,6 +21,10 @@ typedef struct
     void *connection_closed_ctx;
 } cloud_req_t;
 
+/* report a placed tonie to teddyCloud (/v1/claim), sent a few seconds later */
+void cloud_claim(uint64_t uid, const uint8_t token[32]);
+void cloud_claim_path(uint64_t uid, char *path, size_t size);
+
 typedef enum
 {
     CC_STATE_INIT,

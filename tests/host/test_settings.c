@@ -104,6 +104,16 @@ int main(void)
     CHECK(s->update_hour == -1 && !strcmp(s->timezone, "UTC0"));
     s->update_hour = 3; snprintf(s->timezone, sizeof(s->timezone), "CET-1CEST,M3.5.0,M10.5.0/3");
 
+    /* claim: default on, 0/1 only */
+    s->claim = true;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("claim = yes\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->claim);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("claim = 0\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(!s->claim);
+    s->claim = true;
+
     /* keys of older versions are accepted silently */
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("ota_enabled = 1\nota_allow_overwrite_pd = 1\n", f); fclose(f);
     settings_load_ini();

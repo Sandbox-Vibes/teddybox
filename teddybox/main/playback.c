@@ -753,6 +753,7 @@ esp_err_t pb_play_content_token(uint64_t nfc_uid, const uint8_t *token)
     memcpy(req->token, token, 32);
     /* for the nightly update, which downloads without the tonie on the box */
     maint_token_save(nfc_uid, token);
+    cloud_claim(nfc_uid, token);
     xQueueSend(playback_queue, &req, portMAX_DELAY);
     return ESP_OK;
 }

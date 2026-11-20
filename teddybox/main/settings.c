@@ -38,6 +38,7 @@ static settings_t settings = {
     .tilt_level = 3,
     .mem_log = true,
     .update_hour = 3,
+    .claim = true,
     .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
     .mqtt_port = 1883,
@@ -121,7 +122,9 @@ int settings_save_ini(const char *path)
                      "# nightly update of the tonies (new versions, unfinished downloads): hour 0-23, -1 off\n"
                      "update_hour = %d\n"
                      "# local time (POSIX TZ), default Germany/Central Europe\n"
-                     "timezone = %s\n",
+                     "timezone = %s\n"
+                     "# report placed tonies to teddyCloud like the original box (it may forward them to the Boxine cloud, setting there)\n"
+                     "claim = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -132,7 +135,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -283,6 +286,17 @@ void settings_load_ini(void)
         else if (!strcmp(key, "led_brightness") && num >= 0 && num <= 3 && val[0] >= '0' && val[0] <= '3' && !val[1])
         {
             settings.led_brightness = num;
+        }
+        else if (!strcmp(key, "claim"))
+        {
+            if (!strcmp(val, "0") || !strcmp(val, "1"))
+            {
+                settings.claim = val[0] == '1';
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid claim '%s' (0 or 1)", val);
+            }
         }
         else if (!strcmp(key, "update_hour"))
         {

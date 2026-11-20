@@ -232,6 +232,16 @@ FATFS then marks the open file as broken, so every later access fails.
   warning in the log means the output did not get its 192000 B/s (wrong
   clock) or the decoder fell behind (PCM buffer empty).
 
+## Claim (tonie placed)
+
+Like the original box, TeddyBox reports a placed tonie to teddyCloud with
+`GET /v1/claim/<rUID>` and the tonie's token (5 s after placing, so the TLS
+handshake does not compete with the playback start). teddyCloud shows it as
+the box's last tonie, sends an MQTT event and marks the tonie as claimed. It
+is only sent to teddyCloud, never to the Boxine fallback; teddyCloud itself
+forwards claims to the Boxine cloud if its cloud access and "Forward claim"
+are enabled. `claim = 0` in `teddybox.ini` turns it off.
+
 ## Nightly update
 
 Once a day at `update_hour` (local time, `timezone`; default 3 o'clock plus

@@ -61,6 +61,8 @@ typedef struct
     bool mem_log;
     /* nightly update of the tonies at this hour (local time), -1 = off */
     int8_t update_hour;
+    /* report placed tonies to teddyCloud (/v1/claim) like the original box */
+    bool claim;
     /* POSIX TZ string for the local time */
     char timezone[48];
 
