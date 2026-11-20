@@ -11,6 +11,7 @@
 
 #include "sdkconfig.h"
 #include "audio_element.h"
+#include "ringbuf.h"
 #include "audio_pipeline.h"
 #include "audio_event_iface.h"
 #include "audio_common.h"
@@ -56,6 +57,58 @@ static uint64_t pb_last_nfc_uid = 0;
 static uint32_t pb_last_play_position = 0;
 
 static const char *TAG = "[PB]";
+
+/* Audio health while playing, logged every 5 s: the rate the I2S output
+   really takes (wrong clock: off from 192000 B/s at 48 kHz stereo) and how
+   often the PCM buffer before it ran empty (decoder too slow: underruns) */
+#define PB_RATE_CHECK_MS 5000
+static void pb_audio_rate_check(void)
+{
+    static int64_t t0 = 0;
+    static int64_t pos0 = 0;
+    static int empty = 0, samples = 0;
+    if (!pb_playing || !i2s_stream_writer)
+    {
+        t0 = 0;
+        return;
+    }
+    ringbuf_handle_t rb = audio_element_get_input_ringbuf(i2s_stream_writer);
+    if (rb)
+    {
+        samples++;
+        empty += rb_bytes_filled(rb) < 512;
+    }
+    audio_element_info_t info = {0};
+    audio_element_getinfo(i2s_stream_writer, &info);
+    int64_t now = esp_timer_get_time();
+    if (!t0 || info.byte_pos < pos0)
+    {
+        t0 = now;
+        pos0 = info.byte_pos;
+        empty = samples = 0;
+        return;
+    }
+    if (now - t0 < PB_RATE_CHECK_MS * 1000LL)
+    {
+        return;
+    }
+    int rate = (int)((info.byte_pos - pos0) * 1000000LL / (now - t0));
+    int expected = info.sample_rates * info.channels * info.bits / 8;
+    int pct = expected ? rate * 100 / expected : 0;
+    if (pct < 97 || pct > 103 || empty * 10 > samples)
+    {
+        ESP_LOGW(TAG, "Audio: %d B/s to I2S (%d %% of %d Hz/%d ch), PCM buffer empty %d of %d times", rate, pct,
+                 info.sample_rates, info.channels, empty, samples);
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Audio: ok (%d %%, buffer empty %d/%d)", pct, empty, samples);
+    }
+    t0 = now;
+    pos0 = info.byte_pos;
+    empty = samples = 0;
+}
+
 
 /* ********************************************************************************************************************* */
 /* ********************************************************************************************************************* */
@@ -1061,6 +1114,8 @@ void pb_mainthread(void *arg)
                 ledman_change("playing");
             }
         }
+
+        pb_audio_rate_check();
 
         /* the decoder normally reports its format within a few 100 ms */
         if (pb_mempeak_taken && xTaskGetTickCount() - pb_mempeak_since > pdMS_TO_TICKS(PB_MEMPEAK_MAX_MS))
