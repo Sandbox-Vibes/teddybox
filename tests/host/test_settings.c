@@ -123,6 +123,23 @@ int main(void)
     CHECK(!s->decoder_celt);
     s->decoder_celt = true; s->cpu_mhz = 240;
 
+    /* download limit while playing */
+    s->dl_playing_kib_s = 96;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("download_playing = 10\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->dl_playing_kib_s == 96);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("download_playing = 12x\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->dl_playing_kib_s == 96);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("download_playing = 0\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->dl_playing_kib_s == 0);
+    CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
+    s->dl_playing_kib_s = 96;
+    settings_load_ini();
+    CHECK(s->dl_playing_kib_s == 0);
+    s->dl_playing_kib_s = 96;
+
     /* claim: 0/1 only */
     s->claim = true;
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("claim = yes\n", f); fclose(f);

@@ -68,8 +68,9 @@ static char user_agent[64];
 #define CLOUD_WRITE_BLOCK 4096
 /* while a tonie plays the download is limited, the SD card and the CPU are
    shared with the playback (about 12 KiB/s): at full speed (250 KiB/s with
-   IDF 5) the sound stuttered. Without playback (nightly update) full speed. */
-#define CLOUD_PLAYING_KIB_S 96
+   IDF 5, ESP-ADF decoder at 160 MHz) the sound stuttered. Limit from
+   teddybox.ini "download_playing" (default 96, 0 = unlimited). Without
+   playback (nightly update) full speed. */
 #define CLOUD_SYNC_BYTES (128 * 1024)
 
 static const char *TAG = "Cloud";
@@ -493,11 +494,12 @@ static esp_err_t cloud_content_flush(cloud_content_req_t *req)
     }
     xSemaphoreGive(req->update_sem);
     int64_t now = esp_timer_get_time();
-    if (pb_is_playing())
+    uint16_t kib_s = settings_get()->dl_playing_kib_s;
+    if (kib_s && pb_is_playing())
     {
         /* evenly spaced blocks: waiting here stops reading from the socket,
            TCP flow control slows the sender down */
-        const int64_t block_us = CLOUD_WRITE_BLOCK * 1000000LL / (CLOUD_PLAYING_KIB_S * 1024);
+        const int64_t block_us = CLOUD_WRITE_BLOCK * 1000000LL / (kib_s * 1024);
         if (req->next_block_us > now)
         {
             vTaskDelay(pdMS_TO_TICKS((req->next_block_us - now + 999) / 1000));

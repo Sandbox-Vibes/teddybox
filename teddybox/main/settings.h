@@ -67,6 +67,8 @@ typedef struct
     bool decoder_celt;
     /* CPU clock: 160 or 240 MHz */
     uint16_t cpu_mhz;
+    /* download speed limit while a tonie plays, KiB/s, 0 = unlimited */
+    uint16_t dl_playing_kib_s;
     /* POSIX TZ string for the local time */
     char timezone[48];
 

@@ -154,6 +154,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "update_hour", s->update_hour);
     cJSON_AddStringToObject(j, "decoder", s->decoder_celt ? "celt" : "adf");
     cJSON_AddNumberToObject(j, "cpu_mhz", s->cpu_mhz);
+    cJSON_AddNumberToObject(j, "download_playing", s->dl_playing_kib_s);
     esp_app_desc_t app;
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_get_partition_description(running, &app);
@@ -422,6 +423,10 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (get_int(o, "cpu_mhz", 160, 240, &v) && (v == 160 || v == 240))
     {
         s->cpu_mhz = v;
+    }
+    if (get_int(o, "download_playing", 0, 4096, &v) && (v == 0 || v >= 32))
+    {
+        s->dl_playing_kib_s = v;
     }
     cJSON *eq = cJSON_GetObjectItemCaseSensitive(o, "speaker_eq");
     if (cJSON_IsString(eq) && speaker_eq_parse(eq->valuestring) >= 0)

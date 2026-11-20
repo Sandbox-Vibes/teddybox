@@ -41,6 +41,7 @@ static settings_t settings = {
     .claim = false,
     .decoder_celt = true,
     .cpu_mhz = 160,
+    .dl_playing_kib_s = 96,
     .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
     .mqtt_port = 1883,
@@ -131,7 +132,10 @@ int settings_save_ini(const char *path)
                      "# Opus decoder: celt (default, libopus CELT only, like the original firmware) or adf (ESP-ADF, also SILK/hybrid files)\n"
                      "decoder = %s\n"
                      "# CPU clock in MHz: 160 (default, about 34 %% of one core for decoding) or 240; decoder = adf always uses 240\n"
-                     "cpu_mhz = %u\n",
+                     "cpu_mhz = %u\n"
+                     "# download speed while a tonie plays in KiB/s (playback needs about 12), 0 = unlimited (about 250);\n"
+                     "# without playback (nightly update, idle box) always unlimited\n"
+                     "download_playing = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -142,7 +146,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -314,6 +318,19 @@ void settings_load_ini(void)
             else
             {
                 ESP_LOGW(TAG, "Invalid cpu_mhz '%s' (160 or 240)", val);
+            }
+        }
+        else if (!strcmp(key, "download_playing"))
+        {
+            char *end;
+            long v = strtol(val, &end, 10);
+            if (*val && !*end && (v == 0 || (v >= 32 && v <= 4096)))
+            {
+                settings.dl_playing_kib_s = v;
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid download_playing '%s' (0 or 32..4096 KiB/s)", val);
             }
         }
         else if (!strcmp(key, "claim"))
