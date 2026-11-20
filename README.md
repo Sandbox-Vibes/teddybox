@@ -42,6 +42,21 @@ writes `teddybox.ini`, stores the WiFi in the original firmware's format and
 restarts. Unused for 15 minutes, the box switches off. Needs about 18 KB RAM;
 cloud, MQTT and NFC do not run in setup mode.
 
+### Backup (setup page)
+
+The setup page offers a backup of what is unique to the box:
+
+- `toniebox-<mac>-certs.zip`: `ca.der`, `client.der`, `private.der` (the
+  names teddyCloud expects)
+- `toniebox-<mac>-flash.bin`: the whole flash (bootloader, original
+  firmware, NVS with WiFi data, certificates); restore with
+  `esptool.py --chip esp32s3 write_flash 0x0 toniebox-<mac>-flash.bin`
+- optionally both onto the SD card (`teddybox_backup/<mac>/`)
+
+The setup hotspot is open, so the backup is only released after the small
+ear is pressed on the box (60 s to press it, then 10 minutes valid). The
+files contain the private key of the box.
+
 ## Configuration: `teddybox.ini` on the SD card
 
 All keys are optional.

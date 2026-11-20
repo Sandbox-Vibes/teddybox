@@ -18,6 +18,7 @@
 #include "mbedtls/x509_crt.h"
 
 #include "setup_portal.h"
+#include "backup.h"
 #include "speaker_eq.h"
 #include "settings.h"
 #include "wifi.h"
@@ -45,6 +46,11 @@ static volatile bool saved = false;
 bool setup_portal_saved(void)
 {
     return saved;
+}
+
+void setup_portal_touch(void)
+{
+    last_activity = esp_timer_get_time();
 }
 
 static void touch(void)
@@ -559,6 +565,11 @@ esp_err_t setup_portal_register(httpd_handle_t server)
             return err;
         }
     }
+    esp_err_t err = backup_register(server);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
     touch();
     return httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, redirect_handler);
 }
@@ -664,6 +675,7 @@ void setup_portal_run(void)
     hc.stack_size = 8192;          /* cJSON and certificate parsing */
     hc.max_open_sockets = 5;       /* phones open many connections */
     hc.lru_purge_enable = true;
+    hc.max_uri_handlers = 16;      /* setup + backup */
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &hc) != ESP_OK || setup_portal_register(server) != ESP_OK)
     {

@@ -99,6 +99,19 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 </section>
 
 <section>
+<h2>Sicherung</h2>
+<p class="hint">Die Zertifikate sind für jede Box einzigartig. Ohne sie kommt die Box weder zu teddyCloud noch zur Tonies-Cloud. Das Flash-Abbild enthält zusätzlich die Original-Firmware und die WLAN-Daten und stellt die Box mit esptool komplett wieder her.</p>
+<p class="hint"><b>Die Dateien enthalten den privaten Schlüssel der Box.</b> Bewahre sie sicher auf und gib sie nicht weiter.</p>
+<button class="main" id="bkunlock" type="button" style="background:var(--text)">Sicherung freigeben</button>
+<div class="status" id="bkstatus"></div>
+<div id="bkfiles" hidden>
+<p><a id="bkcerts" href="/backup/certs.zip">Zertifikate herunterladen (für teddyCloud)</a></p>
+<p><a id="bkflash" href="/backup/flash.bin">Komplettes Flash-Abbild herunterladen</a> <span class="hint" id="bksize"></span></p>
+<button class="link" type="button" id="bksd">Beides auf die SD-Karte sichern</button>
+</div>
+</section>
+
+<section>
 <h2>Firmware aktualisieren</h2>
 <p class="hint" id="fwinfo"></p>
 <label for="fwfile">Neue TeddyBox-Firmware (teddybox.bin)</label>
@@ -135,6 +148,13 @@ async function scan(){
       $('nets').append(b);
     });
   }catch(e){$('nets').innerHTML='<span class="hint">Suche fehlgeschlagen.</span>';}
+}
+async function bkPoll(){
+  const s=await (await fetch('/api/backup/status')).json();
+  if(s.unlocked){setStatus($('bkstatus'),'Freigegeben für 10 Minuten.','ok');$('bkfiles').hidden=false;$('bkunlock').hidden=true;
+    $('bksize').textContent='('+Math.round(s.flash_size/1048576)+' MB, dauert 1–3 Minuten)';return;}
+  if(s.waiting){setStatus($('bkstatus'),'Drücke jetzt das kleine Ohr der Box (die LED blinkt blau) …');setTimeout(bkPoll,1000);return;}
+  setStatus($('bkstatus'),'Kein Ohr gedrückt. Bitte noch einmal versuchen.','err');$('bkunlock').disabled=false;
 }
 async function load(){
   try{
@@ -191,6 +211,12 @@ $('save').onclick=async()=>{
     else setStatus($('status'),'Fehler: '+j.error,'err');
   }catch(e){setStatus($('status'),'Speichern fehlgeschlagen.','err');}
 };
+$('bkunlock').onclick=async()=>{$('bkunlock').disabled=true;try{await fetch('/api/backup/unlock',{method:'POST'});bkPoll();}catch(e){setStatus($('bkstatus'),'Keine Verbindung zur Box.','err');$('bkunlock').disabled=false;}};
+$('bksd').onclick=async()=>{$('bksd').disabled=true;setStatus($('bkstatus'),'Schreibe auf die SD-Karte … (1–2 Minuten)');
+  try{const j=await (await fetch('/api/backup/sd',{method:'POST'})).json();
+    setStatus($('bkstatus'),j.ok?'Gesichert in '+j.dir+' auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.':'Sichern auf die SD-Karte fehlgeschlagen.',j.ok?'ok':'err');}
+  catch(e){setStatus($('bkstatus'),'Keine Antwort der Box.','err');}
+  $('bksd').disabled=false;};
 load();
 </script>
 </body>

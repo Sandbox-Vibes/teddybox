@@ -15,6 +15,9 @@
  * held while switching on.
  */
 
+/* keeps the setup mode alive during long transfers */
+void setup_portal_touch(void);
+
 #define SETUP_PORTAL_IDLE_TIMEOUT_MS (15 * 60 * 1000)
 #define SETUP_LED_PATTERN "fadeblink blue-green slow"
 
