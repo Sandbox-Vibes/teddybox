@@ -14,6 +14,8 @@ int main(void)
     settings_init();
 
     settings_t *s = settings_get_mutable();
+    /* compiled-in defaults */
+    CHECK(s->decoder_celt && s->cpu_mhz == 240 && !s->claim);
     strcpy(s->cloud_host, "192.168.178.20");
     s->cloud_port = 8443;
     s->cloud_enabled = true;   /* the setup page sets this together with the host */
@@ -63,7 +65,6 @@ int main(void)
     remove(SETTINGS_INI_PATH);
     memset(s, 0, sizeof(*s));
     settings_init();
-    CHECK(s->decoder_celt && s->cpu_mhz == 240 && !s->claim);
     FILE *f = fopen(SETTINGS_INI_PATH, "w"); fputs("cloud_host = tc.local\n", f); fclose(f);
     s->boxine_fallback = false; s->user_agent_original = false; s->speaker_eq = SPEAKER_EQ_DEFAULT;
     settings_load_ini();
