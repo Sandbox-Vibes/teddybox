@@ -176,7 +176,7 @@ static const char *ha_minutes_or_null(char *buf, size_t size, int ds)
 
 int ha_state_json(const ha_state_t *st, char *buf, size_t size)
 {
-    char prog[8], chprog[8], pos[16], dur[16], dl[8];
+    char prog[12], chprog[12], pos[16], dur[16], dl[12];
     char tonie[20] = "";
     if (st->uid)
     {

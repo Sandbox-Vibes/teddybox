@@ -265,6 +265,12 @@ Notes on the IDF 5 port:
   driver checks that a direct command (software init) has an effect.
 - A firmware on probation (just installed) checks SD card, DAC, accelerometer
   and NFC chip first and goes back to the previous firmware if one fails.
+- Release build (`-O2`); TLS handshakes in QEMU about 20 % faster than -Og.
+- TCP receive window 16 segments (23 KB) instead of 5.7 KB, WiFi RX buffers
+  to match: with IDF 4.4 the small window limited downloads to about
+  5.7 KB per round trip.
+- `mem_log = 0` in `teddybox.ini` turns off the memory lines in the serial
+  log (failed allocations are always logged).
 - WiFi, lwIP, heap and FreeRTOS functions stay in flash, not IRAM: about
   70 KiB more heap than with IDF 4.4 (QEMU: 330 KiB free at start instead of
   260 KiB).

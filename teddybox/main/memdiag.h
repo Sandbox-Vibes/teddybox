@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 
 /*
  * Memory diagnostics for the serial log:
@@ -8,6 +9,9 @@
  */
 
 void memdiag_init(void);
+/* the periodic and event lines (failed allocations are always logged);
+   teddybox.ini: mem_log = 0/1 */
+void memdiag_enable(bool on);
 /* one line with the internal heap state */
 void memdiag_log(const char *where);
 /* heap plus the unused stack of every task */

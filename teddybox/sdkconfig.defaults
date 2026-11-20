@@ -50,10 +50,7 @@ CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
 # the box needs ~100 kbit/s
 # CONFIG_ESP32_WIFI_IRAM_OPT is not set
 # CONFIG_ESP32_WIFI_RX_IRAM_OPT is not set
-CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=6
-CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=16
 CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER_NUM=16
-CONFIG_ESP32_WIFI_RX_BA_WIN=6
 CONFIG_ESP32_WIFI_MGMT_SBUF_NUM=16
 # TLS: teddyCloud sends records of up to 16 KB unless asked for less; with
 # 8192 every content download failed after the HTTP header. Buffers are
@@ -105,3 +102,16 @@ CONFIG_FREERTOS_ENABLE_BACKWARD_COMPATIBILITY=y
 # calibration in NVS instead of a full DHCP exchange / calibration every time
 CONFIG_LWIP_DHCP_RESTORE_LAST_IP=y
 CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=y
+
+# release build: our code, lwIP, mbedTLS and the WiFi glue are compiled from
+# source (-Og before; the WiFi and Opus libraries are prebuilt anyway)
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# downloads: with IDF 4.4 the TCP window was 5.7 KB for lack of memory,
+# which limited the rate to about 5.7 KB per round trip (~170 KiB/s).
+# 16 segments now, with WiFi RX buffers to match (costs ~25 KB)
+CONFIG_LWIP_TCP_WND_DEFAULT=23040
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=16
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_RX_BA_WIN=16

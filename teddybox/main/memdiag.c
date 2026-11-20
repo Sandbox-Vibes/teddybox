@@ -32,8 +32,19 @@ void memdiag_init(void)
     memdiag_log("boot");
 }
 
+static bool memdiag_enabled = true;
+
+void memdiag_enable(bool on)
+{
+    memdiag_enabled = on;
+}
+
 void memdiag_log(const char *where)
 {
+    if (!memdiag_enabled)
+    {
+        return;
+    }
     ESP_LOGI(TAG, "%s: free %u (min %u) largest %u", where,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
@@ -42,6 +53,10 @@ void memdiag_log(const char *where)
 
 void memdiag_log_tasks(void)
 {
+    if (!memdiag_enabled)
+    {
+        return;
+    }
     static TaskStatus_t tasks[MEMDIAG_MAX_TASKS];
     static char line[512];
 

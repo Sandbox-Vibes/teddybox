@@ -57,6 +57,8 @@ typedef struct
     bool slap_reverse;
     /* tilt = chapter / seek: 0 off, 1 (tilt furthest) .. 5, 3 = 30 degrees as before */
     uint8_t tilt_level;
+    /* memory/stack lines in the serial log (every 30 s and at events) */
+    bool mem_log;
 
     /* idle time until power off, seconds */
     uint32_t idle_timeout_s;

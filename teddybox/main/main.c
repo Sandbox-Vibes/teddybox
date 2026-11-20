@@ -29,7 +29,6 @@
 #include "board.h"
 #include "playback.h"
 #include "wifi.h"
-#include "webserver.h"
 #include "accel.h"
 #include "dac3100.h"
 #include "ota.h"
@@ -297,6 +296,7 @@ void app_main(void)
     /* first boot: no settings file yet */
     bool setup_mode = setup_requested || !settings_ini_exists();
     settings_load_ini();
+    memdiag_enable(settings_get()->mem_log);
     sfx_install(settings_get()->lang_id);
 
     ESP_LOGI(TAG, "Start codec chip");
@@ -360,7 +360,6 @@ void app_main(void)
     cloud_init();
     mqtt_ha_init();
     /* already too much memory consumption, do not enable by default */
-    // www_init();
     /* updates come through the setup page, see ota.h */
 
     int64_t last_activity_time = esp_timer_get_time();

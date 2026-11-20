@@ -36,6 +36,7 @@ static settings_t settings = {
     .slap_level = 3,
     .slap_reverse = false,
     .tilt_level = 3,
+    .mem_log = true,
     .mqtt_host = "",
     .mqtt_port = 1883,
     .mqtt_user = "",
@@ -112,7 +113,9 @@ int settings_save_ini(const char *path)
                      "slap = %u\n"
                      "slap_reverse = %u\n"
                      "# tilt for chapter/seek: 0 (off), 1 (tilt far) to 5 (tilt a little), 3 = 30 degrees\n"
-                     "tilt = %u\n",
+                     "tilt = %u\n"
+                     "# memory lines in the serial log (diagnostics): 1 on, 0 off\n"
+                     "mem_log = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -123,7 +126,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -274,6 +277,17 @@ void settings_load_ini(void)
         else if (!strcmp(key, "led_brightness") && num >= 0 && num <= 3 && val[0] >= '0' && val[0] <= '3' && !val[1])
         {
             settings.led_brightness = num;
+        }
+        else if (!strcmp(key, "mem_log"))
+        {
+            if ((val[0] == '0' || val[0] == '1') && !val[1])
+            {
+                settings.mem_log = num;
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid mem_log '%s' (0 or 1)", val);
+            }
         }
         else if (!strcmp(key, "slap") || !strcmp(key, "tilt") || !strcmp(key, "slap_reverse"))
         {
