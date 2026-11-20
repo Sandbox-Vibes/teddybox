@@ -100,6 +100,27 @@ int ctrl_get_led_brightness(void)
     return led_get_brightness();
 }
 
+static volatile bool ctrl_motion_save = false;
+
+void ctrl_request_motion(int slap, int tilt, int reverse)
+{
+    /* the accel task reads the settings in every loop */
+    settings_t *s = settings_get_mutable();
+    if (slap >= 0 && slap <= 5)
+    {
+        s->slap_level = slap;
+    }
+    if (tilt >= 0 && tilt <= 5)
+    {
+        s->tilt_level = tilt;
+    }
+    if (reverse == 0 || reverse == 1)
+    {
+        s->slap_reverse = reverse;
+    }
+    ctrl_motion_save = true;
+}
+
 void ctrl_request_volume(int percent)
 {
     int max = settings_get()->volume_max;
@@ -418,6 +439,17 @@ void app_main(void)
                 {
                     ESP_LOGW(TAG, "Could not save LED brightness");
                 }
+            }
+        }
+
+        if (ctrl_motion_save)
+        {
+            ctrl_motion_save = false;
+            ESP_LOGI(TAG, "Slap %d%s, tilt %d", settings_get()->slap_level, settings_get()->slap_reverse ? " (reversed)" : "",
+                     settings_get()->tilt_level);
+            if (settings_save_ini(SETTINGS_INI_PATH) != 0)
+            {
+                ESP_LOGW(TAG, "Could not save slap/tilt settings");
             }
         }
 

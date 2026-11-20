@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "state")) {
         ha_state_t a = {.playing = 1, .uid = 0xE004035000112233ULL, .chapter = 3, .chapters = 12, .volume = 60,
                         .battery_mv = 3950, .battery_percent = ha_battery_percent(3950, 3600), .battery_state = "ok",
-                        .charging = 0, .headphones = 1, .rssi = -61, .led = 2,
+                        .charging = 0, .headphones = 1, .rssi = -61, .led = 2, .slap = 3, .tilt = 0, .slap_reverse = 1,
                         .progress = 37, .chapter_progress = 80, .position_ds = 7385, .duration_ds = 19980, .download = -1};
         ha_state_t b = {.battery_state = "unknown", .battery_percent = -1, .progress = -1, .chapter_progress = -1,
                         .position_ds = -1, .duration_ds = -1, .download = 55};
@@ -43,6 +43,14 @@ int main(int argc, char **argv)
         {"teddybox/aabbccddeeff/cmd/led", "3.0", HA_CMD_LED, 3},
         {"teddybox/aabbccddeeff/cmd/led", "4", HA_CMD_NONE, 0},
         {"teddybox/aabbccddeeff/cmd/led", "-1", HA_CMD_NONE, 0},
+        {"teddybox/aabbccddeeff/cmd/slap", "0", HA_CMD_SLAP, 0},
+        {"teddybox/aabbccddeeff/cmd/slap", "5.0", HA_CMD_SLAP, 5},
+        {"teddybox/aabbccddeeff/cmd/slap", "6", HA_CMD_NONE, 0},
+        {"teddybox/aabbccddeeff/cmd/tilt", "3", HA_CMD_TILT, 3},
+        {"teddybox/aabbccddeeff/cmd/tilt", "-1", HA_CMD_NONE, 0},
+        {"teddybox/aabbccddeeff/cmd/slap_reverse", "ON", HA_CMD_SLAP_REVERSE, 1},
+        {"teddybox/aabbccddeeff/cmd/slap_reverse", "OFF", HA_CMD_SLAP_REVERSE, 0},
+        {"teddybox/aabbccddeeff/cmd/slap_reverse", "on", HA_CMD_NONE, 0},
         {"teddybox/other/cmd/stop", "PRESS", HA_CMD_NONE, 0},
         {"teddybox/aabbccddeeff/cmd/", "", HA_CMD_NONE, 0},
     };

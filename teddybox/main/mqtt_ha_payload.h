@@ -42,6 +42,9 @@ typedef struct
     int rssi;                /* 0 = unknown */
     int speaker_eq;          /* 0 off, 1 lowcut, 2 full (speaker_eq_t) */
     int led;                 /* 0..3 */
+    int slap;                /* 0 off, 1..5 */
+    int tilt;                /* 0 off, 1..5 */
+    bool slap_reverse;
     /* progress, -1 = unknown (sent as null) */
     int progress;            /* % of the tonie */
     int chapter_progress;    /* % of the chapter */
@@ -60,6 +63,9 @@ typedef enum
     HA_CMD_POWEROFF,
     HA_CMD_SPEAKER_EQ,
     HA_CMD_LED,
+    HA_CMD_SLAP,
+    HA_CMD_TILT,
+    HA_CMD_SLAP_REVERSE,
 } ha_cmd_t;
 
 /* select labels, index = speaker_eq_t */

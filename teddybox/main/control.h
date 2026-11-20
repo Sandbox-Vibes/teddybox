@@ -16,6 +16,9 @@ int ctrl_get_speaker_eq(void);
 /* LED brightness 0..3, applied and saved to the INI by the main loop */
 void ctrl_request_led_brightness(int level);
 int ctrl_get_led_brightness(void);
+/* slap level 0..5, tilt level 0..5, slap reverse 0/1; -1 = unchanged.
+   Takes effect at once, saved to the INI by the main loop */
+void ctrl_request_motion(int slap, int tilt, int reverse);
 uint32_t ctrl_get_volume(void);
 
 void ctrl_request_poweroff(void);

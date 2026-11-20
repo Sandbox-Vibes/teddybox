@@ -24,6 +24,38 @@ esp_err_t lis3dh_set_reg(lis3dh_t ctx, uint8_t reg, uint8_t val)
     return i2c_bus_write_bytes(ctx->i2c_handle, LIS3DH_ADDR, &reg, 1, &val, 1);
 }
 
+esp_err_t lis3dh_get_range(lis3dh_t ctx);
+
+esp_err_t lis3dh_read_burst(lis3dh_t ctx, uint8_t reg, uint8_t *buf, int len)
+{
+    return i2c_bus_read_bytes(ctx->i2c_handle, LIS3DH_ADDR, &reg, 1, buf, len);
+}
+
+/* configuration of the original firmware (from the dump of a box with
+   toniebox-esp32 v5.235.0): 400 Hz, +-8 g high resolution, FIFO in stream
+   mode (32 samples = 80 ms), single click on Y and Z to INT1, latched;
+   time limit 80/400 s = 200 ms, latency 255/400 s. Its threshold is 100
+   (x 62.5 mg = 6.25 g); click_ths 0 disables the click detection. */
+esp_err_t lis3dh_setup_click(lis3dh_t ctx, uint8_t click_ths)
+{
+    if (!ctx->valid)
+    {
+        return ESP_FAIL;
+    }
+    esp_err_t err = ESP_OK;
+    err |= lis3dh_set_reg(ctx, LIS3DH_CTRL_REG1, 0x77);
+    err |= lis3dh_set_reg(ctx, LIS3DH_CTRL_REG3, click_ths ? 0x80 : 0x00);
+    err |= lis3dh_set_reg(ctx, LIS3DH_CTRL_REG4, 0xA8);
+    err |= lis3dh_set_reg(ctx, LIS3DH_CTRL_REG5, 0x48);
+    err |= lis3dh_set_reg(ctx, LIS3DH_CLICK_CFG, click_ths ? 0x14 : 0x00);
+    err |= lis3dh_set_reg(ctx, LIS3DH_CLICK_THS, 0x80 | (click_ths & 0x7F));
+    err |= lis3dh_set_reg(ctx, LIS3DH_TIME_LIMIT, 0x50);
+    err |= lis3dh_set_reg(ctx, LIS3DH_TIME_LATENCY, 0xFF);
+    err |= lis3dh_set_reg(ctx, LIS3DH_FIFO_CTRL_REG, 0x80);
+    err |= lis3dh_get_range(ctx);
+    return err;
+}
+
 esp_err_t lis3dh_fetch(lis3dh_t ctx, float *measurements)
 {
     if (!ctx->valid)
@@ -33,10 +65,8 @@ esp_err_t lis3dh_fetch(lis3dh_t ctx, float *measurements)
     uint8_t reading[6];
     esp_err_t ret = 0;
 
-    for (int pos = 0; pos < sizeof(reading); pos++)
-    {
-        ret |= lis3dh_get_reg(ctx, LIS3DH_OUT_X_L_INCR + pos, &reading[pos]);
-    }
+    /* one burst: with the FIFO on, a complete burst takes one sample out of it */
+    ret = lis3dh_read_burst(ctx, LIS3DH_OUT_X_L_INCR, reading, sizeof(reading));
 
     // Read and sign extend
     int16_t val_x = (reading[0] | (reading[1] << 8));

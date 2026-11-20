@@ -77,6 +77,9 @@ static void mqtt_collect_state(ha_state_t *st)
     st->headphones = pb_headphones_connected();
     st->speaker_eq = ctrl_get_speaker_eq();
     st->led = ctrl_get_led_brightness();
+    st->slap = settings_get()->slap_level;
+    st->tilt = settings_get()->tilt_level;
+    st->slap_reverse = settings_get()->slap_reverse;
 
     pb_progress_t p;
     pb_get_progress(&p);
@@ -95,6 +98,7 @@ static bool state_differs(const ha_state_t *a, const ha_state_t *b)
 {
     return a->playing != b->playing || a->uid != b->uid || a->chapter != b->chapter || a->chapters != b->chapters ||
            a->volume != b->volume || a->charging != b->charging || a->headphones != b->headphones || a->speaker_eq != b->speaker_eq || a->led != b->led ||
+           a->slap != b->slap || a->tilt != b->tilt || a->slap_reverse != b->slap_reverse ||
            /* a value appearing or disappearing (download starts/ends, duration known) goes out at once */
            (a->download < 0) != (b->download < 0) || (a->duration_ds < 0) != (b->duration_ds < 0) ||
            (a->download == 100) != (b->download == 100) ||
@@ -129,6 +133,18 @@ static void mqtt_handle_command(const char *topic, int topic_len, const char *da
     case HA_CMD_LED:
         ESP_LOGI(TAG, "Command: LED brightness %d", value);
         ctrl_request_led_brightness(value);
+        break;
+    case HA_CMD_SLAP:
+        ESP_LOGI(TAG, "Command: slap level %d", value);
+        ctrl_request_motion(value, -1, -1);
+        break;
+    case HA_CMD_TILT:
+        ESP_LOGI(TAG, "Command: tilt level %d", value);
+        ctrl_request_motion(-1, value, -1);
+        break;
+    case HA_CMD_SLAP_REVERSE:
+        ESP_LOGI(TAG, "Command: slap reverse %d", value);
+        ctrl_request_motion(-1, -1, value);
         break;
     case HA_CMD_POWEROFF:
         ESP_LOGI(TAG, "Command: power off");

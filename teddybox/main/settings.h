@@ -51,6 +51,12 @@ typedef struct
     uint8_t speaker_eq;
     /* LED brightness 0 (off) .. 3 (full) */
     uint8_t led_brightness;
+    /* slap on the side = chapter: 0 off, 1 (least sensitive) .. 5, 3 = original firmware */
+    uint8_t slap_level;
+    /* swap the slap directions */
+    bool slap_reverse;
+    /* tilt = chapter / seek: 0 off, 1 (tilt furthest) .. 5, 3 = 30 degrees as before */
+    uint8_t tilt_level;
 
     /* idle time until power off, seconds */
     uint32_t idle_timeout_s;

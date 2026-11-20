@@ -26,6 +26,9 @@ int main(void)
     s->idle_timeout_s = 300;
     s->speaker_eq = SPEAKER_EQ_LOWCUT;
     s->led_brightness = 1;
+    s->slap_level = 5;
+    s->slap_reverse = true;
+    s->tilt_level = 0;
     s->boxine_fallback = true;
     s->user_agent_original = true;
     CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
@@ -46,6 +49,7 @@ int main(void)
     CHECK(s->boxine_fallback && s->user_agent_original);
     CHECK(s->speaker_eq == SPEAKER_EQ_LOWCUT);
     CHECK(s->led_brightness == 1);
+    CHECK(s->slap_level == 5 && s->slap_reverse && s->tilt_level == 0);
     CHECK(!strcmp(s->boxine_host, "prod.de.tbs.toys"));
 
     /* host set but cloud switched off must survive the round trip */
@@ -76,6 +80,15 @@ int main(void)
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("led_brightness = 7\n", f); fclose(f);
     settings_load_ini();
     CHECK(s->led_brightness == 0);
+
+    /* slap/tilt: defaults 3, invalid values keep the previous one */
+    s->slap_level = 3; s->slap_reverse = false; s->tilt_level = 3;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("slap = 6\ntilt = 12\nslap_reverse = 2\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->slap_level == 3 && !s->slap_reverse && s->tilt_level == 3);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("slap = 0\ntilt = 1\nslap_reverse = 1\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->slap_level == 0 && s->slap_reverse && s->tilt_level == 1);
 
     /* keys of older versions are accepted silently */
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("ota_enabled = 1\nota_allow_overwrite_pd = 1\n", f); fclose(f);

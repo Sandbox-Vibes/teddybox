@@ -33,6 +33,9 @@ static settings_t settings = {
     .idle_timeout_s = 60,
     .speaker_eq = SPEAKER_EQ_DEFAULT,
     .led_brightness = 3,
+    .slap_level = 3,
+    .slap_reverse = false,
+    .tilt_level = 3,
     .mqtt_host = "",
     .mqtt_port = 1883,
     .mqtt_user = "",
@@ -104,7 +107,12 @@ int settings_save_ini(const char *path)
                      "# speaker EQ: off, lowcut (high-pass 150 Hz) or full (plus gentle cuts at 400 Hz and 3.2 kHz)\n"
                      "speaker_eq = %s\n"
                      "# LED brightness: 0 (off) to 3 (full)\n"
-                     "led_brightness = %u\n",
+                     "led_brightness = %u\n"
+                     "# slap on the side for the next/previous chapter: 0 (off), 1 (firm) to 5 (light), 3 like the original\n"
+                     "slap = %u\n"
+                     "slap_reverse = %u\n"
+                     "# tilt for chapter/seek: 0 (off), 1 (tilt far) to 5 (tilt a little), 3 = 30 degrees\n"
+                     "tilt = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -114,7 +122,8 @@ int settings_save_ini(const char *path)
                      s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
-                     speaker_eq_name(s->speaker_eq), s->led_brightness) > 0;
+                     speaker_eq_name(s->speaker_eq), s->led_brightness,
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -265,6 +274,29 @@ void settings_load_ini(void)
         else if (!strcmp(key, "led_brightness") && num >= 0 && num <= 3 && val[0] >= '0' && val[0] <= '3' && !val[1])
         {
             settings.led_brightness = num;
+        }
+        else if (!strcmp(key, "slap") || !strcmp(key, "tilt") || !strcmp(key, "slap_reverse"))
+        {
+            int max = strcmp(key, "slap_reverse") ? 5 : 1;
+            if (val[0] >= '0' && val[0] <= '0' + max && !val[1])
+            {
+                if (!strcmp(key, "slap"))
+                {
+                    settings.slap_level = num;
+                }
+                else if (!strcmp(key, "tilt"))
+                {
+                    settings.tilt_level = num;
+                }
+                else
+                {
+                    settings.slap_reverse = num;
+                }
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid %s '%s' (0 to %d)", key, val, max);
+            }
         }
         else if (!strcmp(key, "speaker_eq"))
         {

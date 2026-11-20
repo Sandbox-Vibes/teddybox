@@ -142,6 +142,9 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "idle_timeout", s->idle_timeout_s);
     cJSON_AddStringToObject(j, "speaker_eq", speaker_eq_name(s->speaker_eq));
     cJSON_AddNumberToObject(j, "led_brightness", s->led_brightness);
+    cJSON_AddNumberToObject(j, "slap", s->slap_level);
+    cJSON_AddBoolToObject(j, "slap_reverse", s->slap_reverse);
+    cJSON_AddNumberToObject(j, "tilt", s->tilt_level);
     esp_app_desc_t app;
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_get_partition_description(running, &app);
@@ -384,6 +387,19 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (get_int(o, "led_brightness", 0, 3, &v))
     {
         s->led_brightness = v;
+    }
+    if (get_int(o, "slap", 0, 5, &v))
+    {
+        s->slap_level = v;
+    }
+    if (get_int(o, "tilt", 0, 5, &v))
+    {
+        s->tilt_level = v;
+    }
+    cJSON *sr = cJSON_GetObjectItemCaseSensitive(o, "slap_reverse");
+    if (cJSON_IsBool(sr))
+    {
+        s->slap_reverse = cJSON_IsTrue(sr);
     }
     cJSON *eq = cJSON_GetObjectItemCaseSensitive(o, "speaker_eq");
     if (cJSON_IsString(eq) && speaker_eq_parse(eq->valuestring) >= 0)

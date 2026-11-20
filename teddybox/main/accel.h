@@ -13,7 +13,10 @@
 
 /* angle definitions for stable, tilted and flipped */
 #define ACCEL_ANGLE_STABLE 0
-#define ACCEL_ANGLE_TILT 30
+/* sensitivity levels for slap and tilt: 0 off, 1..5 */
+#define ACCEL_LEVELS 6
+/* after a slap, ignore further ones (the box swings back) */
+#define ACCEL_SLAP_PAUSE_MS 700
 #define ACCEL_ANGLE_FLIP 180
 
 void accel_init(audio_board_handle_t board);

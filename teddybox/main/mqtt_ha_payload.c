@@ -57,6 +57,15 @@ static const ha_entity_t entities[] = {
     {"number", "led", "LED-Helligkeit",
      "\"value_template\":\"{{ value_json.led }}\",\"command_topic\":\"%s/cmd/led\",\"min\":0,\"max\":3,\"step\":1,"
      "\"mode\":\"slider\",\"icon\":\"mdi:led-on\",\"entity_category\":\"config\""},
+    {"number", "slap", "Klapsen (Empfindlichkeit)",
+     "\"value_template\":\"{{ value_json.slap }}\",\"command_topic\":\"%s/cmd/slap\",\"min\":0,\"max\":5,\"step\":1,"
+     "\"mode\":\"slider\",\"icon\":\"mdi:hand-back-left\",\"entity_category\":\"config\""},
+    {"switch", "slap_reverse", "Klapsen umgekehrt",
+     "\"value_template\":\"{{ 'ON' if value_json.slap_reverse else 'OFF' }}\",\"command_topic\":\"%s/cmd/slap_reverse\","
+     "\"icon\":\"mdi:swap-horizontal\",\"entity_category\":\"config\""},
+    {"number", "tilt", "Kippen (Empfindlichkeit)",
+     "\"value_template\":\"{{ value_json.tilt }}\",\"command_topic\":\"%s/cmd/tilt\",\"min\":0,\"max\":5,\"step\":1,"
+     "\"mode\":\"slider\",\"icon\":\"mdi:phone-rotate-landscape\",\"entity_category\":\"config\""},
     {"select", "speaker_eq", "Lautsprecher-Klang",
      "\"value_template\":\"{{ value_json.speaker_eq }}\",\"command_topic\":\"%s/cmd/speaker_eq\","
      "\"options\":[\"Optimiert\",\"Nur Tiefenfilter\",\"Wie Original\"],\"icon\":\"mdi:tune-vertical\",\"entity_category\":\"config\""},
@@ -177,12 +186,12 @@ int ha_state_json(const ha_state_t *st, char *buf, size_t size)
     int n = snprintf(buf, size,
                      "{\"status\":\"%s\",\"tonie\":\"%s\",\"chapter\":%d,\"chapters\":%d,\"volume\":%u,"
                      "\"battery_mv\":%u,\"battery\":%d,\"battery_state\":\"%s\",\"charging\":%s,"
-                     "\"headphones\":%s,\"rssi\":%d,\"speaker_eq\":\"%s\",\"led\":%d,"
+                     "\"headphones\":%s,\"rssi\":%d,\"speaker_eq\":\"%s\",\"led\":%d,\"slap\":%d,\"tilt\":%d,\"slap_reverse\":%s,"
                      "\"progress\":%s,\"chapter_progress\":%s,\"position\":%s,\"duration\":%s,\"download\":%s}",
                      st->playing ? "playing" : "idle", tonie, st->chapter, st->chapters, st->volume,
                      st->battery_mv, st->battery_percent, st->battery_state ? st->battery_state : "unknown",
                      st->charging ? "true" : "false", st->headphones ? "true" : "false", st->rssi,
-                     ha_speaker_eq_label(st->speaker_eq), st->led,
+                     ha_speaker_eq_label(st->speaker_eq), st->led, st->slap, st->tilt, st->slap_reverse ? "true" : "false",
                      ha_int_or_null(prog, sizeof(prog), st->progress), ha_int_or_null(chprog, sizeof(chprog), st->chapter_progress),
                      ha_minutes_or_null(pos, sizeof(pos), st->position_ds), ha_minutes_or_null(dur, sizeof(dur), st->duration_ds),
                      ha_int_or_null(dl, sizeof(dl), st->download));
@@ -203,7 +212,7 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     int name_len = topic_len - (int)(name - topic);
 
 #define IS(s) (name_len == (int)strlen(s) && !strncmp(name, s, name_len))
-    if (IS("volume") || IS("led"))
+    if (IS("volume") || IS("led") || IS("slap") || IS("tilt"))
     {
         char num[12];
         if (data_len <= 0 || data_len >= (int)sizeof(num))
@@ -225,6 +234,10 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
         {
             return (*value >= 0 && *value <= 3) ? HA_CMD_LED : HA_CMD_NONE;
         }
+        if (IS("slap") || IS("tilt"))
+        {
+            return (*value >= 0 && *value <= 5) ? (IS("slap") ? HA_CMD_SLAP : HA_CMD_TILT) : HA_CMD_NONE;
+        }
         return HA_CMD_VOLUME;
     }
     if (IS("stop"))
@@ -242,6 +255,20 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     if (IS("poweroff"))
     {
         return HA_CMD_POWEROFF;
+    }
+    if (IS("slap_reverse"))
+    {
+        if (data_len == 2 && !strncmp(data, "ON", 2))
+        {
+            *value = 1;
+            return HA_CMD_SLAP_REVERSE;
+        }
+        if (data_len == 3 && !strncmp(data, "OFF", 3))
+        {
+            *value = 0;
+            return HA_CMD_SLAP_REVERSE;
+        }
+        return HA_CMD_NONE;
     }
     if (IS("speaker_eq"))
     {
