@@ -100,3 +100,8 @@ CONFIG_MBEDTLS_SSL_PROTO_TLS1_3=n
 
 # ESP-ADF headers still use the old FreeRTOS type names
 CONFIG_FREERTOS_ENABLE_BACKWARD_COMPATIBILITY=y
+
+# faster WiFi after waking up: keep the last DHCP address and the PHY (radio)
+# calibration in NVS instead of a full DHCP exchange / calibration every time
+CONFIG_LWIP_DHCP_RESTORE_LAST_IP=y
+CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=y
