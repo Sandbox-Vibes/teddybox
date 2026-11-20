@@ -39,7 +39,7 @@ static settings_t settings = {
     .mem_log = true,
     .update_hour = 3,
     .claim = false,
-    .decoder_celt = false,
+    .decoder_celt = true,
     .cpu_mhz = 240,
     .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
@@ -128,7 +128,7 @@ int settings_save_ini(const char *path)
                      "# report placed tonies to teddyCloud like the original box; off: teddyCloud forwards them to the Boxine cloud\n"
                      "# if its cloud access is on (\"Forward claim\"), and Home Assistant shows the tonie anyway\n"
                      "claim = %u\n"
-                     "# Opus decoder: adf (ESP-ADF) or celt (libopus CELT only, like the original firmware)\n"
+                     "# Opus decoder: celt (default, libopus CELT only, like the original firmware) or adf (ESP-ADF, also SILK/hybrid files)\n"
                      "decoder = %s\n"
                      "# CPU clock in MHz: 240 or 160 (less power, enough decoding power with decoder = celt?)\n"
                      "cpu_mhz = %u\n",

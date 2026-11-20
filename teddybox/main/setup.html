@@ -93,9 +93,9 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <p class="hint">Klapsen auf die Seite: Kapitel vor/zurück. Kippen: Kapitel oder Spulen. 5 reagiert am leichtesten.</p>
 <label for="uphour">Nächtliche Aktualisierung</label><select id="uphour"><option value="-1">Aus</option><option value="0">00:00 Uhr</option><option value="1">01:00 Uhr</option><option value="2">02:00 Uhr</option><option value="3">03:00 Uhr</option><option value="4">04:00 Uhr</option><option value="5">05:00 Uhr</option><option value="6">06:00 Uhr</option><option value="7">07:00 Uhr</option><option value="8">08:00 Uhr</option><option value="9">09:00 Uhr</option><option value="10">10:00 Uhr</option><option value="11">11:00 Uhr</option><option value="12">12:00 Uhr</option><option value="13">13:00 Uhr</option><option value="14">14:00 Uhr</option><option value="15">15:00 Uhr</option><option value="16">16:00 Uhr</option><option value="17">17:00 Uhr</option><option value="18">18:00 Uhr</option><option value="19">19:00 Uhr</option><option value="20">20:00 Uhr</option><option value="21">21:00 Uhr</option><option value="22">22:00 Uhr</option><option value="23">23:00 Uhr</option></select>
 <p class="hint">Die Box wacht einmal täglich lautlos auf und lädt neue Versionen ihrer Tonies und abgebrochene Downloads (am Ladegerät immer, im Akkubetrieb ab 50 %). Ein Ohr drücken startet die Box normal.</p>
-<details><summary>Decoder und Prozessortakt (Test)</summary>
+<details><summary>Decoder und Prozessortakt</summary>
 <div class="row">
-<div><label for="decoder">Decoder</label><select id="decoder"><option value="adf">ESP-ADF</option><option value="celt">CELT (wie Original)</option></select></div>
+<div><label for="decoder">Decoder</label><select id="decoder"><option value="celt">CELT (Standard, wie Original)</option><option value="adf">ESP-ADF (Ausweichlösung)</option></select></div>
 <div><label for="cpumhz">Prozessortakt</label><select id="cpumhz"><option value="240">240 MHz</option><option value="160">160 MHz</option></select></div>
 </div>
 <p class="hint">CELT braucht deutlich weniger Arbeitsspeicher. Mit 160 MHz hält der Akku etwas länger, mit ESP-ADF stockten bei 160 MHz aber manche Tonies. Im Log zeigt „Decoder … % CPU“ die Auslastung.</p>
@@ -174,7 +174,7 @@ async function load(){
     if(cfg.ca_custom)setStatus($('castatus'),'Eigenes CA-Zertifikat ist gespeichert.','ok');
     $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
     if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
-    $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('idle').value=cfg.idle_timeout||60;$('speq').value=cfg.speaker_eq||'full';$('led').value=String(cfg.led_brightness??3);$('slap').value=String(cfg.slap??3);$('slaprev').checked=!!cfg.slap_reverse;$('tilt').value=String(cfg.tilt??3);$('uphour').value=String(cfg.update_hour??3);$('decoder').value=cfg.decoder||'adf';$('cpumhz').value=String(cfg.cpu_mhz||240);
+    $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('idle').value=cfg.idle_timeout||60;$('speq').value=cfg.speaker_eq||'full';$('led').value=String(cfg.led_brightness??3);$('slap').value=String(cfg.slap??3);$('slaprev').checked=!!cfg.slap_reverse;$('tilt').value=String(cfg.tilt??3);$('uphour').value=String(cfg.update_hour??3);$('decoder').value=cfg.decoder||'celt';$('cpumhz').value=String(cfg.cpu_mhz||240);
     $('fwinfo').textContent='Läuft: TeddyBox '+(cfg.fw_version||'?')+' aus Slot '+(cfg.fw_slot||'?');
     $('boxfb').checked=!!cfg.boxine_fallback;$('uaorig').checked=!!cfg.user_agent_original;
   }catch(e){setStatus($('status'),'Einstellungen konnten nicht geladen werden.','err');}

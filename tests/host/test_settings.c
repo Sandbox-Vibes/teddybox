@@ -63,6 +63,7 @@ int main(void)
     remove(SETTINGS_INI_PATH);
     memset(s, 0, sizeof(*s));
     settings_init();
+    CHECK(s->decoder_celt && s->cpu_mhz == 240 && !s->claim);
     FILE *f = fopen(SETTINGS_INI_PATH, "w"); fputs("cloud_host = tc.local\n", f); fclose(f);
     s->boxine_fallback = false; s->user_agent_original = false; s->speaker_eq = SPEAKER_EQ_DEFAULT;
     settings_load_ini();
@@ -116,7 +117,10 @@ int main(void)
     s->decoder_celt = false; s->cpu_mhz = 240;
     settings_load_ini();
     CHECK(s->decoder_celt && s->cpu_mhz == 160);
-    s->decoder_celt = false; s->cpu_mhz = 240;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("decoder = adf\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(!s->decoder_celt);
+    s->decoder_celt = true; s->cpu_mhz = 240;
 
     /* claim: 0/1 only */
     s->claim = true;

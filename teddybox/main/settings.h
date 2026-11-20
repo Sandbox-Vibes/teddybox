@@ -63,7 +63,7 @@ typedef struct
     int8_t update_hour;
     /* report placed tonies to teddyCloud (/v1/claim) like the original box */
     bool claim;
-    /* Opus decoder: false = ESP-ADF (esp_audio_codec), true = own CELT decoder (libopus) */
+    /* Opus decoder: true = own CELT decoder (libopus, default), false = ESP-ADF (esp_audio_codec, fallback) */
     bool decoder_celt;
     /* CPU clock: 160 or 240 MHz */
     uint16_t cpu_mhz;
