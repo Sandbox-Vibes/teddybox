@@ -42,6 +42,12 @@ int main(void)
     time_t a = maint_next_time(local(2026, 10, 24, 22, 0), 3, 5, 0, 12 * 3600);
     check("after autumn DST run -> next day 03:05", maint_next_time(a + 60, 3, 5, a, 12 * 3600), local(2026, 10, 26, 3, 5));
     check("spring DST at 02:20 (missing hour)", maint_next_time(local(2026, 3, 28, 22, 0), 2, 20, 0, 12 * 3600) > local(2026, 3, 28, 22, 0), 1);
+    /* token names: same as the content file of the tonie from the box log */
+    char dir[9], file[9];
+    maint_token_names(0xE00403500EEA5646ULL, dir, file);
+    int ok = !strcmp(dir, "4656EA0E") && !strcmp(file, "500304E0");
+    fails += !ok;
+    printf("%s token E00403500EEA5646 -> TOKENS/%s/%s\n", ok ? "ok  " : "FAIL", dir, file);
     printf("%s\n", fails ? "FAILED" : "all ok");
     return fails;
 }

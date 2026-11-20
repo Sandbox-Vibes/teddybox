@@ -236,10 +236,11 @@ unfinished download, one after another.
   progress for 2 minutes, low battery or 45 minutes in total stop it, the
   rest continues the next night or when the tonie is placed.
 - Downloading without the tonie on the box needs its token. It is stored when
-  a tonie is placed (`/sdcard/teddybox_tokens/<uid>.tok`, 32 bytes, only
-  written when it changes). Tonies not placed since this version are skipped.
+  a tonie is placed (`/sdcard/TOKENS/<dir>/<file>`, same names as in
+  `CONTENT`, 32 bytes, only written when it changes; FATFS names are limited
+  to 16 characters). Tonies not placed since this version are skipped.
   **The tokens give access to the tonie's content in the cloud: whoever has
-  the SD card has them.** Delete the folder to remove them.
+  the SD card has them.** Delete the `TOKENS` folder to remove them.
 - Needs a valid clock (set from teddyCloud on every connection; kept in deep
   sleep, lost when the battery is removed: then the next normal start plans
   it again).

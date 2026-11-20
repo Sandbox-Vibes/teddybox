@@ -31,6 +31,9 @@ void maint_run(void);
 void maint_token_save(uint64_t uid, const uint8_t token[32]);
 bool maint_token_load(uint64_t uid, uint8_t token[32]);
 
+/* token file TOKENS/<dir>/<file>, same names as the content in CONTENT/ */
+void maint_token_names(uint64_t uid, char dir[9], char file[9]);
+
 /* last run for Home Assistant: time (0 = never) and a short German text */
 time_t maint_last(const char **result);
 

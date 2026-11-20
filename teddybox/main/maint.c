@@ -27,7 +27,8 @@ static const char *TAG = "Maint";
 
 #define CONTENT_DIR "/sdcard/CONTENT"
 #define SYSTEM_DIR "00000001"
-#define TOKEN_DIR "/sdcard/teddybox_tokens"
+/* same layout as CONTENT (names of at most 8 characters, FATFS_MAX_LFN is 16) */
+#define TOKEN_DIR "/sdcard/TOKENS"
 #define CLOCK_VALID 1700000000
 
 /* survives deep sleep and software resets; garbage after power-on (magic) */
@@ -119,15 +120,33 @@ time_t maint_last(const char **result)
     return rtc.last;
 }
 
-static void token_path(uint64_t uid, char *path, size_t size)
+void maint_token_names(uint64_t uid, char dir[9], char file[9])
 {
-    snprintf(path, size, TOKEN_DIR "/%016llX.tok", (unsigned long long)uid);
+    /* byte 0 first, as pb_build_filename() and freshness_uid_from_names() */
+    for (int i = 0; i < 4; i++)
+    {
+        snprintf(dir + 2 * i, 3, "%02X", (unsigned)(uid >> (8 * i)) & 0xFF);
+        snprintf(file + 2 * i, 3, "%02X", (unsigned)(uid >> (8 * (i + 4))) & 0xFF);
+    }
+}
+
+static void token_path(uint64_t uid, char *path, size_t size, bool make_dirs)
+{
+    char dir[9], file[9];
+    maint_token_names(uid, dir, file);
+    if (make_dirs)
+    {
+        mkdir(TOKEN_DIR, 0775);
+        snprintf(path, size, TOKEN_DIR "/%s", dir);
+        mkdir(path, 0775);
+    }
+    snprintf(path, size, TOKEN_DIR "/%s/%s", dir, file);
 }
 
 bool maint_token_load(uint64_t uid, uint8_t token[32])
 {
     char path[64];
-    token_path(uid, path, sizeof(path));
+    token_path(uid, path, sizeof(path), false);
     FILE *f = fopen(path, "rb");
     bool ok = f && fread(token, 1, 32, f) == 32;
     if (f)
@@ -145,12 +164,11 @@ void maint_token_save(uint64_t uid, const uint8_t token[32])
         return; /* known, no SD write */
     }
     char path[64];
-    mkdir(TOKEN_DIR, 0775);
-    token_path(uid, path, sizeof(path));
+    token_path(uid, path, sizeof(path), true);
     FILE *f = fopen(path, "wb");
     if (!f || fwrite(token, 1, 32, f) != 32)
     {
-        ESP_LOGW(TAG, "Could not store the token of %016llX", (unsigned long long)uid);
+        ESP_LOGW(TAG, "Could not store the token of %016llX in %s", (unsigned long long)uid, path);
     }
     if (f)
     {
