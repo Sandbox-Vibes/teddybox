@@ -125,6 +125,8 @@ esp_err_t pb_play_content(uint64_t nfc_uid);
 esp_err_t pb_play_content_token(uint64_t nfc_uid, const uint8_t *token);
 esp_err_t pb_stop();
 bool pb_is_playing();
+/* block where the last tonie continues (0 = from the start, also after it played to the end) */
+uint32_t pb_get_resume_position();
 char *pb_build_filename(uint64_t id);
 /* PB_ERR_GOOD_FILE if the TAF file is complete */
 esp_err_t pb_check_file(const char *filename);

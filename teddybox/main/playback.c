@@ -503,6 +503,14 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
     else if (bytes_read == 0)
     {
         ESP_LOGI(TAG, "Playback finished, cleaning up");
+        /* played to the very end: next time the tonie starts from the
+           beginning, like the original firmware. Not after a download that
+           stopped halfway, there the position is kept for the resume. */
+        if (!pb_default_content && info->taf && (uint64_t)info->current_pos >= info->taf->num_bytes + TONIEFILE_FRAME_SIZE)
+        {
+            ESP_LOGI(TAG, "Tonie played to the end, next time from the start");
+            pb_last_play_position = 0;
+        }
         pb_toniefile_close(info);
         return AEL_IO_DONE;
     }
@@ -717,6 +725,11 @@ uint32_t pb_get_play_position()
     }
 
     return pb_toniefile_info.current_block;
+}
+
+uint32_t pb_get_resume_position()
+{
+    return pb_last_play_position;
 }
 
 uint64_t pb_get_current_uid()

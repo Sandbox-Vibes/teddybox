@@ -453,10 +453,12 @@ void app_main(void)
             last_activity_time = cur_time;
         }
 
-        if (pb_is_playing())
+        /* also after the playback ended: a tonie played to the end continues
+           from the start, after deep sleep too */
+        if (pb_get_current_uid())
         {
             rtc_storage.nfc_uid = pb_get_current_uid();
-            rtc_storage.play_position = pb_get_play_position();
+            rtc_storage.play_position = pb_get_resume_position();
         }
 
         /* hold both ears for 5 seconds: reboot into the original firmware */
