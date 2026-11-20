@@ -41,7 +41,7 @@ static settings_t settings = {
     .claim = false,
     .decoder_celt = true,
     .cpu_mhz = 160,
-    .dl_playing_kib_s = 96,
+    .dl_playing_kib_s = 0,
     .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
     .mqtt_port = 1883,
@@ -133,7 +133,7 @@ int settings_save_ini(const char *path)
                      "decoder = %s\n"
                      "# CPU clock in MHz: 160 (default, about 34 %% of one core for decoding) or 240; decoder = adf always uses 240\n"
                      "cpu_mhz = %u\n"
-                     "# download speed while a tonie plays in KiB/s (playback needs about 12), 0 = unlimited (about 250);\n"
+                     "# download speed while a tonie plays in KiB/s (playback needs about 12), 0 = unlimited (default, about 300; decoder = adf: max 96);\n"
                      "# without playback (nightly update, idle box) always unlimited\n"
                      "download_playing = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,

@@ -69,7 +69,9 @@ static char user_agent[64];
 /* while a tonie plays the download is limited, the SD card and the CPU are
    shared with the playback (about 12 KiB/s): at full speed (250 KiB/s with
    IDF 5, ESP-ADF decoder at 160 MHz) the sound stuttered. Limit from
-   teddybox.ini "download_playing" (default 96, 0 = unlimited). Without
+   teddybox.ini "download_playing" (default 0 = unlimited, about 300 KiB/s
+   with CELT at 160 MHz: decoder 40.7 % of one core, clean sound; decoder =
+   adf: at most 96). Without
    playback (nightly update) full speed. */
 #define CLOUD_SYNC_BYTES (128 * 1024)
 
@@ -495,6 +497,11 @@ static esp_err_t cloud_content_flush(cloud_content_req_t *req)
     xSemaphoreGive(req->update_sem);
     int64_t now = esp_timer_get_time();
     uint16_t kib_s = settings_get()->dl_playing_kib_s;
+    if (!settings_get()->decoder_celt && (!kib_s || kib_s > 96))
+    {
+        /* the ESP-ADF decoder stuttered with faster downloads */
+        kib_s = 96;
+    }
     if (kib_s && pb_is_playing())
     {
         /* evenly spaced blocks: waiting here stops reading from the socket,

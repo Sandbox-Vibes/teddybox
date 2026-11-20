@@ -223,10 +223,10 @@ FATFS then marks the open file as broken, so every later access fails.
   (digital pads would lose their level otherwise).
 - Idle power off after 60 s by default (`idle_timeout`).
 
-- While a tonie plays, downloads are limited to 96 KiB/s by default (8 times
-  the playback rate; full speed, about 250 KiB/s, made the sound stutter with
-  the ESP-ADF decoder at 160 MHz). `download_playing = <KiB/s>` (0 =
-  unlimited) to test more with CELT. Without playback full speed.
+- Downloads run at full speed also while a tonie plays (about 300 KiB/s;
+  CELT at 160 MHz then needs 40.7 % of one core, sound clean).
+  `download_playing = <KiB/s>` limits it (0 = unlimited, default). With
+  `decoder = adf` at most 96 KiB/s: full speed made ESP-ADF stutter.
 
 - (History, ESP-ADF decoder) The CPU ran at 240 MHz: at 160 MHz some tonies (teddyCloud encoded)
   played slowed and stuttering while WiFi/TLS were busy. A `[PB]: Audio:`
