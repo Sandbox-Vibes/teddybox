@@ -61,6 +61,7 @@ typedef struct
     uint8_t *wbuf;
     uint32_t wbuf_len;
     int64_t sd_write_us; /* time spent writing to SD since the last log line */
+    int64_t next_block_us; /* rate limit while playing: next block not before */
     /* FATFS only writes the file size to the directory entry on fsync/fclose.
        A file opened again sees that size, so it is synced regularly; after an
        SD error the download never seeks beyond it (that would extend the file

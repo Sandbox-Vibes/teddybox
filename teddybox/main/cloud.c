@@ -66,6 +66,10 @@ static char user_agent[64];
 
 /* download write block = TAF block, and how often an SD access is retried */
 #define CLOUD_WRITE_BLOCK 4096
+/* while a tonie plays the download is limited, the SD card and the CPU are
+   shared with the playback (about 12 KiB/s): at full speed (250 KiB/s with
+   IDF 5) the sound stuttered. Without playback (nightly update) full speed. */
+#define CLOUD_PLAYING_KIB_S 96
 #define CLOUD_SYNC_BYTES (128 * 1024)
 
 static const char *TAG = "Cloud";
@@ -488,8 +492,25 @@ static esp_err_t cloud_content_flush(cloud_content_req_t *req)
         return ESP_FAIL;
     }
     xSemaphoreGive(req->update_sem);
-    /* give others the chance to react */
-    vTaskDelay(1 / portTICK_RATE_MS);
+    int64_t now = esp_timer_get_time();
+    if (pb_is_playing())
+    {
+        /* evenly spaced blocks: waiting here stops reading from the socket,
+           TCP flow control slows the sender down */
+        const int64_t block_us = CLOUD_WRITE_BLOCK * 1000000LL / (CLOUD_PLAYING_KIB_S * 1024);
+        if (req->next_block_us > now)
+        {
+            vTaskDelay(pdMS_TO_TICKS((req->next_block_us - now + 999) / 1000));
+            now = esp_timer_get_time();
+        }
+        req->next_block_us = (req->next_block_us > now - block_us ? req->next_block_us : now) + block_us;
+    }
+    else
+    {
+        req->next_block_us = 0;
+        /* give others the chance to react */
+        vTaskDelay(1 / portTICK_RATE_MS);
+    }
     return ESP_OK;
 }
 

@@ -223,6 +223,10 @@ FATFS then marks the open file as broken, so every later access fails.
   (digital pads would lose their level otherwise).
 - Idle power off after 60 s by default (`idle_timeout`).
 
+- While a tonie plays, downloads are limited to 96 KiB/s (8 times the
+  playback rate; full speed, about 250 KiB/s, made the sound stutter because
+  SD card and CPU are shared). Without playback full speed.
+
 ## Nightly update
 
 Once a day at `update_hour` (local time, `timezone`; default 3 o'clock plus
