@@ -152,6 +152,8 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(j, "slap_reverse", s->slap_reverse);
     cJSON_AddNumberToObject(j, "tilt", s->tilt_level);
     cJSON_AddNumberToObject(j, "update_hour", s->update_hour);
+    cJSON_AddStringToObject(j, "decoder", s->decoder_celt ? "celt" : "adf");
+    cJSON_AddNumberToObject(j, "cpu_mhz", s->cpu_mhz);
     esp_app_desc_t app;
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_get_partition_description(running, &app);
@@ -411,6 +413,15 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (cJSON_IsBool(sr))
     {
         s->slap_reverse = cJSON_IsTrue(sr);
+    }
+    cJSON *dec = cJSON_GetObjectItemCaseSensitive(o, "decoder");
+    if (cJSON_IsString(dec) && (!strcmp(dec->valuestring, "adf") || !strcmp(dec->valuestring, "celt")))
+    {
+        s->decoder_celt = !strcmp(dec->valuestring, "celt");
+    }
+    if (get_int(o, "cpu_mhz", 160, 240, &v) && (v == 160 || v == 240))
+    {
+        s->cpu_mhz = v;
     }
     cJSON *eq = cJSON_GetObjectItemCaseSensitive(o, "speaker_eq");
     if (cJSON_IsString(eq) && speaker_eq_parse(eq->valuestring) >= 0)

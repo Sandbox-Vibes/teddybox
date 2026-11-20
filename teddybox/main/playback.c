@@ -30,6 +30,8 @@
 #include "cloud.h"
 #include "esp_timer.h"
 #include "mempeak.h"
+#include "tb_opus_dec.h"
+#include "esp_clk_tree.h"
 #include "ogg_pos.h"
 #include "sd_retry.h"
 #include "maint.h"
@@ -57,6 +59,53 @@ static uint64_t pb_last_nfc_uid = 0;
 static uint32_t pb_last_play_position = 0;
 
 static const char *TAG = "[PB]";
+
+/* decoder CPU load while playing, every 30 s: compares "decoder = adf/celt"
+   and "cpu_mhz = 160/240" (FreeRTOS run time of the "dec" task) */
+#define PB_LOAD_LOG_MS 30000
+static void pb_decoder_load_log(void)
+{
+    static int64_t t0;
+    static uint32_t run0, total0;
+    if (!pb_playing || pb_default_content)
+    {
+        t0 = 0;
+        return;
+    }
+    int64_t now = esp_timer_get_time();
+    if (t0 && now - t0 < PB_LOAD_LOG_MS * 1000LL)
+    {
+        return;
+    }
+    UBaseType_t n = uxTaskGetNumberOfTasks();
+    TaskStatus_t *ts = malloc(n * sizeof(TaskStatus_t));
+    if (!ts)
+    {
+        return;
+    }
+    uint32_t total = 0, run = 0;
+    n = uxTaskGetSystemState(ts, n, &total);
+    for (UBaseType_t i = 0; i < n; i++)
+    {
+        if (!strcmp(ts[i].pcTaskName, "dec"))
+        {
+            run = ts[i].ulRunTimeCounter;
+        }
+    }
+    free(ts);
+    if (t0 && total > total0)
+    {
+        uint32_t mhz = 0;
+        esp_clk_tree_src_get_freq_hz(SOC_MOD_CLK_CPU, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &mhz);
+        ESP_LOGI(TAG, "Decoder %s at %u MHz: %u.%u %% CPU (of one core)", settings_get()->decoder_celt ? "celt" : "adf",
+                 (unsigned)(mhz / 1000000), (unsigned)((uint64_t)(run - run0) * 100 / (total - total0)),
+                 (unsigned)((uint64_t)(run - run0) * 1000 / (total - total0) % 10));
+    }
+    t0 = now;
+    run0 = run;
+    total0 = total;
+}
+
 
 /* Audio health while playing, logged every 5 s: the rate the I2S output
    really takes (wrong clock: off from 192000 B/s at 48 kHz stereo) and how
@@ -1149,6 +1198,7 @@ void pb_mainthread(void *arg)
         }
 
         pb_audio_rate_check();
+        pb_decoder_load_log();
 
         /* the decoder normally reports its format within a few 100 ms */
         if (pb_mempeak_taken && xTaskGetTickCount() - pb_mempeak_since > pdMS_TO_TICKS(PB_MEMPEAK_MAX_MS))
@@ -1342,7 +1392,14 @@ void pb_init(esp_periph_set_handle_t set)
     /* PCM between decoder and I2S: 4096 bytes were only 21 ms at 48 kHz stereo,
        an SD access that took longer while a download wrote was audible */
     opus_dec_cfg.out_rb_size = 8 * 1024;
-    music_decoder = decoder_opus_init(&opus_dec_cfg);
+    if (settings_get()->decoder_celt)
+    {
+        music_decoder = tb_opus_dec_init(opus_dec_cfg.task_core, opus_dec_cfg.task_prio);
+    }
+    else
+    {
+        music_decoder = decoder_opus_init(&opus_dec_cfg);
+    }
 
     audio_pipeline_register(pipeline, music_decoder, "dec");
     audio_pipeline_register(pipeline, i2s_stream_writer, "i2s");

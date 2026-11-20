@@ -104,4 +104,4 @@ implements all of them (`handleCloudClaim`, `handleCloudLog`, RTNL decoding).
 - `/v1/claim` implemented but off by default (`claim = 1`): teddyCloud
   forwards claims to the Boxine cloud when its cloud access is on, which
   would report every placed tonie; Home Assistant shows the tonie anyway
-- CELT-only decoder (experimental, since this analysis)
+- CELT-only decoder (`decoder = celt`, experimental, since this analysis)

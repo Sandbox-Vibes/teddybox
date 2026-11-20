@@ -3,9 +3,10 @@ MAIN := ../../teddybox/main
 DAC := ../../teddybox/components/toniebox/dac3100
 CFLAGS := -Wall -Wextra -O1 -I$(MAIN)
 
-test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time
+test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time test_ogg_demux
 	./test_backup_zip /tmp/teddybox_test_backup.zip
 	./test_maint_time
+	./test_ogg_demux
 	python3 -c "import zipfile; z=zipfile.ZipFile('/tmp/teddybox_test_backup.zip'); assert z.testzip() is None; assert all(z.read(n)==open('/tmp/teddybox_test_backup.zip.'+n,'rb').read() for n in ('ca.der','client.der','private.der')); print('backup zip opens, files identical')"
 	./test_ogg_pos
 	./test_speaker_eq
@@ -29,6 +30,9 @@ test_settings: test_settings.c $(MAIN)/settings.c $(DAC)/speaker_eq.c
 	$(CC) -Wall -Wextra -O1 -Wno-unused-parameter -Istub -I$(MAIN) -I$(DAC) -DSETTINGS_INI_PATH='"/tmp/teddybox_test.ini"' $^ -lm -o $@
 
 # certificate backup ZIP, checked with python's zipfile
+test_ogg_demux: test_ogg_demux.c $(MAIN)/ogg_demux.c
+	$(CC) $(CFLAGS) -o $@ $^
+
 maint_time_only.c: $(MAIN)/maint.c gen_maint_time.sh
 	./gen_maint_time.sh $< $@
 
@@ -49,4 +53,4 @@ clean:
 	$(MAKE) -C nfc_sim clean
 	$(MAKE) -C battery_sim clean
 	$(MAKE) -C dac_sim clean
-	rm -f test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time
+	rm -f test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time test_ogg_demux

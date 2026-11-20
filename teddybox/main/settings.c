@@ -39,6 +39,8 @@ static settings_t settings = {
     .mem_log = true,
     .update_hour = 3,
     .claim = false,
+    .decoder_celt = false,
+    .cpu_mhz = 240,
     .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
     .mqtt_port = 1883,
@@ -125,7 +127,11 @@ int settings_save_ini(const char *path)
                      "timezone = %s\n"
                      "# report placed tonies to teddyCloud like the original box; off: teddyCloud forwards them to the Boxine cloud\n"
                      "# if its cloud access is on (\"Forward claim\"), and Home Assistant shows the tonie anyway\n"
-                     "claim = %u\n",
+                     "claim = %u\n"
+                     "# Opus decoder: adf (ESP-ADF) or celt (libopus CELT only, like the original firmware)\n"
+                     "decoder = %s\n"
+                     "# CPU clock in MHz: 240 or 160 (less power, enough decoding power with decoder = celt?)\n"
+                     "cpu_mhz = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -136,7 +142,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -287,6 +293,28 @@ void settings_load_ini(void)
         else if (!strcmp(key, "led_brightness") && num >= 0 && num <= 3 && val[0] >= '0' && val[0] <= '3' && !val[1])
         {
             settings.led_brightness = num;
+        }
+        else if (!strcmp(key, "decoder"))
+        {
+            if (!strcmp(val, "adf") || !strcmp(val, "celt"))
+            {
+                settings.decoder_celt = !strcmp(val, "celt");
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid decoder '%s' (adf or celt)", val);
+            }
+        }
+        else if (!strcmp(key, "cpu_mhz"))
+        {
+            if (!strcmp(val, "160") || !strcmp(val, "240"))
+            {
+                settings.cpu_mhz = atoi(val);
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid cpu_mhz '%s' (160 or 240)", val);
+            }
         }
         else if (!strcmp(key, "claim"))
         {

@@ -120,3 +120,5 @@ CONFIG_ESP_TASK_WDT_PANIC=y
 # 240 MHz: at 160 MHz some (teddyCloud encoded) tonies played slowed and
 # stuttering on IDF 5 while WiFi/TLS were busy; fine at 240 MHz (box test)
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+# only to set the CPU clock from teddybox.ini (cpu_mhz), fixed, no light sleep
+CONFIG_PM_ENABLE=y

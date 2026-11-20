@@ -104,6 +104,20 @@ int main(void)
     CHECK(s->update_hour == -1 && !strcmp(s->timezone, "UTC0"));
     s->update_hour = 3; snprintf(s->timezone, sizeof(s->timezone), "CET-1CEST,M3.5.0,M10.5.0/3");
 
+    /* decoder and CPU clock */
+    s->decoder_celt = false; s->cpu_mhz = 240;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("decoder = mp3\ncpu_mhz = 80\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(!s->decoder_celt && s->cpu_mhz == 240);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("decoder = celt\ncpu_mhz = 160\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->decoder_celt && s->cpu_mhz == 160);
+    CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
+    s->decoder_celt = false; s->cpu_mhz = 240;
+    settings_load_ini();
+    CHECK(s->decoder_celt && s->cpu_mhz == 160);
+    s->decoder_celt = false; s->cpu_mhz = 240;
+
     /* claim: 0/1 only */
     s->claim = true;
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("claim = yes\n", f); fclose(f);

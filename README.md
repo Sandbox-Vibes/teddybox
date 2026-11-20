@@ -232,6 +232,24 @@ FATFS then marks the open file as broken, so every later access fails.
   warning in the log means the output did not get its 192000 B/s (wrong
   clock) or the decoder fell behind (PCM buffer empty).
 
+## Opus decoder and CPU clock
+
+`teddybox.ini`: `decoder = adf` (default, ESP-ADF's esp_audio_codec) or
+`decoder = celt`: libopus 1.5.2, fixed point, only the CELT part, like the
+original firmware's decoder (`components/opus_celt`, symbols prefixed with
+`tb_` because ESP-ADF links its own libopus). Tonie files are CELT only
+(also teddyCloud's 96 kbit/s encodes); a SILK/hybrid packet is skipped with a
+log hint to use `decoder = adf`. Own Ogg demuxer (`main/ogg_demux.c`).
+
+- RAM while decoding music (QEMU): about 60 KB instead of 126 KB.
+- Output is bit exact with the libopus reference (32 bit multiply path, as
+  on every 32 bit CPU): `tests/qemu/qemu_codec_test.c` and
+  `celt_host_reference.c`.
+- `cpu_mhz = 240` (default) or `160`: fixed clock via power management (no
+  light sleep). At 160 MHz with the ADF decoder some tonies stuttered.
+- While a tonie plays the log shows every 30 s
+  `Decoder <adf|celt> at <MHz> MHz: <x> % CPU (of one core)`.
+
 ## Downloads go to a .tmp file
 
 As in the original firmware, a download is written to `<file>.tmp` and only

@@ -33,6 +33,7 @@
 #include "dac3100.h"
 #include "ota.h"
 #include "maint.h"
+#include "esp_pm.h"
 #include "nfc.h"
 #include "cloud.h"
 #include "ledman.h"
@@ -303,6 +304,13 @@ void app_main(void)
     settings_load_ini();
     setenv("TZ", settings_get()->timezone, 1);
     tzset();
+    /* fixed CPU clock from teddybox.ini (power management only for that, no light sleep) */
+    {
+        int mhz = settings_get()->cpu_mhz;
+        esp_pm_config_t pm = {.max_freq_mhz = mhz, .min_freq_mhz = mhz, .light_sleep_enable = false};
+        esp_err_t err = esp_pm_configure(&pm);
+        ESP_LOGI(TAG, "CPU clock %d MHz%s", mhz, err == ESP_OK ? "" : " (failed)");
+    }
     memdiag_enable(settings_get()->mem_log);
     sfx_install(settings_get()->lang_id);
 
