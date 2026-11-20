@@ -44,7 +44,7 @@ static const ha_entity_t entities[] = {
      "\"unit_of_measurement\":\"%%\",\"state_class\":\"measurement\""},
     {"sensor", "battery_voltage", "Akkuspannung",
      "\"value_template\":\"{{ (value_json.battery_mv / 1000) | round(2) if value_json.battery_mv else None }}\","
-     "\"device_class\":\"voltage\",\"unit_of_measurement\":\"V\",\"state_class\":\"measurement\",\"entity_category\":\"diagnostic\""},
+     "\"device_class\":\"voltage\",\"unit_of_measurement\":\"V\",\"suggested_display_precision\":2,\"state_class\":\"measurement\",\"entity_category\":\"diagnostic\""},
     {"binary_sensor", "charging", "Lädt",
      "\"value_template\":\"{{ 'ON' if value_json.charging else 'OFF' }}\",\"device_class\":\"battery_charging\""},
     {"binary_sensor", "battery_low", "Akku schwach",

@@ -281,9 +281,9 @@ Notes on the IDF 5 port:
 - A firmware on probation (just installed) checks SD card, DAC, accelerometer
   and NFC chip first and goes back to the previous firmware if one fails.
 - Release build (`-O2`); TLS handshakes in QEMU about 20 % faster than -Og.
-- TCP receive window 16 segments (23 KB) instead of 5.7 KB, WiFi RX buffers
-  to match: with IDF 4.4 the small window limited downloads to about
-  5.7 KB per round trip.
+- TCP window and WiFi RX buffers as with IDF 4.4. A 23 KB window with 32
+  dynamic RX buffers (f9d700e) let the free heap fall to 8 KB on the box
+  during a download.
 - Home Assistant diagnostics (entity category "diagnostic", topic
   `<base>/diag`, every minute): free heap, lowest free heap since start,
   start time, reason of the last start (power on, crash, task watchdog,
@@ -292,8 +292,10 @@ Notes on the IDF 5 port:
 - `mem_log = 0` in `teddybox.ini` turns off the memory lines in the serial
   log (failed allocations are always logged).
 - WiFi, lwIP, heap and FreeRTOS functions stay in flash, not IRAM: about
-  70 KiB more heap than with IDF 4.4 (QEMU: 330 KiB free at start instead of
-  260 KiB).
+  70 KiB more heap at start (330 instead of 260 KiB). Most of it is used
+  again at runtime: the IDF 4.4 version kept the Opus decoder's ~56 KiB in
+  static buffers (heap patch), now the decoder allocates them. On the box
+  while playing (no download): about 65 KiB free, IDF 4.4 about 59 KiB.
 
 ## Install (into the free slot)
 
