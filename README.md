@@ -227,6 +227,11 @@ FATFS then marks the open file as broken, so every later access fails.
   playback rate; full speed, about 250 KiB/s, made the sound stutter because
   SD card and CPU are shared). Without playback full speed.
 
+- The CPU runs at 240 MHz: at 160 MHz some tonies (teddyCloud encoded)
+  played slowed and stuttering while WiFi/TLS were busy. A `[PB]: Audio:`
+  warning in the log means the output did not get its 192000 B/s (wrong
+  clock) or the decoder fell behind (PCM buffer empty).
+
 ## Nightly update
 
 Once a day at `update_hour` (local time, `timezone`; default 3 o'clock plus

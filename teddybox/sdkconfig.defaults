@@ -117,6 +117,6 @@ CONFIG_ESP_WIFI_RX_BA_WIN=6
 # a stuck system (idle task starved for 5 s) restarts instead of draining the battery
 CONFIG_ESP_TASK_WDT_PANIC=y
 
-# test: some tonies played slowed and stuttering at 160 MHz (decoder too slow
-# while WiFi/TLS are busy?); the [PB] "Audio:" log lines show whether it was
+# 240 MHz: at 160 MHz some (teddyCloud encoded) tonies played slowed and
+# stuttering on IDF 5 while WiFi/TLS were busy; fine at 240 MHz (box test)
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y

@@ -60,16 +60,26 @@ static const char *TAG = "[PB]";
 
 /* Audio health while playing, logged every 5 s: the rate the I2S output
    really takes (wrong clock: off from 192000 B/s at 48 kHz stereo) and how
-   often the PCM buffer before it ran empty (decoder too slow: underruns) */
+   often the PCM buffer before it ran empty (decoder too slow: underruns).
+   Only problems are logged; the first 2 s after a start are skipped (the
+   clock change at the start pauses the output briefly). */
 #define PB_RATE_CHECK_MS 5000
 static void pb_audio_rate_check(void)
 {
-    static int64_t t0 = 0;
+    static int64_t t0 = 0, started = 0;
     static int64_t pos0 = 0;
     static int empty = 0, samples = 0;
     if (!pb_playing || !i2s_stream_writer)
     {
-        t0 = 0;
+        t0 = started = 0;
+        return;
+    }
+    if (!started)
+    {
+        started = esp_timer_get_time();
+    }
+    if (esp_timer_get_time() - started < 2000000)
+    {
         return;
     }
     ringbuf_handle_t rb = audio_element_get_input_ringbuf(i2s_stream_writer);
@@ -102,7 +112,7 @@ static void pb_audio_rate_check(void)
     }
     else
     {
-        ESP_LOGI(TAG, "Audio: ok (%d %%, buffer empty %d/%d)", pct, empty, samples);
+        ESP_LOGD(TAG, "Audio: ok (%d %%, buffer empty %d/%d)", pct, empty, samples);
     }
     t0 = now;
     pos0 = info.byte_pos;
