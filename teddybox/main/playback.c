@@ -60,7 +60,7 @@ static uint32_t pb_last_play_position = 0;
 
 static const char *TAG = "[PB]";
 
-/* decoder CPU load while playing, every 30 s: compares "decoder = adf/celt"
+/* decoder CPU load while playing, first after 10 s, then every 30 s: compares "decoder = adf/celt"
    and "cpu_mhz = 160/240" (FreeRTOS run time of the "dec" task) */
 #define PB_LOAD_LOG_MS 30000
 static void pb_decoder_load_log(void)
@@ -72,8 +72,14 @@ static void pb_decoder_load_log(void)
         t0 = 0;
         return;
     }
+    static int logged;
     int64_t now = esp_timer_get_time();
-    if (t0 && now - t0 < PB_LOAD_LOG_MS * 1000LL)
+    if (!t0)
+    {
+        logged = 0;
+    }
+    /* first after 10 s (short tests), then every 30 s */
+    if (t0 && now - t0 < (logged ? PB_LOAD_LOG_MS : 10000) * 1000LL)
     {
         return;
     }
@@ -100,6 +106,7 @@ static void pb_decoder_load_log(void)
         ESP_LOGI(TAG, "Decoder %s at %u MHz: %u.%u %% CPU (of one core)", settings_get()->decoder_celt ? "celt" : "adf",
                  (unsigned)(mhz / 1000000), (unsigned)((uint64_t)(run - run0) * 100 / (total - total0)),
                  (unsigned)((uint64_t)(run - run0) * 1000 / (total - total0) % 10));
+        logged++;
     }
     t0 = now;
     run0 = run;
