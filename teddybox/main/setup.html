@@ -18,7 +18,7 @@ h2{font-size:1.05rem;margin:0 0 .25rem}
 label{display:block;font-size:.875rem;font-weight:600;margin:.5rem 0 .25rem}
 input,select{width:100%;font:inherit;padding:.6rem .7rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
 input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
-.row{display:flex;gap:.6rem}.row>div{flex:1}.row>.small{flex:0 0 6.5rem}
+.row{display:flex;flex-wrap:wrap;gap:.6rem}.row>div{flex:1 1 9rem;min-width:0;display:flex;flex-direction:column;justify-content:flex-end}.row>.small{flex:0 0 6.5rem}
 .nets{display:flex;flex-direction:column;gap:.35rem;margin:.25rem 0 .5rem;max-height:14rem;overflow:auto}
 .net{display:flex;justify-content:space-between;align-items:center;padding:.55rem .7rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;text-align:left;font:inherit;color:inherit}
 .net.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
@@ -78,14 +78,19 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <select id="lang"><option value="1">Deutsch</option><option value="0">Englisch (UK)</option><option value="2">Englisch (USA)</option><option value="3">Französisch</option></select></div>
 </div>
 <div class="row">
-<div><label for="vmax">Max. Lautstärke (%)</label><input id="vmax" type="number" min="10" max="100" step="5"></div>
-<div><label for="idle">Ausschalten nach (Sek.)</label><input id="idle" type="number" min="10" step="10"></div>
-<div><label for="speq">Lautsprecher-Klang</label><select id="speq"><option value="full">Optimiert (empfohlen)</option><option value="lowcut">Nur Tiefenfilter</option><option value="off">Wie Original (ohne Filter)</option></select></div>
-<div><label for="slap">Klapsen (Kapitel vor/zurück)</label><select id="slap"><option value="5">5 (sehr empfindlich)</option><option value="4">4</option><option value="3">3 (wie Original)</option><option value="2">2</option><option value="1">1 (unempfindlich)</option><option value="0">Aus</option></select></div>
-<div><label for="slaprev"><input type="checkbox" id="slaprev"> Klaps-Richtung umkehren</label></div>
-<div><label for="tilt">Kippen (Kapitel/Spulen)</label><select id="tilt"><option value="5">5 (schon leicht kippen, 20°)</option><option value="4">4 (25°)</option><option value="3">3 (30°, wie bisher)</option><option value="2">2 (35°)</option><option value="1">1 (weit kippen, 40°)</option><option value="0">Aus</option></select></div>
+<div><label for="vmax">Max. Lautstärke %</label><input id="vmax" type="number" min="10" max="100" step="5"></div>
+<div><label for="idle">Aus nach (Sek.)</label><input id="idle" type="number" min="10" step="10"></div>
+</div>
+<div class="row">
+<div><label for="speq">Klang</label><select id="speq"><option value="full">Optimiert</option><option value="lowcut">Tiefenfilter</option><option value="off">Wie Original</option></select></div>
 <div><label for="led">LED-Helligkeit</label><select id="led"><option value="3">3 (hell)</option><option value="2">2</option><option value="1">1 (gedimmt)</option><option value="0">Aus</option></select></div>
 </div>
+<div class="row">
+<div><label for="slap">Klapsen</label><select id="slap"><option value="5">5 leicht</option><option value="4">4</option><option value="3">3 Original</option><option value="2">2</option><option value="1">1 fest</option><option value="0">Aus</option></select></div>
+<div><label for="tilt">Kippen</label><select id="tilt"><option value="5">5 (20°)</option><option value="4">4 (25°)</option><option value="3">3 (30°)</option><option value="2">2 (35°)</option><option value="1">1 (40°)</option><option value="0">Aus</option></select></div>
+</div>
+<label><input id="slaprev" type="checkbox" style="width:auto"> Klaps-Richtung umkehren</label>
+<p class="hint">Klapsen auf die Seite: Kapitel vor/zurück. Kippen: Kapitel oder Spulen. 5 reagiert am leichtesten.</p>
 <details><summary>Erweitert</summary>
 <label><input id="boxfb" type="checkbox" style="width:auto"> Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist</label>
 <label><input id="uaorig" type="checkbox" style="width:auto"> Als Original-Firmware ausgeben (User-Agent)</label>
