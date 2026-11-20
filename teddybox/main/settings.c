@@ -37,6 +37,8 @@ static settings_t settings = {
     .slap_reverse = false,
     .tilt_level = 3,
     .mem_log = true,
+    .update_hour = 3,
+    .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
     .mqtt_port = 1883,
     .mqtt_user = "",
@@ -115,7 +117,11 @@ int settings_save_ini(const char *path)
                      "# tilt for chapter/seek: 0 (off), 1 (tilt far) to 5 (tilt a little), 3 = 30 degrees\n"
                      "tilt = %u\n"
                      "# memory lines in the serial log (diagnostics): 1 on, 0 off\n"
-                     "mem_log = %u\n",
+                     "mem_log = %u\n"
+                     "# nightly update of the tonies (new versions, unfinished downloads): hour 0-23, -1 off\n"
+                     "update_hour = %d\n"
+                     "# local time (POSIX TZ), default Germany/Central Europe\n"
+                     "timezone = %s\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -126,7 +132,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -277,6 +283,30 @@ void settings_load_ini(void)
         else if (!strcmp(key, "led_brightness") && num >= 0 && num <= 3 && val[0] >= '0' && val[0] <= '3' && !val[1])
         {
             settings.led_brightness = num;
+        }
+        else if (!strcmp(key, "update_hour"))
+        {
+            char *end;
+            long h = strtol(val, &end, 10);
+            if (*val && !*end && h >= -1 && h <= 23)
+            {
+                settings.update_hour = h;
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid update_hour '%s' (0 to 23, -1 off)", val);
+            }
+        }
+        else if (!strcmp(key, "timezone"))
+        {
+            if (strlen(val) > 0 && strlen(val) < sizeof(settings.timezone) && !strchr(val, '\n'))
+            {
+                snprintf(settings.timezone, sizeof(settings.timezone), "%s", val);
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid timezone '%s'", val);
+            }
         }
         else if (!strcmp(key, "mem_log"))
         {

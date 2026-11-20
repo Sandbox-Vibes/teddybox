@@ -323,6 +323,13 @@ void audio_board_poweroff()
 #define SLEEP_MODE_LINE 0x4C494E45u /* "LINE": wake line */
 #define SLEEP_MODE_EARS 0x45415253u /* "EARS": ears + charger check timer */
 static RTC_NOINIT_ATTR uint32_t sleep_mode;
+/* additional timer wake (nightly update), 0 = none */
+static uint64_t extra_wake_us = 0;
+
+void audio_board_set_timer_wakeup(uint64_t us)
+{
+    extra_wake_us = us;
+}
 
 static bool sleep_pin_low(gpio_num_t pin);
 
@@ -332,6 +339,10 @@ void audio_board_deep_sleep(void)
     {
         sleep_mode = SLEEP_MODE_LINE;
         esp_sleep_enable_ext0_wakeup(WAKEUP_GPIO, 0);
+        if (extra_wake_us)
+        {
+            esp_sleep_enable_timer_wakeup(extra_wake_us);
+        }
     }
     else
     {
@@ -344,7 +355,7 @@ void audio_board_deep_sleep(void)
         rtc_gpio_pulldown_dis(EAR_BIG_GPIO);
         rtc_gpio_pullup_en(EAR_SMALL_GPIO);
         rtc_gpio_pulldown_dis(EAR_SMALL_GPIO);
-        esp_sleep_enable_timer_wakeup(CHARGER_CHECK_US);
+        esp_sleep_enable_timer_wakeup(extra_wake_us && extra_wake_us < CHARGER_CHECK_US ? extra_wake_us : CHARGER_CHECK_US);
     }
     esp_deep_sleep_start();
 }
@@ -359,14 +370,14 @@ static bool sleep_pin_low(gpio_num_t pin)
     return gpio_get_level(pin) == 0;
 }
 
-void audio_board_sleep_check(void)
+void audio_board_sleep_check(bool stay_awake_on_timer)
 {
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
     /* woken by the wake line while it stays low and no ear is pressed: the box
        was put on the charger. Do not start, sleep on (waking on the ears). */
     bool put_on_charger = cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE &&
                           sleep_pin_low(WAKEUP_GPIO) && !sleep_pin_low(EAR_BIG_GPIO) && !sleep_pin_low(EAR_SMALL_GPIO);
-    if (cause == ESP_SLEEP_WAKEUP_TIMER || put_on_charger)
+    if ((cause == ESP_SLEEP_WAKEUP_TIMER && !stay_awake_on_timer) || put_on_charger)
     {
         /* only the charger check: straight back to sleep, peripherals stay off
            (their pins are still held from the last sleep) */

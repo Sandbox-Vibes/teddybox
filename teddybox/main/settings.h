@@ -59,6 +59,10 @@ typedef struct
     uint8_t tilt_level;
     /* memory/stack lines in the serial log (every 30 s and at events) */
     bool mem_log;
+    /* nightly update of the tonies at this hour (local time), -1 = off */
+    int8_t update_hour;
+    /* POSIX TZ string for the local time */
+    char timezone[48];
 
     /* idle time until power off, seconds */
     uint32_t idle_timeout_s;

@@ -82,9 +82,9 @@ int main(int argc, char **argv)
     /* diagnostics */
     {
         char d[192];
-        ha_diag_t dg = {.free_kb = 251, .min_free_kb = 138, .boot_iso = "2026-11-20T11:05:00+00:00", .reset = "task watchdog", .slot = "ota_1"};
+        ha_diag_t dg = {.free_kb = 251, .min_free_kb = 138, .boot_iso = "2026-11-20T11:05:00+00:00", .reset = "task watchdog", .slot = "ota_1", .update = "21.11. 03:12: 2 Tonie(s) aktualisiert"};
         int n = ha_diag_json(&dg, d, sizeof(d));
-        int ok = n > 0 && !strcmp(d, "{\"free_kb\":251,\"min_free_kb\":138,\"boot\":\"2026-11-20T11:05:00+00:00\",\"reset\":\"task watchdog\",\"slot\":\"ota_1\"}");
+        int ok = n > 0 && !strcmp(d, "{\"free_kb\":251,\"min_free_kb\":138,\"boot\":\"2026-11-20T11:05:00+00:00\",\"reset\":\"task watchdog\",\"slot\":\"ota_1\",\"update\":\"21.11. 03:12: 2 Tonie(s) aktualisiert\"}");
         fails += !ok;
         printf("%s diag %s\n", ok ? "ok  " : "FAIL", d);
         dg.boot_iso = "";

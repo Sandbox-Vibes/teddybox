@@ -90,6 +90,20 @@ int main(void)
     settings_load_ini();
     CHECK(s->slap_level == 0 && s->slap_reverse && s->tilt_level == 1);
 
+    /* nightly update: hour and timezone, invalid values keep the previous one */
+    s->update_hour = 3; snprintf(s->timezone, sizeof(s->timezone), "CET-1CEST,M3.5.0,M10.5.0/3");
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("update_hour = 24\ntimezone = \n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->update_hour == 3 && !strcmp(s->timezone, "CET-1CEST,M3.5.0,M10.5.0/3"));
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("update_hour = -1\ntimezone = UTC0\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->update_hour == -1 && !strcmp(s->timezone, "UTC0"));
+    CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
+    s->update_hour = 5;
+    settings_load_ini();
+    CHECK(s->update_hour == -1 && !strcmp(s->timezone, "UTC0"));
+    s->update_hour = 3; snprintf(s->timezone, sizeof(s->timezone), "CET-1CEST,M3.5.0,M10.5.0/3");
+
     /* keys of older versions are accepted silently */
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("ota_enabled = 1\nota_allow_overwrite_pd = 1\n", f); fclose(f);
     settings_load_ini();

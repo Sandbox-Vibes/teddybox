@@ -31,6 +31,7 @@
 #include "mempeak.h"
 #include "ogg_pos.h"
 #include "sd_retry.h"
+#include "maint.h"
 #include "memdiag.h"
 
 audio_pipeline_handle_t pipeline;
@@ -687,6 +688,8 @@ esp_err_t pb_play_content_token(uint64_t nfc_uid, const uint8_t *token)
     req->hdr.type = PB_REQ_TYPE_PLAY_TOKEN;
     req->uid = nfc_uid;
     memcpy(req->token, token, 32);
+    /* for the nightly update, which downloads without the tonie on the box */
+    maint_token_save(nfc_uid, token);
     xQueueSend(playback_queue, &req, portMAX_DELAY);
     return ESP_OK;
 }

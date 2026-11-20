@@ -6,3 +6,5 @@
 void mqtt_ha_init(void);
 /* publishes "offline" and stops the client before power off */
 void mqtt_ha_shutdown(void);
+/* send state and diagnostics at the next chance (e.g. before sleeping) */
+void mqtt_ha_publish_now(void);

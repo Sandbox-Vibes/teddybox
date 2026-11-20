@@ -3,6 +3,7 @@
 #include "esp_heap_caps.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "maint.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -38,6 +39,12 @@ static char base_topic[64];
 static char avail_topic[80];
 static char state_topic[80];
 static char diag_topic[80];
+static volatile bool publish_now = false;
+
+void mqtt_ha_publish_now(void)
+{
+    publish_now = true;
+}
 
 /* diagnostics (heap, start time, reset reason, slot) */
 #define DIAG_INTERVAL_MS 60000
@@ -248,6 +255,16 @@ static void mqtt_publish_diag(void)
             strftime(boot_iso, sizeof(boot_iso), "%Y-%m-%dT%H:%M:%S+00:00", &tm);
         }
     }
+    /* last nightly update: "21.11. 03:12: 2 Tonie(s) aktualisiert" */
+    char update[96] = "";
+    const char *result;
+    time_t last = maint_last(&result);
+    if (last > 1700000000)
+    {
+        struct tm lt;
+        localtime_r(&last, &lt);
+        snprintf(update, sizeof(update), "%02d.%02d. %02d:%02d: %s", lt.tm_mday, lt.tm_mon + 1, lt.tm_hour, lt.tm_min, result);
+    }
     const esp_partition_t *running = esp_ota_get_running_partition();
     ha_diag_t d = {
         .free_kb = (int)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
@@ -255,8 +272,9 @@ static void mqtt_publish_diag(void)
         .boot_iso = boot_iso,
         .reset = reset_reason_text(esp_reset_reason()),
         .slot = running ? running->label : "",
+        .update = update,
     };
-    char json[192];
+    char json[320];
     int len = ha_diag_json(&d, json, sizeof(json));
     if (len > 0)
     {
@@ -280,7 +298,8 @@ static void mqtt_ha_task(void *arg)
             continue;
         }
 
-        bool force = false;
+        bool force = publish_now;
+        publish_now = false;
         if (announce)
         {
             announce = false;

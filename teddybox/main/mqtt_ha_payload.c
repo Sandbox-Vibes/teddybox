@@ -77,6 +77,8 @@ static const ha_entity_t entities[] = {
      "\"value_template\":\"{{ value_json.boot }}\",\"device_class\":\"timestamp\",\"entity_category\":\"diagnostic\""},
     {"sensor", "diag_reset", "Grund des letzten Starts",
      "\"value_template\":\"{{ value_json.reset }}\",\"icon\":\"mdi:restart-alert\",\"entity_category\":\"diagnostic\""},
+    {"sensor", "diag_update", "Letzte nächtliche Aktualisierung",
+     "\"value_template\":\"{{ value_json.update if value_json.update else None }}\",\"icon\":\"mdi:cloud-download\",\"entity_category\":\"diagnostic\""},
     {"sensor", "diag_slot", "Firmware-Slot",
      "\"value_template\":\"{{ value_json.slot }}\",\"icon\":\"mdi:chip\",\"entity_category\":\"diagnostic\""},
     {"select", "speaker_eq", "Lautsprecher-Klang",
@@ -347,7 +349,8 @@ int ha_diag_json(const ha_diag_t *d, char *buf, size_t size)
     {
         snprintf(boot, sizeof(boot), "\"%s\"", d->boot_iso);
     }
-    int n = snprintf(buf, size, "{\"free_kb\":%d,\"min_free_kb\":%d,\"boot\":%s,\"reset\":\"%s\",\"slot\":\"%s\"}",
-                     d->free_kb, d->min_free_kb, boot, d->reset ? d->reset : "", d->slot ? d->slot : "");
+    int n = snprintf(buf, size, "{\"free_kb\":%d,\"min_free_kb\":%d,\"boot\":%s,\"reset\":\"%s\",\"slot\":\"%s\",\"update\":\"%s\"}",
+                     d->free_kb, d->min_free_kb, boot, d->reset ? d->reset : "", d->slot ? d->slot : "",
+                     d->update ? d->update : "");
     return (n < 0 || (size_t)n >= size) ? -1 : n;
 }

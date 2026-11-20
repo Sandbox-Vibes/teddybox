@@ -149,8 +149,11 @@ void audio_board_power(bool state);
 void audio_board_poweroff(void);
 /* deep sleep with the right wake sources (wake line, or ears while on the charger) */
 void audio_board_deep_sleep(void);
-/* call first in app_main: a timer wake (charger check) goes straight back to sleep */
-void audio_board_sleep_check(void);
+/* call first in app_main: a timer wake (charger check) goes straight back to
+   sleep unless stay_awake_on_timer (nightly update due) */
+void audio_board_sleep_check(bool stay_awake_on_timer);
+/* additional timer wake for the next deep sleep (0 = none) */
+void audio_board_set_timer_wakeup(uint64_t us);
 esp_err_t audio_board_sdcard_unmount(void);
 
 #ifdef __cplusplus

@@ -89,6 +89,7 @@ typedef struct
     const char *boot_iso; /* start time, ISO 8601 with offset; NULL/"" if the clock is not set yet */
     const char *reset;    /* reason of the last start, e.g. "power on", "task watchdog" */
     const char *slot;     /* running app partition, e.g. "ota_0" */
+    const char *update;   /* last nightly update, "" = none yet */
 } ha_diag_t;
 int ha_diag_json(const ha_diag_t *d, char *buf, size_t size);
 

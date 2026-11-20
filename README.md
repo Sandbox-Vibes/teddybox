@@ -223,6 +223,30 @@ FATFS then marks the open file as broken, so every later access fails.
   (digital pads would lose their level otherwise).
 - Idle power off after 60 s by default (`idle_timeout`).
 
+## Nightly update
+
+Once a day at `update_hour` (local time, `timezone`; default 3 o'clock plus
+0-29 minutes) the box wakes from deep sleep by timer, without sound or LED
+and without reading NFC. It waits for the freshness check against teddyCloud
+and then downloads every tonie that has a new version (`<file>.old`) or an
+unfinished download, one after another.
+
+- On the charger always, on battery only from 50 % (resting voltage).
+- A pressed ear stops it and starts the box normally; a download without
+  progress for 2 minutes, low battery or 45 minutes in total stop it, the
+  rest continues the next night or when the tonie is placed.
+- Downloading without the tonie on the box needs its token. It is stored when
+  a tonie is placed (`/sdcard/teddybox_tokens/<uid>.tok`, 32 bytes, only
+  written when it changes). Tonies not placed since this version are skipped.
+  **The tokens give access to the tonie's content in the cloud: whoever has
+  the SD card has them.** Delete the folder to remove them.
+- Needs a valid clock (set from teddyCloud on every connection; kept in deep
+  sleep, lost when the battery is removed: then the next normal start plans
+  it again).
+- Result in Home Assistant: diagnostic sensor "Letzte nächtliche
+  Aktualisierung" (`update` in `<base>/diag`).
+- `update_hour = -1` turns it off.
+
 ## Network traffic
 
 Without `boxine_fallback` the box only talks to what is configured:

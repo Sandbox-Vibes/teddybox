@@ -300,6 +300,13 @@ static void park_outdated(uint64_t uid)
     free(file);
 }
 
+static volatile int runs_done = 0;
+
+int freshness_runs(void)
+{
+    return runs_done;
+}
+
 esp_err_t freshness_run(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -373,6 +380,10 @@ esp_err_t freshness_run(void)
     ret = ESP_OK;
 
 out:
+    if (ret == ESP_OK)
+    {
+        runs_done++;
+    }
     free(infos);
     free(ptrs);
     free(resp);

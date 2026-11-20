@@ -32,6 +32,7 @@
 #include "accel.h"
 #include "dac3100.h"
 #include "ota.h"
+#include "maint.h"
 #include "nfc.h"
 #include "cloud.h"
 #include "ledman.h"
@@ -220,8 +221,11 @@ static bool rtc_checksum_valid()
 
 void app_main(void)
 {
-    /* woken only to see whether the box is still on the charger */
-    audio_board_sleep_check();
+    /* a timer wake is the charger check or the nightly update; everything
+       else than a due update goes straight back to sleep */
+    const bool maint_mode = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER && maint_due();
+    audio_board_set_timer_wakeup(maint_sleep_us());
+    audio_board_sleep_check(maint_mode);
 
     esp_log_level_set("*", ESP_LOG_WARN);
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -230,6 +234,7 @@ void app_main(void)
         esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
         ESP_LOGI(TAG, "Wake cause: %s", cause == ESP_SLEEP_WAKEUP_EXT0   ? "wake line"
                                         : cause == ESP_SLEEP_WAKEUP_EXT1 ? "ear (on the charger)"
+                                        : cause == ESP_SLEEP_WAKEUP_TIMER ? "timer (nightly update)"
                                         : cause == ESP_SLEEP_WAKEUP_UNDEFINED ? "power on / reset"
                                                                            : "other");
     }
@@ -296,6 +301,8 @@ void app_main(void)
     /* first boot: no settings file yet */
     bool setup_mode = setup_requested || !settings_ini_exists();
     settings_load_ini();
+    setenv("TZ", settings_get()->timezone, 1);
+    tzset();
     memdiag_enable(settings_get()->mem_log);
     sfx_install(settings_get()->lang_id);
 
@@ -345,6 +352,22 @@ void app_main(void)
         pb_play_default(CONTENT_DEFAULT_INSTALLATION);
         /* returns only if nobody used it, restarts after saving */
         setup_portal_run();
+        goto shutdown;
+    }
+
+    if (maint_mode)
+    {
+        /* silent: no sound, LED off, no NFC (a tonie on the box is not played) */
+        ESP_LOGI(TAG, "Nightly update");
+        ledman_change("off");
+        battery_init();
+        wifi_init();
+        cloud_init();
+        mqtt_ha_init();
+        maint_run();
+        /* let MQTT send the result */
+        mqtt_ha_publish_now();
+        vTaskDelay(pdMS_TO_TICKS(1500));
         goto shutdown;
     }
 
@@ -569,6 +592,9 @@ void app_main(void)
 
     mqtt_ha_shutdown();
 shutdown:
+    /* plan the nightly update (needs the clock, set from teddyCloud) */
+    maint_schedule_next();
+    audio_board_set_timer_wakeup(maint_sleep_us());
     ledman_change("poweroff");
     audio_board_sdcard_unmount();
     rtc_checksum_update();

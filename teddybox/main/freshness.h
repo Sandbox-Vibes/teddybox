@@ -33,6 +33,8 @@ esp_err_t freshness_run(void);
 
 /* UID from a content path "XXXXXXXX/YYYYYYYY" (dir, file); false if no tonie file */
 bool freshness_uid_from_names(const char *dir, const char *file, uint64_t *uid);
+/* number of completed freshness checks since start */
+int freshness_runs(void);
 
 /* parses a TonieFreshnessCheckResponse; returns number of UIDs stored in marked, -1 on error */
 int freshness_parse_response(const uint8_t *buf, size_t len, uint64_t *marked, int max_marked, freshness_settings_t *settings);
