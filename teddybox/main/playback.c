@@ -1147,10 +1147,22 @@ void pb_mainthread(void *arg)
                         /* decoder buffers are allocated now */
                         pb_mempeak_release();
                         memdiag_log("playback running");
-                        audio_element_setinfo(i2s_stream_writer, &music_info);
-                        if (i2s_stream_set_clk(i2s_stream_writer, music_info.sample_rates, music_info.bits, music_info.channels) != ESP_OK)
+                        /* only on a real format change: i2s_stream_set_clk() pauses
+                           the output and resumes it ("RESUME timeout", a short gap) */
+                        audio_element_info_t i2s_info = {0};
+                        audio_element_getinfo(i2s_stream_writer, &i2s_info);
+                        if (i2s_info.sample_rates != music_info.sample_rates || i2s_info.bits != music_info.bits ||
+                            i2s_info.channels != music_info.channels)
                         {
-                            ESP_LOGE(TAG, "Failed to set I²S rate");
+                            ESP_LOGI(TAG, "I²S clock %d Hz/%d bit/%d ch -> %d Hz/%d bit/%d ch", i2s_info.sample_rates,
+                                     i2s_info.bits, i2s_info.channels, music_info.sample_rates, music_info.bits,
+                                     music_info.channels);
+                            audio_element_setinfo(i2s_stream_writer, &music_info);
+                            if (i2s_stream_set_clk(i2s_stream_writer, music_info.sample_rates, music_info.bits,
+                                                   music_info.channels) != ESP_OK)
+                            {
+                                ESP_LOGE(TAG, "Failed to set I²S rate");
+                            }
                         }
                     }
                 }
@@ -1239,7 +1251,9 @@ void pb_init(esp_periph_set_handle_t set)
     pipeline = audio_pipeline_init(&pipeline_cfg);
     mem_assert(pipeline);
 
-    i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
+    /* tonie files are 48 kHz stereo: start with that, so the first file does
+       not need a clock change (which pauses and resumes the I2S element) */
+    i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT_WITH_PARA(I2S_NUM_0, 48000, I2S_DATA_BIT_WIDTH_16BIT, AUDIO_STREAM_WRITER);
     i2s_cfg.type = AUDIO_STREAM_WRITER;
     /* same DMA buffering as with IDF 4.4: 4 x 512 frames */
     i2s_cfg.chan_cfg.dma_desc_num = 4;
