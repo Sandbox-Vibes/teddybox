@@ -269,6 +269,11 @@ Notes on the IDF 5 port:
 - TCP receive window 16 segments (23 KB) instead of 5.7 KB, WiFi RX buffers
   to match: with IDF 4.4 the small window limited downloads to about
   5.7 KB per round trip.
+- Home Assistant diagnostics (entity category "diagnostic", topic
+  `<base>/diag`, every minute): free heap, lowest free heap since start,
+  start time, reason of the last start (power on, crash, task watchdog,
+  brownout, ...) and the running slot.
+- Task watchdog panics (reboot) if an idle task is starved for 5 s.
 - `mem_log = 0` in `teddybox.ini` turns off the memory lines in the serial
   log (failed allocations are always logged).
 - WiFi, lwIP, heap and FreeRTOS functions stay in flash, not IRAM: about

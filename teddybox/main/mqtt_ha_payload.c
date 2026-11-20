@@ -66,6 +66,19 @@ static const ha_entity_t entities[] = {
     {"number", "tilt", "Kippen (Empfindlichkeit)",
      "\"value_template\":\"{{ value_json.tilt }}\",\"command_topic\":\"%s/cmd/tilt\",\"min\":0,\"max\":5,\"step\":1,"
      "\"mode\":\"slider\",\"icon\":\"mdi:phone-rotate-landscape\",\"entity_category\":\"config\""},
+    /* diagnostics: own state topic <base>/diag, every minute */
+    {"sensor", "diag_free_heap", "Freier Speicher",
+     "\"value_template\":\"{{ value_json.free_kb }}\",\"unit_of_measurement\":\"kB\",\"state_class\":\"measurement\","
+     "\"icon\":\"mdi:memory\",\"entity_category\":\"diagnostic\""},
+    {"sensor", "diag_min_free_heap", "Freier Speicher (Minimum seit Start)",
+     "\"value_template\":\"{{ value_json.min_free_kb }}\",\"unit_of_measurement\":\"kB\",\"state_class\":\"measurement\","
+     "\"icon\":\"mdi:memory\",\"entity_category\":\"diagnostic\""},
+    {"sensor", "diag_boot", "Gestartet",
+     "\"value_template\":\"{{ value_json.boot }}\",\"device_class\":\"timestamp\",\"entity_category\":\"diagnostic\""},
+    {"sensor", "diag_reset", "Grund des letzten Starts",
+     "\"value_template\":\"{{ value_json.reset }}\",\"icon\":\"mdi:restart-alert\",\"entity_category\":\"diagnostic\""},
+    {"sensor", "diag_slot", "Firmware-Slot",
+     "\"value_template\":\"{{ value_json.slot }}\",\"icon\":\"mdi:chip\",\"entity_category\":\"diagnostic\""},
     {"select", "speaker_eq", "Lautsprecher-Klang",
      "\"value_template\":\"{{ value_json.speaker_eq }}\",\"command_topic\":\"%s/cmd/speaker_eq\","
      "\"options\":[\"Optimiert\",\"Nur Tiefenfilter\",\"Wie Original\"],\"icon\":\"mdi:tune-vertical\",\"entity_category\":\"config\""},
@@ -132,11 +145,12 @@ int ha_discovery(const ha_ctx_t *ctx, int idx, char *topic, size_t topic_size, c
         return -1;
     }
 
-    /* buttons have no state */
+    /* buttons have no state; diagnostics have their own topic */
     char state_topic[96] = "";
     if (strcmp(e->component, "button"))
     {
-        snprintf(state_topic, sizeof(state_topic), "\"state_topic\":\"%s/state\",", ctx->base_topic);
+        snprintf(state_topic, sizeof(state_topic), "\"state_topic\":\"%s/%s\",", ctx->base_topic,
+                 strncmp(e->object, "diag_", 5) ? "state" : "diag");
     }
 
     /* default_entity_id replaces object_id, which Home Assistant dropped in 2026.4 */
@@ -324,4 +338,16 @@ int ha_battery_percent(unsigned mv, unsigned critical_mv)
         }
     }
     return 100;
+}
+
+int ha_diag_json(const ha_diag_t *d, char *buf, size_t size)
+{
+    char boot[40] = "null";
+    if (d->boot_iso && d->boot_iso[0])
+    {
+        snprintf(boot, sizeof(boot), "\"%s\"", d->boot_iso);
+    }
+    int n = snprintf(buf, size, "{\"free_kb\":%d,\"min_free_kb\":%d,\"boot\":%s,\"reset\":\"%s\",\"slot\":\"%s\"}",
+                     d->free_kb, d->min_free_kb, boot, d->reset ? d->reset : "", d->slot ? d->slot : "");
+    return (n < 0 || (size_t)n >= size) ? -1 : n;
 }

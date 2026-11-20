@@ -1,3 +1,8 @@
+#include <time.h>
+#include "esp_ota_ops.h"
+#include "esp_heap_caps.h"
+#include "esp_system.h"
+#include "esp_timer.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -32,6 +37,10 @@ static char device_id[32];
 static char base_topic[64];
 static char avail_topic[80];
 static char state_topic[80];
+static char diag_topic[80];
+
+/* diagnostics (heap, start time, reset reason, slot) */
+#define DIAG_INTERVAL_MS 60000
 static char cmd_topic[80];
 static char sw_version[32];
 static ha_ctx_t ctx;
@@ -199,12 +208,69 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
+static const char *reset_reason_text(esp_reset_reason_t r)
+{
+    switch (r)
+    {
+    case ESP_RST_POWERON:
+        return "power on";
+    case ESP_RST_SW:
+        return "restart (update, setup)";
+    case ESP_RST_PANIC:
+        return "crash";
+    case ESP_RST_INT_WDT:
+        return "interrupt watchdog";
+    case ESP_RST_TASK_WDT:
+        return "task watchdog";
+    case ESP_RST_WDT:
+        return "watchdog";
+    case ESP_RST_DEEPSLEEP:
+        return "wake from deep sleep";
+    case ESP_RST_BROWNOUT:
+        return "brownout (low voltage)";
+    default:
+        return "other";
+    }
+}
+
+static void mqtt_publish_diag(void)
+{
+    static char boot_iso[32];
+    /* start time once the clock is set (from teddyCloud) */
+    if (!boot_iso[0])
+    {
+        time_t now = time(NULL);
+        if (now > 1700000000)
+        {
+            time_t boot = now - (time_t)(esp_timer_get_time() / 1000000);
+            struct tm tm;
+            gmtime_r(&boot, &tm);
+            strftime(boot_iso, sizeof(boot_iso), "%Y-%m-%dT%H:%M:%S+00:00", &tm);
+        }
+    }
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    ha_diag_t d = {
+        .free_kb = (int)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+        .min_free_kb = (int)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
+        .boot_iso = boot_iso,
+        .reset = reset_reason_text(esp_reset_reason()),
+        .slot = running ? running->label : "",
+    };
+    char json[192];
+    int len = ha_diag_json(&d, json, sizeof(json));
+    if (len > 0)
+    {
+        esp_mqtt_client_publish(client, diag_topic, json, len, 0, 1);
+    }
+}
+
 static void mqtt_ha_task(void *arg)
 {
     ha_state_t last = {.battery_state = ""};
     ha_state_t now;
     char json[512];
     TickType_t last_sent = 0;
+    TickType_t last_diag = 0;
 
     while (true)
     {
@@ -220,6 +286,12 @@ static void mqtt_ha_task(void *arg)
             announce = false;
             mqtt_publish_discovery();
             force = true;
+        }
+
+        if (force || xTaskGetTickCount() - last_diag >= pdMS_TO_TICKS(DIAG_INTERVAL_MS))
+        {
+            mqtt_publish_diag();
+            last_diag = xTaskGetTickCount();
         }
 
         mqtt_collect_state(&now);
@@ -267,6 +339,7 @@ void mqtt_ha_init(void)
     }
     snprintf(avail_topic, sizeof(avail_topic), "%s/availability", base_topic);
     snprintf(state_topic, sizeof(state_topic), "%s/state", base_topic);
+    snprintf(diag_topic, sizeof(diag_topic), "%s/diag", base_topic);
     snprintf(cmd_topic, sizeof(cmd_topic), "%s/cmd/+", base_topic);
 
     esp_app_desc_t app;

@@ -79,5 +79,19 @@ int main(int argc, char **argv)
         if (p < (int)last) { fails++; printf("FAIL battery curve not monotonic at %u\n", mv); }
         last = p;
     }
+    /* diagnostics */
+    {
+        char d[192];
+        ha_diag_t dg = {.free_kb = 251, .min_free_kb = 138, .boot_iso = "2026-11-20T11:05:00+00:00", .reset = "task watchdog", .slot = "ota_1"};
+        int n = ha_diag_json(&dg, d, sizeof(d));
+        int ok = n > 0 && !strcmp(d, "{\"free_kb\":251,\"min_free_kb\":138,\"boot\":\"2026-11-20T11:05:00+00:00\",\"reset\":\"task watchdog\",\"slot\":\"ota_1\"}");
+        fails += !ok;
+        printf("%s diag %s\n", ok ? "ok  " : "FAIL", d);
+        dg.boot_iso = "";
+        n = ha_diag_json(&dg, d, sizeof(d));
+        ok = n > 0 && strstr(d, "\"boot\":null");
+        fails += !ok;
+        printf("%s diag without clock: boot null\n", ok ? "ok  " : "FAIL");
+    }
     return fails;
 }

@@ -81,6 +81,17 @@ int ha_discovery(const ha_ctx_t *ctx, int idx, char *topic, size_t topic_size, c
 /* state JSON for BASE/state; returns length or -1 */
 int ha_state_json(const ha_state_t *st, char *buf, size_t size);
 
+/* diagnostics, published to <base>/diag about once a minute */
+typedef struct
+{
+    int free_kb;          /* internal heap now */
+    int min_free_kb;      /* lowest since start */
+    const char *boot_iso; /* start time, ISO 8601 with offset; NULL/"" if the clock is not set yet */
+    const char *reset;    /* reason of the last start, e.g. "power on", "task watchdog" */
+    const char *slot;     /* running app partition, e.g. "ota_0" */
+} ha_diag_t;
+int ha_diag_json(const ha_diag_t *d, char *buf, size_t size);
+
 /* maps a received topic (full) and payload to a command; *value gets the volume or EQ mode */
 ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len, const char *data, int data_len, int *value);
 
