@@ -98,7 +98,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
     if (req->range_start)
     {
         free(range_line);
-        asprintf(&range_line, "Range: bytes=%d-\r\n", req->range_start);
+        asprintf(&range_line, "Range: bytes=%" PRIu32 "-\r\n", req->range_start);
     }
     asprintf(&url, "https://%s:%d%s", req->host, req->port, req->path);
     ESP_LOGI(TAG, "Connect to %s...", url);
@@ -140,7 +140,12 @@ static esp_err_t cloud_request(cloud_req_t *req)
 
     /* the handshake is one of the two big memory peaks, see mempeak.h */
     bool peak = mempeak_enter("TLS handshake", 8000);
-    struct esp_tls *tls = esp_tls_conn_http_new(url, &cfg);
+    esp_tls_t *tls = esp_tls_init();
+    if (tls && esp_tls_conn_http_new_sync(url, &cfg, tls) != 1)
+    {
+        esp_tls_conn_destroy(tls);
+        tls = NULL;
+    }
     mempeak_leave(peak);
     if (!tls)
     {
@@ -242,7 +247,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
     }
 
 exit:
-    esp_tls_conn_delete(tls);
+    esp_tls_conn_destroy(tls);
 
     free(auth_line);
     free(range_line);

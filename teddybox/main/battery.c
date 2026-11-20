@@ -12,8 +12,9 @@
 #include "freertos/task.h"
 
 #include "esp_log.h"
-#include "driver/adc.h"
-#include "esp_adc_cal.h"
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 
 #include "battery.h"
 #include "settings.h"
@@ -21,8 +22,8 @@
 
 static const char *TAG = "Battery";
 
-#define VBAT_CHANNEL ADC1_CHANNEL_8 /* GPIO9 */
-#define VCHG_CHANNEL ADC1_CHANNEL_7 /* GPIO8 */
+#define VBAT_CHANNEL ADC_CHANNEL_8 /* GPIO9 */
+#define VCHG_CHANNEL ADC_CHANNEL_7 /* GPIO8 */
 
 /* divider ratios multiplied by 1000 */
 #define VBAT_RATIO_X1000 ((100 + 33) * 1000 / 33)
@@ -35,8 +36,10 @@ static const char *TAG = "Battery";
 #define CRITICAL_CONFIRM 3
 #define IMPLAUSIBLE_MV 2800
 
-static esp_adc_cal_characteristics_t cal_vbat;
-static esp_adc_cal_characteristics_t cal_vchg;
+static adc_oneshot_unit_handle_t adc_unit;
+/* NULL if the chip has no calibration in eFuse: then a nominal full scale */
+static adc_cali_handle_t cal_vbat;
+static adc_cali_handle_t cal_vchg;
 
 static volatile uint32_t vbat_mv = 0;
 static volatile bool charging = false;
@@ -99,15 +102,41 @@ static void update_rest(uint32_t filtered)
     rest_mv = playing ? filtered + sag_mv : filtered;
 }
 
-static uint32_t read_mv(adc1_channel_t ch, esp_adc_cal_characteristics_t *cal, uint32_t ratio_x1000)
+static uint32_t read_mv(adc_channel_t ch, adc_cali_handle_t cal, uint32_t full_scale_mv, uint32_t ratio_x1000)
 {
     uint32_t sum = 0;
+    int n = 0;
     for (int i = 0; i < SAMPLES_PER_READ; i++)
     {
-        sum += adc1_get_raw(ch);
+        int raw;
+        if (adc_oneshot_read(adc_unit, ch, &raw) == ESP_OK)
+        {
+            sum += raw;
+            n++;
+        }
     }
-    uint32_t pin_mv = esp_adc_cal_raw_to_voltage(sum / SAMPLES_PER_READ, cal);
-    return pin_mv * ratio_x1000 / 1000;
+    if (!n)
+    {
+        return 0;
+    }
+    int pin_mv;
+    if (!cal || adc_cali_raw_to_voltage(cal, sum / n, &pin_mv) != ESP_OK)
+    {
+        pin_mv = (sum / n) * full_scale_mv / 4095;
+    }
+    return (uint32_t)pin_mv * ratio_x1000 / 1000;
+}
+
+static adc_cali_handle_t battery_cali(adc_channel_t ch, adc_atten_t atten)
+{
+    adc_cali_handle_t h = NULL;
+    adc_cali_curve_fitting_config_t c = {.unit_id = ADC_UNIT_1, .chan = ch, .atten = atten, .bitwidth = ADC_BITWIDTH_12};
+    if (adc_cali_create_scheme_curve_fitting(&c, &h) != ESP_OK)
+    {
+        ESP_LOGW(TAG, "No ADC calibration in eFuse, voltages are less accurate");
+        return NULL;
+    }
+    return h;
 }
 
 static void battery_task(void *arg)
@@ -118,8 +147,8 @@ static void battery_task(void *arg)
 
     while (true)
     {
-        uint32_t mv = read_mv(VBAT_CHANNEL, &cal_vbat, VBAT_RATIO_X1000);
-        uint32_t chg = read_mv(VCHG_CHANNEL, &cal_vchg, VCHG_RATIO_X1000);
+        uint32_t mv = read_mv(VBAT_CHANNEL, cal_vbat, 1750, VBAT_RATIO_X1000);
+        uint32_t chg = read_mv(VCHG_CHANNEL, cal_vchg, 3100, VCHG_RATIO_X1000);
 
         /* simple IIR filter, initialize with the first value */
         filtered = filtered ? (filtered * 3 + mv) / 4 : mv;
@@ -185,14 +214,17 @@ void battery_init(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
-    adc1_config_width(ADC_WIDTH_BIT_12);
+    adc_oneshot_unit_init_cfg_t unit = {.unit_id = ADC_UNIT_1};
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&unit, &adc_unit));
     /* battery: max ~4.5V / 4.03 = 1.12V at the pin -> 6dB (up to ~1.75V) */
-    adc1_config_channel_atten(VBAT_CHANNEL, ADC_ATTEN_DB_6);
-    /* charger: 5V / 2 = 2.5V at the pin -> 11dB (up to ~3.1V) */
-    adc1_config_channel_atten(VCHG_CHANNEL, ADC_ATTEN_DB_11);
+    adc_oneshot_chan_cfg_t vbat = {.atten = ADC_ATTEN_DB_6, .bitwidth = ADC_BITWIDTH_12};
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_unit, VBAT_CHANNEL, &vbat));
+    /* charger: 5V / 2 = 2.5V at the pin -> 12dB (up to ~3.1V) */
+    adc_oneshot_chan_cfg_t vchg = {.atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_12};
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_unit, VCHG_CHANNEL, &vchg));
 
-    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_6, ADC_WIDTH_BIT_12, 1100, &cal_vbat);
-    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &cal_vchg);
+    cal_vbat = battery_cali(VBAT_CHANNEL, ADC_ATTEN_DB_6);
+    cal_vchg = battery_cali(VCHG_CHANNEL, ADC_ATTEN_DB_12);
 
     xTaskCreate(&battery_task, "[TB] battery", 2560, NULL, 4, NULL);
 }

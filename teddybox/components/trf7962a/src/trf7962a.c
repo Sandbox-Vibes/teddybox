@@ -122,8 +122,11 @@ esp_err_t trf7962a_command(trf7962a_t ctx, uint8_t cmd)
 
     t.flags |= SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
 
-    /* TRF7960 quirk here. sloa140b.pdf 1.3: some commands need an extra clock cycle after the command */
-    t.length = 9;
+    /* TRF7960 quirk here. sloa140b.pdf 1.3: some commands need an extra clock
+       cycle after the command. The ESP32-S3 SPI cannot send a single extra bit
+       (IDF 5 refuses 9 bits, minimum is 2 extra), so two extra clocks; the
+       TRF only acts on complete bytes, SS goes high right after. */
+    t.length = 10;
     t.tx_data[0] = (cmd & 0b00011111) | (uint8_t)COMMAND_B7 | (uint8_t)WRITE_B6;
     t.tx_data[1] = 0;
 
@@ -456,6 +459,20 @@ esp_err_t trf7962a_reset(trf7962a_t ctx)
         ESP_LOGE(TAG, "REG_CHIP_STATUS_CONTROL not set correctly. Chip not found.");
         return ESP_FAIL;
     }
+
+    /* direct commands work (they need the extra clock cycles, see
+       trf7962a_command): software init must reset that register again */
+    trf7962a_command(ctx, CMD_SOFT_INIT);
+    trf7962a_command(ctx, CMD_IDLING);
+    trf7962a_get_reg(ctx, REG_CHIP_STATUS_CONTROL, &val, 1);
+    if (val == 0x21)
+    {
+        ESP_LOGE(TAG, "Direct command SOFT_INIT had no effect, SPI commands do not work");
+        return ESP_FAIL;
+    }
+    trf7962a_command(ctx, CMD_RESET_FIFO);
+    trf7962a_init_regs(ctx);
+    trf7962a_irq_reset(ctx);
 
     return ESP_OK;
 }

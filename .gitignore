@@ -4,3 +4,4 @@ teddybox/managed_components
 tests/host/battery_sim/sim
 tests/host/battery_sim/battery_copy.c
 tests/host/battery_sim/stub/battery.h
+teddybox/sdkconfig.old

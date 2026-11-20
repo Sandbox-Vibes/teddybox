@@ -90,8 +90,8 @@ user_agent_original = 1      # send "toniebox-esp32-eu/v5.x" (read from the orig
 - teddyCloud passes the box's user agent on to Boxine. Without
   `user_agent_original`, Boxine therefore sees `toniebox-esp32-teddybox/...`
   whenever teddyCloud fetches content for TeddyBox.
-- The user agent is not the only difference: TLS handshake (mbedTLS 2.28 from
-  IDF 4.4 instead of the original's IDF 5.0) and behaviour (no log upload, no
+- The user agent is not the only difference: TLS handshake (mbedTLS 3.6 from
+  IDF 5.5 instead of the original's IDF 5.0, TLS 1.2 only) and behaviour (no log upload, no
   firmware checks) differ as well. If Boxine blocks the box certificate, the
   Boxine cloud stops working for the original firmware and teddyCloud too.
 
@@ -236,13 +236,38 @@ Murmeltier"), so neither of them may be overwritten.
 
 ## Build
 
-Tested on Linux with ESP-ADF v2.6 and its bundled ESP-IDF v4.4.4.
+Built and tested on Linux with ESP-IDF v5.5.6 (supported by Espressif until
+January 2028) and ESP-ADF v2.8 (only its components and esp-adf-libs; ADF's
+own esp-idf copy is not used). Older versions of TeddyBox used IDF 4.4.4,
+whose branch reached end of life in July 2024, with a patch to the IDF heap;
+that patch is gone.
 
 ```sh
-./setup_libs.sh            # clones esp-adf v2.6, applies patches/malloc.diff
+./setup_libs.sh            # clones esp-idf v5.5.6 and esp-adf v2.8
 . ./env_vars.sh
 cd teddybox && idf.py build
 ```
+
+Without access to components.espressif.com (the IDF component manager),
+`./setup_libs.sh offline` fetches the three registry components ESP-ADF needs
+(jsmn, nghttp, zlib) from GitHub; `env_vars.sh` then sets
+`IDF_EXTRA_COMPONENTS` and turns the component manager off.
+
+Notes on the IDF 5 port:
+
+- `components/audio_stream` is a slim copy of ADF's: only the I2S and raw
+  streams (the original pulls in esp-sr on the ESP32-S3).
+- The project only builds what `main` needs (`set(COMPONENTS main)`).
+- ESP-ADF headers still use the old FreeRTOS type names, hence
+  `CONFIG_FREERTOS_ENABLE_BACKWARD_COMPATIBILITY`.
+- TRF7962A direct commands need an extra SPI clock; the ESP32-S3 cannot send
+  a single extra bit, so it sends two (`trf7962a_command`). At start the
+  driver checks that a direct command (software init) has an effect.
+- A firmware on probation (just installed) checks SD card, DAC, accelerometer
+  and NFC chip first and goes back to the previous firmware if one fails.
+- WiFi, lwIP, heap and FreeRTOS functions stay in flash, not IRAM: about
+  70 KiB more heap than with IDF 4.4 (QEMU: 330 KiB free at start instead of
+  260 KiB).
 
 ## Install (into the free slot)
 

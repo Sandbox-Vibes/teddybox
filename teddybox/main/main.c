@@ -229,9 +229,8 @@ void app_main(void)
     memdiag_init();
     {
         esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-        /* EXT0 is the wake line, or the small ear while on the charger */
-        ESP_LOGI(TAG, "Wake cause: %s", cause == ESP_SLEEP_WAKEUP_EXT0   ? "wake line / small ear"
-                                        : cause == ESP_SLEEP_WAKEUP_EXT1 ? "big ear"
+        ESP_LOGI(TAG, "Wake cause: %s", cause == ESP_SLEEP_WAKEUP_EXT0   ? "wake line"
+                                        : cause == ESP_SLEEP_WAKEUP_EXT1 ? "ear (on the charger)"
                                         : cause == ESP_SLEEP_WAKEUP_UNDEFINED ? "power on / reset"
                                                                            : "other");
     }
@@ -271,11 +270,26 @@ void app_main(void)
     ESP_LOGI(TAG, "Mount sdcard");
     audio_board_sdcard_init(set, SD_MODE_4_LINE);
 
+    /* A just installed firmware first checks the hardware: a new framework
+       version could break a driver (SD, I2S/DAC, I2C, SPI). Then it goes back
+       to the previous firmware instead of confirming itself. */
+    {
+        char failed[48];
+        if (!audio_board_selftest(failed, sizeof(failed)))
+        {
+            ESP_LOGE(TAG, "Hardware check failed: %s", failed);
+            if (ota_on_probation())
+            {
+                ota_reject_running(failed);
+            }
+        }
+    }
+
     ESP_LOGI(TAG, "Mount assets");
-    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
+    esp_vfs_fat_mount_config_t mount_config = {
         .format_if_mount_failed = false,
         .max_files = 3};
-    if (esp_vfs_fat_spiflash_mount("/spiflash", NULL, &mount_config, &s_test_wl_handle) != ESP_OK)
+    if (esp_vfs_fat_spiflash_mount_rw_wl("/spiflash", NULL, &mount_config, &s_test_wl_handle) != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to mount assets partition");
     }

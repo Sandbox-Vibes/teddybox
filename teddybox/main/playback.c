@@ -859,7 +859,7 @@ static esp_err_t pb_int_play_default(uint32_t lang, uint32_t id)
 {
     char filename[64];
 
-    sprintf(filename, "/sdcard/CONTENT/%08X/%08X", lang, id);
+    sprintf(filename, "/sdcard/CONTENT/%08" PRIX32 "/%08" PRIX32, lang, id);
     if (pb_check_file(filename) == PB_ERR_GOOD_FILE)
     {
         pb_default_content = true;
@@ -868,7 +868,7 @@ static esp_err_t pb_int_play_default(uint32_t lang, uint32_t id)
 
     if (lang != 0)
     {
-        sprintf(filename, "/sdcard/CONTENT/%08X/%08X", 0, id);
+        sprintf(filename, "/sdcard/CONTENT/%08" PRIX32 "/%08" PRIX32, (uint32_t)0, id);
         if (pb_check_file(filename) == PB_ERR_GOOD_FILE)
         {
             pb_default_content = true;
@@ -1238,15 +1238,16 @@ void pb_init(esp_periph_set_handle_t set)
 
     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
     i2s_cfg.type = AUDIO_STREAM_WRITER;
-    i2s_cfg.i2s_config.use_apll = false;
-    i2s_cfg.i2s_config.dma_buf_count = 4;
-    i2s_cfg.i2s_config.dma_buf_len = 512;
+    /* same DMA buffering as with IDF 4.4: 4 x 512 frames */
+    i2s_cfg.chan_cfg.dma_desc_num = 4;
+    i2s_cfg.chan_cfg.dma_frame_num = 512;
 
     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
 
     opus_decoder_cfg_t opus_dec_cfg = DEFAULT_OPUS_DECODER_CONFIG();
     opus_dec_cfg.stack_in_ext = false;
-    opus_dec_cfg.task_prio = 200;
+    /* was 200, which FreeRTOS clamped to the highest priority; IDF 5 asserts instead */
+    opus_dec_cfg.task_prio = configMAX_PRIORITIES - 1;
     /* PCM between decoder and I2S: 4096 bytes were only 21 ms at 48 kHz stereo,
        an SD access that took longer while a download wrote was audible */
     opus_dec_cfg.out_rb_size = 8 * 1024;

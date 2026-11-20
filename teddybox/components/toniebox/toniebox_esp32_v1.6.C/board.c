@@ -46,6 +46,8 @@ static const char *TAG = "TB-ESP32";
 
 static audio_board_handle_t board_handle = 0;
 static esp_periph_handle_t sdcard_handle = 0;
+static bool i2c_lis3dh_ok = false;
+static bool i2c_dac_ok = false;
 
 static esp_err_t i2c_init(audio_board_handle_t board)
 {
@@ -70,11 +72,13 @@ static esp_err_t i2c_init(audio_board_handle_t board)
     ESP_LOGE(TAG, "I2C checks:");
     reg_add = 0x0F;
     ret = i2c_bus_read_bytes(board->i2c_handle, 0x32, &reg_add, 1, &reg_data, 1);
-    ESP_LOGE(TAG, "  LIS3DH:  %s", ((ret == ESP_OK) && (reg_data == 0x33)) ? "[OK]" : "[FAIL]");
+    i2c_lis3dh_ok = (ret == ESP_OK) && (reg_data == 0x33);
+    ESP_LOGE(TAG, "  LIS3DH:  %s", i2c_lis3dh_ok ? "[OK]" : "[FAIL]");
 
     reg_add = 0x00;
     ret = i2c_bus_read_bytes(board->i2c_handle, DAC3100_ADDR, &reg_add, 1, &reg_data, 1);
-    ESP_LOGE(TAG, "  DAC3100: %s", (ret == ESP_OK) ? "[OK]" : "[FAIL]");
+    i2c_dac_ok = ret == ESP_OK;
+    ESP_LOGE(TAG, "  DAC3100: %s", i2c_dac_ok ? "[OK]" : "[FAIL]");
 
     return res;
 }
@@ -211,6 +215,17 @@ esp_err_t audio_board_sdcard_unmount()
     return ESP_OK;
 }
 
+bool audio_board_selftest(char *failed, size_t size)
+{
+    failed[0] = 0;
+    bool sd = sdcard_handle && periph_sdcard_is_mounted(sdcard_handle);
+    bool nfc = board_handle && board_handle->trf7962a && board_handle->trf7962a->valid;
+    bool accel = board_handle && board_handle->lis3dh && board_handle->lis3dh->valid;
+    snprintf(failed, size, "%s%s%s%s", sd ? "" : "SD card ", i2c_dac_ok ? "" : "DAC3100 ",
+             (i2c_lis3dh_ok && accel) ? "" : "LIS3DH ", nfc ? "" : "TRF7962A");
+    return sd && i2c_dac_ok && i2c_lis3dh_ok && accel && nfc;
+}
+
 esp_err_t audio_board_sdcard_init(esp_periph_set_handle_t set, periph_sdcard_mode_t mode)
 {
     if (mode != SD_MODE_4_LINE)
@@ -322,10 +337,7 @@ void audio_board_deep_sleep(void)
     {
         sleep_mode = SLEEP_MODE_EARS;
         ESP_LOGI(TAG, "Wake line held low (charger?): wake on the ears, check again in %llu s", CHARGER_CHECK_US / 1000000);
-        /* IDF 4.4 has no "any low" for ext1 on this chip: one ear on ext0
-           (free now), the other alone on ext1 ("all low" of one pin) */
-        esp_sleep_enable_ext0_wakeup(EAR_SMALL_GPIO, 0);
-        esp_sleep_enable_ext1_wakeup(BIT64(EAR_BIG_GPIO), ESP_EXT1_WAKEUP_ALL_LOW);
+        esp_sleep_enable_ext1_wakeup(BIT64(EAR_BIG_GPIO) | BIT64(EAR_SMALL_GPIO), ESP_EXT1_WAKEUP_ANY_LOW);
         /* keep the pull-ups of the (active low) ears in deep sleep */
         esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
         rtc_gpio_pullup_en(EAR_BIG_GPIO);

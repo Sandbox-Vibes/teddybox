@@ -62,6 +62,10 @@ typedef struct audio_board_handle *audio_board_handle_t;
  */
 audio_board_handle_t audio_board_init(void);
 
+/* after board and SD init: true if SD card, DAC, accelerometer and NFC chip
+   answered; otherwise the failed parts are named in "failed" */
+bool audio_board_selftest(char *failed, size_t size);
+
 /**
  * @brief Initialize codec chip
  *

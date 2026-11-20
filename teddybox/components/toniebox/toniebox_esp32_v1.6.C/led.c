@@ -2,11 +2,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "driver/mcpwm.h"
+#include "driver/ledc.h"
 
 #include "board.h"
 
 static const char *TAG = "LED";
+
+#define LED_DUTY_BITS LEDC_TIMER_13_BIT
 
 /* brightness levels 0..LED_BRIGHTNESS_MAX as share of the PWM duty; the eye
    is far from linear, equal steps would look almost the same at the top */
@@ -18,42 +20,59 @@ void led_init(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, LED_RED_GPIO);
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM1A, LED_GREEN_GPIO);
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM2A, LED_BLUE_GPIO);
-
-    mcpwm_config_t pwm_config = {
-        .frequency = 1000,
-        .cmpr_a = 0,
-        .counter_mode = MCPWM_UP_COUNTER,
-        .duty_mode = MCPWM_DUTY_MODE_0,
+    /* IDF 5: LEDC instead of the legacy MCPWM driver; 1 kHz like before */
+    ledc_timer_config_t timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .duty_resolution = LED_DUTY_BITS,
+        .timer_num = LEDC_TIMER_0,
+        .freq_hz = 1000,
+        .clk_cfg = LEDC_AUTO_CLK,
     };
-    mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-    mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_1, &pwm_config);
-    mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_2, &pwm_config);
+    ESP_ERROR_CHECK(ledc_timer_config(&timer));
+    const int gpio[3] = {LED_RED_GPIO, LED_GREEN_GPIO, LED_BLUE_GPIO};
+    for (int i = 0; i < 3; i++)
+    {
+        ledc_channel_config_t ch = {
+            .gpio_num = gpio[i],
+            .speed_mode = LEDC_LOW_SPEED_MODE,
+            .channel = (ledc_channel_t)i,
+            .timer_sel = LEDC_TIMER_0,
+            .duty = 0,
+            .hpoint = 0,
+        };
+        ESP_ERROR_CHECK(ledc_channel_config(&ch));
+    }
 
     led_set_rgb(0, 0, 0);
 }
 
+/* pct: duty in percent, 0..100 */
 void led_set(led_t led, float pct)
 {
-    mcpwm_timer_t timer = MCPWM_TIMER_0;
-
+    ledc_channel_t ch = LEDC_CHANNEL_0;
     switch (led)
     {
     case LED_RED:
-        timer = MCPWM_TIMER_0;
+        ch = LEDC_CHANNEL_0;
         break;
-
     case LED_GREEN:
-        timer = MCPWM_TIMER_1;
+        ch = LEDC_CHANNEL_1;
         break;
-
     case LED_BLUE:
-        timer = MCPWM_TIMER_2;
+        ch = LEDC_CHANNEL_2;
         break;
     }
-    mcpwm_set_duty(MCPWM_UNIT_0, timer, MCPWM_GEN_A, pct);
+    if (pct < 0)
+    {
+        pct = 0;
+    }
+    if (pct > 100)
+    {
+        pct = 100;
+    }
+    uint32_t duty = (uint32_t)(pct * ((1 << LED_DUTY_BITS) - 1) / 100.0f + 0.5f);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, ch, duty);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, ch);
 }
 
 void led_set_rgb(float r, float g, float b)

@@ -282,20 +282,20 @@ void mqtt_ha_init(void)
     };
 
     esp_mqtt_client_config_t cfg = {
-        .host = s->mqtt_host,
-        .port = s->mqtt_port,
-        .transport = MQTT_TRANSPORT_OVER_TCP,
-        .client_id = device_id,
-        .username = s->mqtt_user[0] ? s->mqtt_user : NULL,
-        .password = s->mqtt_pass[0] ? s->mqtt_pass : NULL,
-        .lwt_topic = avail_topic,
-        .lwt_msg = "offline",
-        .lwt_qos = 1,
-        .lwt_retain = 1,
-        .keepalive = 30,
-        .task_stack = 4096,
-        .buffer_size = 1024,
-        .out_buffer_size = 1280,
+        .broker.address.hostname = s->mqtt_host,
+        .broker.address.port = s->mqtt_port,
+        .broker.address.transport = MQTT_TRANSPORT_OVER_TCP,
+        .credentials.client_id = device_id,
+        .credentials.username = s->mqtt_user[0] ? s->mqtt_user : NULL,
+        .credentials.authentication.password = s->mqtt_pass[0] ? s->mqtt_pass : NULL,
+        .session.last_will.topic = avail_topic,
+        .session.last_will.msg = "offline",
+        .session.last_will.qos = 1,
+        .session.last_will.retain = 1,
+        .session.keepalive = 30,
+        .task.stack_size = 4096,
+        .buffer.size = 1024,
+        .buffer.out_size = 1280,
     };
 
     client = esp_mqtt_client_init(&cfg);

@@ -42,3 +42,7 @@ void ota_session_abort(ota_session_t *s);
 
 /* marks the running image as good, cancels a pending rollback; safe to call any time */
 void ota_confirm_running(void);
+/* the running firmware was just installed and is not confirmed yet */
+bool ota_on_probation(void);
+/* mark the running firmware invalid and reboot into the previous one */
+void ota_reject_running(const char *why);

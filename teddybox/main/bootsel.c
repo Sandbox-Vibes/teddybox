@@ -3,7 +3,7 @@
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
-#include "esp_spi_flash.h"
+#include "spi_flash_mmap.h"
 
 #include "bootsel.h"
 

@@ -1,5 +1,7 @@
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_image_format.h"
@@ -125,11 +127,26 @@ void ota_session_abort(ota_session_t *s)
     }
 }
 
-void ota_confirm_running(void)
+bool ota_on_probation(void)
 {
     esp_ota_img_states_t state;
     const esp_partition_t *running = esp_ota_get_running_partition();
-    if (esp_ota_get_state_partition(running, &state) == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY)
+    return esp_ota_get_state_partition(running, &state) == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY;
+}
+
+void ota_reject_running(const char *why)
+{
+    ESP_LOGE(TAG, "New firmware does not work here (%s), going back to the previous one", why);
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_ota_mark_app_invalid_rollback_and_reboot();
+    /* only returns if there is no previous firmware to go back to */
+    ESP_LOGE(TAG, "No previous firmware to go back to, keeping this one");
+}
+
+void ota_confirm_running(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (ota_on_probation())
     {
         if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK)
         {

@@ -7,8 +7,6 @@ bool pb_is_playing(void) { return playing_now; }
 #define static_assert _Static_assert
 #define battery_task battery_task_unused
 #define battery_init battery_init_unused
-int adc1_get_raw(int c) { return 0; }
-unsigned esp_adc_cal_raw_to_voltage(int r, void *c) { return 0; }
 #include "battery_copy.c"
 int fails;
 static uint32_t filt;

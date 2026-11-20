@@ -21,7 +21,7 @@ void __real_mbedtls_ssl_conf_ca_chain(mbedtls_ssl_config *conf, mbedtls_x509_crt
 void __wrap_mbedtls_ssl_conf_ca_chain(mbedtls_ssl_config *conf, mbedtls_x509_crt *ca_chain, mbedtls_x509_crl *ca_crl)
 {
     __real_mbedtls_ssl_conf_ca_chain(conf, ca_chain, ca_crl);
-    if (conf->endpoint == MBEDTLS_SSL_IS_CLIENT)
+    if (mbedtls_ssl_conf_get_endpoint(conf) == MBEDTLS_SSL_IS_CLIENT)
     {
         /* needs CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN >= 4096; 2048 would be
            smaller but teddyCloud's certificate message (2.6 KB) would then have
