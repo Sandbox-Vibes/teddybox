@@ -290,6 +290,10 @@ static void park_outdated(uint64_t uid)
         {
             ESP_LOGI(TAG, "  %016llX outdated, new version is loaded next time it is placed", (unsigned long long)uid);
         }
+        /* an unfinished download is of the old version too: must not be resumed */
+        char tmp[72];
+        snprintf(tmp, sizeof(tmp), "%s.tmp", file);
+        unlink(tmp);
     }
     else
     {

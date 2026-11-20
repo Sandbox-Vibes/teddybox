@@ -394,9 +394,9 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
     req->speed_start_us = esp_timer_get_time();
     req->speed_start_bytes = range_start;
 
-    ESP_LOGI(TAG, "[CDL] download %u-%u to '%s'%s", req->received, req->content_length, req->filename, resume ? " (resume)" : "");
+    ESP_LOGI(TAG, "[CDL] download %u-%u to '%s'%s", req->received, req->content_length, req->tmpname, resume ? " (resume)" : "");
 
-    cloud_create_directories(req->filename);
+    cloud_create_directories(req->tmpname);
     if (!req->wbuf)
     {
         req->wbuf = malloc(CLOUD_WRITE_BLOCK);
@@ -410,10 +410,10 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
     req->sd_write_us = 0;
     req->synced = req->received;
     /* "wb+" would truncate the part we already have */
-    req->handle = fopen(req->filename, resume ? "rb+" : "wb+");
+    req->handle = fopen(req->tmpname, resume ? "rb+" : "wb+");
     if (!req->handle)
     {
-        ESP_LOGE(TAG, "[CDL] Failed to open '%s'", req->filename);
+        ESP_LOGE(TAG, "[CDL] Failed to open '%s'", req->tmpname);
         return ESP_FAIL;
     }
 
@@ -451,7 +451,7 @@ static esp_err_t cloud_content_flush(cloud_content_req_t *req)
                 fclose(req->handle);
             }
             vTaskDelay(pdMS_TO_TICKS(sd_retry_delay_ms(attempt)));
-            req->handle = fopen(req->filename, "rb+");
+            req->handle = fopen(req->tmpname, "rb+");
             if (!req->handle)
             {
                 continue;
@@ -840,16 +840,25 @@ cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc
     req->received = 0;
     req->location = malloc(64);
     req->filename = pb_build_filename(nfc_uid);
+    req->tmpname = malloc(strlen(req->filename) + 5);
+    sprintf(req->tmpname, "%s.tmp", req->filename);
     req->auth = malloc(65);
 
-    /* when the file already exists, do a partial download */
+    /* a partial download of an older TeddyBox version is in the final name */
     struct stat st;
-    if (stat(req->filename, &st) == 0)
+    if (stat(req->tmpname, &st) != 0 && stat(req->filename, &st) == 0)
+    {
+        ESP_LOGI(TAG, "[CDL] Continuing the partial download as '%s'", req->tmpname);
+        rename(req->filename, req->tmpname);
+    }
+
+    /* when the file already exists, do a partial download */
+    if (stat(req->tmpname, &st) == 0)
     {
         /* only resume behind a valid TAF header (4 byte big endian length of
            the protobuf header, which fits into the first 4 KB block) */
         uint8_t be[4];
-        FILE *f = st.st_size >= 4096 ? fopen(req->filename, "rb") : NULL;
+        FILE *f = st.st_size >= 4096 ? fopen(req->tmpname, "rb") : NULL;
         bool valid = f && fread(be, 4, 1, f) == 1 &&
                      ((uint32_t)be[0] << 24 | be[1] << 16 | be[2] << 8 | be[3]) <= 4096 - 4;
         if (f)
@@ -914,6 +923,17 @@ cloud_content_state_t cloud_content_get_state(cloud_content_req_t *req)
 
 void cloud_content_cleanup(cloud_content_req_t *req)
 {
+    if (req->handle)
+    {
+        fclose(req->handle);
+        req->handle = NULL;
+    }
+    /* complete: becomes the tonie file; partial: stays .tmp for a resume */
+    if (req->filename && req->tmpname)
+    {
+        pb_finish_tmp(req->filename);
+    }
+    free(req->tmpname);
     free(req->wbuf);
     vSemaphoreDelete(req->update_sem);
     free(req->filename);

@@ -232,6 +232,16 @@ FATFS then marks the open file as broken, so every later access fails.
   warning in the log means the output did not get its 192000 B/s (wrong
   clock) or the decoder fell behind (PCM buffer empty).
 
+## Downloads go to a .tmp file
+
+As in the original firmware, a download is written to `<file>.tmp` and only
+renamed to the tonie file when it is complete and valid, so a partial download
+never looks like a tonie (power loss, removed tonie). An interrupted download
+continues from the `.tmp` the next time; partial files of older TeddyBox
+versions are taken over. A complete `.tmp` that was not renamed (power lost at
+the end) is taken over when the tonie is placed or during the nightly update.
+Tested in QEMU against teddyCloud: `tests/qemu/qemu_dl_test.c`.
+
 ## Claim (tonie placed)
 
 Like the original box, TeddyBox reports a placed tonie to teddyCloud with
@@ -240,7 +250,9 @@ handshake does not compete with the playback start). teddyCloud shows it as
 the box's last tonie, sends an MQTT event and marks the tonie as claimed. It
 is only sent to teddyCloud, never to the Boxine fallback; teddyCloud itself
 forwards claims to the Boxine cloud if its cloud access and "Forward claim"
-are enabled. `claim = 0` in `teddybox.ini` turns it off.
+are enabled, so every placed tonie would reach Boxine. Therefore it is off by
+default; `claim = 1` in `teddybox.ini` turns it on. Home Assistant shows the
+current tonie anyway (MQTT).
 
 ## Nightly update
 

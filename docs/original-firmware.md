@@ -100,5 +100,8 @@ implements all of them (`handleCloudClaim`, `handleCloudLog`, RTNL decoding).
 - battery thresholds and language from NVS (read only)
 - LIS3DH click configuration (slap) and the system sounds from the assets
 - certificates from the assets
-- `.tmp` downloads and `/v1/claim` (since this analysis)
+- `.tmp` downloads (since this analysis)
+- `/v1/claim` implemented but off by default (`claim = 1`): teddyCloud
+  forwards claims to the Boxine cloud when its cloud access is on, which
+  would report every placed tonie; Home Assistant shows the tonie anyway
 - CELT-only decoder (experimental, since this analysis)

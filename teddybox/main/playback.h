@@ -130,6 +130,8 @@ uint32_t pb_get_resume_position();
 char *pb_build_filename(uint64_t id);
 /* PB_ERR_GOOD_FILE if the TAF file is complete */
 esp_err_t pb_check_file(const char *filename);
+/* "<filename>.tmp" is a complete download: rename it to filename (true) */
+bool pb_finish_tmp(const char *filename);
 uint32_t pb_get_play_position();
 uint64_t pb_get_current_uid();
 void pb_set_last(uint64_t nfc_uid, uint32_t play_position);

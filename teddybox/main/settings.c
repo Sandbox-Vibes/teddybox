@@ -38,7 +38,7 @@ static settings_t settings = {
     .tilt_level = 3,
     .mem_log = true,
     .update_hour = 3,
-    .claim = true,
+    .claim = false,
     .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
     .mqtt_port = 1883,
@@ -123,7 +123,8 @@ int settings_save_ini(const char *path)
                      "update_hour = %d\n"
                      "# local time (POSIX TZ), default Germany/Central Europe\n"
                      "timezone = %s\n"
-                     "# report placed tonies to teddyCloud like the original box (it may forward them to the Boxine cloud, setting there)\n"
+                     "# report placed tonies to teddyCloud like the original box; off: teddyCloud forwards them to the Boxine cloud\n"
+                     "# if its cloud access is on (\"Forward claim\"), and Home Assistant shows the tonie anyway\n"
                      "claim = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",

@@ -163,7 +163,8 @@ esp_err_t pb_toniefile_open(pb_toniefile_t *info, const char *filepath)
 {
     memset(info, 0x00, sizeof(pb_toniefile_t));
 
-    info->filename = strdup(filepath);
+    /* while downloading, the data is in the .tmp file (reopened after an SD error) */
+    info->filename = strdup(current_dl_req ? current_dl_req->tmpname : filepath);
 
     if (current_dl_req)
     {
@@ -685,6 +686,25 @@ esp_err_t pb_play(const char *uri)
     return ESP_OK;
 }
 
+bool pb_finish_tmp(const char *filename)
+{
+    char tmp[64];
+    struct stat st;
+    snprintf(tmp, sizeof(tmp), "%s.tmp", filename);
+    if (stat(tmp, &st) != 0 || pb_check_file(tmp) != PB_ERR_GOOD_FILE)
+    {
+        return false;
+    }
+    unlink(filename);
+    if (rename(tmp, filename) != 0)
+    {
+        ESP_LOGE(TAG, "Could not rename '%s' to '%s'", tmp, filename);
+        return false;
+    }
+    ESP_LOGI(TAG, "Download complete: '%s'", filename);
+    return true;
+}
+
 esp_err_t pb_check_file(const char *filename)
 {
     ESP_LOGI(TAG, "Check file '%s'", filename);
@@ -955,6 +975,8 @@ static esp_err_t pb_req_handle_play(pb_req_play_t *req)
     pb_int_stop();
 
     char *filename = pb_build_filename(req->uid);
+    /* a complete download that was not renamed yet (power lost) */
+    pb_finish_tmp(filename);
     esp_err_t file_state = pb_check_file(filename);
 
     /* right now we cannot play this file, wait for token to download it */

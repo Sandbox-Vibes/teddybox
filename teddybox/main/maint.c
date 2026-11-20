@@ -266,7 +266,7 @@ typedef struct
 #define MAX_CANDIDATES 32
 
 /* tonies with a new version waiting (<file>.old, set by the freshness check)
-   or an unfinished download */
+   or an unfinished download (<file>.tmp, or a partial <file> of older versions) */
 static int find_candidates(candidate_t *c, int max)
 {
     DIR *top = opendir(CONTENT_DIR);
@@ -296,7 +296,9 @@ static int find_candidates(candidate_t *c, int max)
         {
             char name[9];
             snprintf(name, sizeof(name), "%.8s", fe->d_name);
-            bool old = strlen(fe->d_name) == 12 && !strcasecmp(fe->d_name + 8, ".old");
+            /* <file>.old: new version waiting; <file>.tmp: unfinished download */
+            bool old = strlen(fe->d_name) == 12 &&
+                       (!strcasecmp(fe->d_name + 8, ".old") || !strcasecmp(fe->d_name + 8, ".tmp"));
             if (strlen(fe->d_name) != 8 && !old)
             {
                 continue;
@@ -308,6 +310,8 @@ static int find_candidates(candidate_t *c, int max)
             }
             char path[48];
             snprintf(path, sizeof(path), "%s/%s", dir_path, name);
+            /* complete but not renamed yet (power lost after the download) */
+            pb_finish_tmp(path);
             struct stat st;
             bool exists = stat(path, &st) == 0;
             bool complete = exists && pb_check_file(path) == PB_ERR_GOOD_FILE;

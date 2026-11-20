@@ -48,6 +48,9 @@ typedef struct
     /* working variables for the download handler */
     char *location;
     char *filename;
+    /* the download goes here and is renamed to filename when complete (as the
+       original firmware does), so a partial download never looks like a tonie */
+    char *tmpname;
     char *auth;
     SemaphoreHandle_t update_sem;
 
