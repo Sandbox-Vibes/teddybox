@@ -40,7 +40,7 @@ static settings_t settings = {
     .update_hour = 3,
     .claim = false,
     .decoder_celt = true,
-    .cpu_mhz = 240,
+    .cpu_mhz = 160,
     .timezone = "CET-1CEST,M3.5.0,M10.5.0/3",
     .mqtt_host = "",
     .mqtt_port = 1883,
@@ -130,7 +130,7 @@ int settings_save_ini(const char *path)
                      "claim = %u\n"
                      "# Opus decoder: celt (default, libopus CELT only, like the original firmware) or adf (ESP-ADF, also SILK/hybrid files)\n"
                      "decoder = %s\n"
-                     "# CPU clock in MHz: 240 or 160 (less power, enough decoding power with decoder = celt?)\n"
+                     "# CPU clock in MHz: 160 (default, about 34 %% of one core for decoding) or 240; decoder = adf always uses 240\n"
                      "cpu_mhz = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",

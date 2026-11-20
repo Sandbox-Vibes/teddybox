@@ -307,6 +307,12 @@ void app_main(void)
     /* fixed CPU clock from teddybox.ini (power management only for that, no light sleep) */
     {
         int mhz = settings_get()->cpu_mhz;
+        if (!settings_get()->decoder_celt && mhz < 240)
+        {
+            /* the ESP-ADF decoder stuttered at 160 MHz on some tonies */
+            ESP_LOGW(TAG, "decoder = adf needs 240 MHz, ignoring cpu_mhz = %d", mhz);
+            mhz = 240;
+        }
         esp_pm_config_t pm = {.max_freq_mhz = mhz, .min_freq_mhz = mhz, .light_sleep_enable = false};
         esp_err_t err = esp_pm_configure(&pm);
         ESP_LOGI(TAG, "CPU clock %d MHz%s", mhz, err == ESP_OK ? "" : " (failed)");

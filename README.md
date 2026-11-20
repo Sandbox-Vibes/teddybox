@@ -246,8 +246,10 @@ log hint to use `decoder = adf`. Own Ogg demuxer (`main/ogg_demux.c`).
 - Output is bit exact with the libopus reference (32 bit multiply path, as
   on every 32 bit CPU): `tests/qemu/qemu_codec_test.c` and
   `celt_host_reference.c`.
-- `cpu_mhz = 240` (default) or `160`: fixed clock via power management (no
-  light sleep). At 160 MHz with the ADF decoder some tonies stuttered.
+- `cpu_mhz = 160` (default) or `240`: fixed clock via power management (no
+  light sleep). CELT at 160 MHz: 33.8 % of one core while a download runs,
+  sounds clean. The ADF decoder stuttered at 160 MHz on some tonies, so
+  `decoder = adf` always runs at 240 MHz.
 - While a tonie plays the log shows after 10 s, then every 30 s,
   `Decoder <adf|celt> at <MHz> MHz: <x> % CPU (of one core)`.
 

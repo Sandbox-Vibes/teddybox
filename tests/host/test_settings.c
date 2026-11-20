@@ -15,7 +15,7 @@ int main(void)
 
     settings_t *s = settings_get_mutable();
     /* compiled-in defaults */
-    CHECK(s->decoder_celt && s->cpu_mhz == 240 && !s->claim);
+    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim);
     strcpy(s->cloud_host, "192.168.178.20");
     s->cloud_port = 8443;
     s->cloud_enabled = true;   /* the setup page sets this together with the host */

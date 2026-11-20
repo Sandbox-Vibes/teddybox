@@ -104,4 +104,4 @@ implements all of them (`handleCloudClaim`, `handleCloudLog`, RTNL decoding).
 - `/v1/claim` implemented but off by default (`claim = 1`): teddyCloud
   forwards claims to the Boxine cloud when its cloud access is on, which
   would report every placed tonie; Home Assistant shows the tonie anyway
-- CELT-only decoder (`decoder = celt`, default since 2026-11 after a listening test on the box; ESP-ADF stays as `decoder = adf` fallback)
+- CELT-only decoder (`decoder = celt`, default since 2026-11 after a listening test on the box; ESP-ADF stays as `decoder = adf` fallback). With CELT the box runs at 160 MHz by default (33.8 % of one core while downloading); ADF forces 240 MHz
