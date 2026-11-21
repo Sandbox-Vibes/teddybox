@@ -436,7 +436,29 @@ static void dac3100_write_eq(bool speaker)
             dac3100_write_reg(reg_r + 1, c[k] & 0xFF);
         }
     }
-    ESP_LOGI(TAG, "EQ: %s", speaker ? speaker_eq_name(cur_eq) : "flat (headphones)");
+    /* read back: shows whether the DAC took the coefficients */
+    int bad = 0;
+    for (int i = 0; i < SPEAKER_EQ_BIQUADS; i++)
+    {
+        const int16_t c[5] = {bq[i].n0, bq[i].n1, bq[i].n2, bq[i].d1, bq[i].d2};
+        for (int k = 0; k < 5; k++)
+        {
+            uint8_t reg_l = 2 + 10 * i + 2 * k, hi = 0, lo = 0;
+            dac3100_read_reg(reg_l, &hi);
+            dac3100_read_reg(reg_l + 1, &lo);
+            bad += (uint16_t)(hi << 8 | lo) != (uint16_t)c[k];
+        }
+    }
+    dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
+    esp_log_level_set(TAG, ESP_LOG_INFO);
+    if (bad)
+    {
+        ESP_LOGE(TAG, "EQ: %s, %d coefficient(s) not taken by the DAC", speaker ? speaker_eq_name(cur_eq) : "flat (headphones)", bad);
+    }
+    else
+    {
+        ESP_LOGI(TAG, "EQ: %s (coefficients checked)", speaker ? speaker_eq_name(cur_eq) : "flat (headphones)");
+    }
 }
 
 static void dac3100_dac_on(void)
