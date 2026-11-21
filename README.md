@@ -27,7 +27,7 @@ booted again at any time.
 - **Freshness check** like the original firmware: changed content (new
   episodes, creative tonies, live content) is detected and downloaded again
 - **Home Assistant** via MQTT discovery (see below)
-- Firmware updates through the setup page with rollback, never touching the original firmware
+- Firmware updates through the setup page with rollback (A/B in ota_0/ota_1), never touching the EU app
 
 ## Setup page
 
@@ -348,18 +348,23 @@ itself contacts the Boxine cloud if its `cloud.enabled` is on.
 
 ## Flash layout
 
-Identical to the original firmware, the partition table is not changed:
+The partition table is not changed. TeddyBox goes into the free slot first;
+the first firmware update (with consent on the setup page) takes the slot of
+the PD app, after that TeddyBox alternates between ota_0 and ota_1:
 
-| Slot   | Address  | Original firmware            | With TeddyBox |
-|--------|----------|------------------------------|---------------|
-| ota_0  | 0x180000 | `toniebox-esp32-pd` (factory/fallback) | unchanged |
-| ota_1  | 0x3a0000 | free (`TB_OTA/FREE`)         | **TeddyBox**  |
-| ota_2  | 0x5c0000 | `toniebox-esp32-eu`          | unchanged     |
+| Slot   | Address  | Original firmware            | TeddyBox installed | after the first update |
+|--------|----------|------------------------------|--------------------|------------------------|
+| ota_0  | 0x180000 | `toniebox-esp32-pd` (factory/fallback) | unchanged | **TeddyBox** (A/B) |
+| ota_1  | 0x3a0000 | free (`TB_OTA/FREE`)         | **TeddyBox**       | **TeddyBox** (A/B)     |
+| ota_2  | 0x5c0000 | `toniebox-esp32-eu`          | unchanged          | unchanged              |
 
 Check your own layout first (`tools/make_otadata.py` prints the current
-slots, NVS `TB_OTA` lists `EU`, `PD`, `FREE`). The PD app takes over when the
-EU app is missing or invalid and then demands an update ("Codewort
-Murmeltier"), so neither of them may be overwritten.
+slots, NVS `TB_OTA` lists `EU`, `PD`, `FREE`; the boot log shows them as
+`BootSel:` lines). The EU app is never touched, so the box can always go
+back to the original firmware (both ears). The PD app only takes over when
+the EU app is missing or invalid and then demands an update ("Codewort
+Murmeltier"); without it there is no such fallback, but TeddyBox stays
+bootable. Keep the flash dump: it contains the PD app if you want it back.
 
 ## Build
 
