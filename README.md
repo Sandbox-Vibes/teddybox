@@ -235,7 +235,11 @@ FATFS then marks the open file as broken, so every later access fails.
   `Audio gap near m:ss: decoder late n x (longest x ms), output late n x
   (longest x ms)` for gaps far shorter than the 5 s rate check sees.
   Decoder late = PCM buffer empty, output late = I2S standing still with
-  data waiting. Dropped Ogg packets are logged by the decoder (`Ogg: ...`).
+  data waiting. Dropped Ogg packets are logged by the decoder (`Ogg: ...`). For the first output
+  stop in a window the line adds the state of the `i2s` and `dec` tasks and
+  what ran on each core.
+- The decoder task runs on core 1 (ESP-ADF's default was core 0, shared with
+  WiFi, lwIP, esp_timer and the I2S output).
 - Hash check (`main/taf_verify.c`): after each download and once per start
   for every tonie played, a background task compares the SHA-1 of the audio
   data with the one in the TAF header (`Verify: Audio hash OK` /

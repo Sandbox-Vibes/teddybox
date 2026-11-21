@@ -133,6 +133,30 @@ static volatile int pb_prog_total = -1, pb_prog_chapter = -1, pb_prog_pos_ds = -
 static esp_timer_handle_t pb_mon_timer;
 static volatile bool pb_i2s_paused;
 static volatile uint32_t pb_mon_empty, pb_mon_empty_max, pb_mon_stall, pb_mon_stall_max;
+/* what the output and the cores did when the output stood still the first time in a window */
+static char pb_mon_detail[96];
+
+static const char *pb_task_state(const char *name)
+{
+    TaskHandle_t t = xTaskGetHandle(name);
+    if (!t)
+    {
+        return "-";
+    }
+    switch (eTaskGetState(t))
+    {
+    case eRunning:
+        return "running";
+    case eReady:
+        return "ready";
+    case eBlocked:
+        return "blocked";
+    case eSuspended:
+        return "suspended";
+    default:
+        return "?";
+    }
+}
 
 static void pb_mon_cb(void *arg)
 {
@@ -185,6 +209,13 @@ static void pb_mon_cb(void *arg)
     if (info.byte_pos == last_pos && fill >= 4096)
     {
         stall_run++;
+        if (stall_run == PB_MON_STALL_MS * 1000 / PB_MON_US && !pb_mon_detail[0])
+        {
+            TaskHandle_t c0 = xTaskGetCurrentTaskHandleForCore(0), c1 = xTaskGetCurrentTaskHandleForCore(1);
+            snprintf(pb_mon_detail, sizeof(pb_mon_detail), "i2s %s, dec %s, core0 %s, core1 %s, PCM %d B",
+                     pb_task_state("i2s"), pb_task_state("dec"), c0 ? pcTaskGetName(c0) : "-",
+                     c1 ? pcTaskGetName(c1) : "-", fill);
+        }
     }
     else
     {
@@ -258,12 +289,15 @@ static void pb_audio_rate_check(void)
     int pct = expected ? rate * 100 / expected : 0;
     uint32_t me = pb_mon_empty, mem = pb_mon_empty_max, ms = pb_mon_stall, msm = pb_mon_stall_max;
     pb_mon_empty = pb_mon_empty_max = pb_mon_stall = pb_mon_stall_max = 0;
+    /* (cleared after the log line below) */
     if (me || ms)
     {
         int32_t sec = pb_prog_pos_ds > 0 ? pb_prog_pos_ds / 10 : 0;
-        ESP_LOGW(TAG, "Audio gap near %d:%02d: decoder late %u x (longest %u ms), output late %u x (longest %u ms)",
-                 (int)(sec / 60), (int)(sec % 60), (unsigned)me, (unsigned)mem, (unsigned)ms, (unsigned)msm);
+        ESP_LOGW(TAG, "Audio gap near %d:%02d: decoder late %u x (longest %u ms), output late %u x (longest %u ms)%s%s",
+                 (int)(sec / 60), (int)(sec % 60), (unsigned)me, (unsigned)mem, (unsigned)ms, (unsigned)msm,
+                 pb_mon_detail[0] ? "; at the first: " : "", pb_mon_detail);
     }
+    pb_mon_detail[0] = 0;
     if (pct < 97 || pct > 103 || empty * 10 > samples)
     {
         ESP_LOGW(TAG, "Audio: %d B/s to I2S (%d %% of %d Hz/%d ch), PCM buffer empty %d of %d times", rate, pct,
@@ -1633,6 +1667,9 @@ void pb_init(esp_periph_set_handle_t set)
     /* PCM between decoder and I2S: 4096 bytes were only 21 ms at 48 kHz stereo,
        an SD access that took longer while a download wrote was audible */
     opus_dec_cfg.out_rb_size = 8 * 1024;
+    /* core 0 has WiFi, lwIP, esp_timer and the I2S output: the decoder on the
+       mostly idle core 1 does not delay the output */
+    opus_dec_cfg.task_core = 1;
     if (settings_get()->decoder_celt)
     {
         music_decoder = tb_opus_dec_init(opus_dec_cfg.task_core, opus_dec_cfg.task_prio);

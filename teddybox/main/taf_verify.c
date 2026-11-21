@@ -144,6 +144,7 @@ static void verify_task(void *arg)
 void taf_verify_start(const char *filename, const uint8_t *sha1, size_t sha1_len, uint64_t num_bytes,
                       uint32_t audio_id)
 {
+    esp_log_level_set(TAG, ESP_LOG_INFO);
     if (!sha1 || sha1_len != 20 || !num_bytes || strlen(filename) >= sizeof(((verify_job_t *)0)->filename))
     {
         return;

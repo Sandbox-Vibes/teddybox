@@ -148,6 +148,7 @@ static void ra_task(void *arg)
 readahead_t *readahead_create(int blocks, int block_size, uint32_t limit, readahead_read_fn fn, void *ctx,
                               void (*ctx_free)(void *ctx), int prio, int core)
 {
+    esp_log_level_set(TAG, ESP_LOG_INFO);
     readahead_t *ra = calloc(1, sizeof(*ra));
     if (!ra)
     {
