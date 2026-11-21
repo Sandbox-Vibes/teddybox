@@ -46,6 +46,27 @@ void mqtt_ha_publish_now(void)
     publish_now = true;
 }
 
+static volatile uint32_t diag_sent;
+
+bool mqtt_ha_flush(int timeout_ms)
+{
+    if (!client)
+    {
+        return false;
+    }
+    uint32_t before = diag_sent;
+    publish_now = true;
+    for (int t = 0; t < timeout_ms; t += 100)
+    {
+        if (diag_sent != before)
+        {
+            return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    return false;
+}
+
 /* diagnostics (heap, start time, reset reason, slot) */
 #define DIAG_INTERVAL_MS 60000
 static char cmd_topic[80];
@@ -278,7 +299,10 @@ static void mqtt_publish_diag(void)
     int len = ha_diag_json(&d, json, sizeof(json));
     if (len > 0)
     {
-        esp_mqtt_client_publish(client, diag_topic, json, len, 0, 1);
+        if (esp_mqtt_client_publish(client, diag_topic, json, len, 0, 1) >= 0)
+        {
+            diag_sent++;
+        }
     }
 }
 

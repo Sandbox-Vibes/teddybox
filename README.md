@@ -309,6 +309,11 @@ unfinished download, one after another.
   Aktualisierung" (`update` in `<base>/diag`).
 - `update_hour = -1` turns it off.
 
+- The result (also "skipped (battery x %)") is stored in NVS as well, so it
+  survives power loss and flashing; after a run the box waits up to 30 s for
+  MQTT so Home Assistant gets it right away. Every start logs
+  `Maint: Nightly update: last <date>: <result>, next planned <date>`.
+
 ## Network traffic
 
 Without `boxine_fallback` the box only talks to what is configured:

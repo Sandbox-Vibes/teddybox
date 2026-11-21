@@ -25,6 +25,8 @@ void maint_schedule_next(void);
 uint64_t maint_sleep_us(void);
 /* the update itself; WiFi, cloud and battery must be started */
 void maint_run(void);
+/* log line at start: last run with result, next planned run */
+void maint_log_status(void);
 
 /* the token of a tonie is needed to download its content later without the
    tonie being on the box; stored on the SD card when a tonie is placed */

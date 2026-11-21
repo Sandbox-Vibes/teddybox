@@ -304,6 +304,7 @@ void app_main(void)
     settings_load_ini();
     setenv("TZ", settings_get()->timezone, 1);
     tzset();
+    maint_log_status();
     /* fixed CPU clock from teddybox.ini (power management only for that, no light sleep) */
     {
         int mhz = settings_get()->cpu_mhz;
@@ -379,9 +380,13 @@ void app_main(void)
         cloud_init();
         mqtt_ha_init();
         maint_run();
-        /* let MQTT send the result */
-        mqtt_ha_publish_now();
-        vTaskDelay(pdMS_TO_TICKS(1500));
+        /* Home Assistant shows the result (WiFi needs a few seconds, the run
+           may have ended right away, e.g. battery too low) */
+        if (!mqtt_ha_flush(30000) && settings_get()->mqtt_host[0])
+        {
+            ESP_LOGW(TAG, "Result not sent to Home Assistant (MQTT not connected)");
+        }
+        mqtt_ha_shutdown();
         goto shutdown;
     }
 

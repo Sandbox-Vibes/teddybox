@@ -12,6 +12,7 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_random.h"
+#include "nvs.h"
 
 #include "board.h"
 #include "battery.h"
@@ -113,9 +114,67 @@ uint64_t maint_sleep_us(void)
     return rtc.next > now ? (uint64_t)(rtc.next - now) * 1000000ULL : 1000000ULL;
 }
 
+/* the last result also in NVS: the RTC memory is lost on power loss and
+   when the firmware is flashed */
+#define MAINT_NVS "TB_MAINT"
+
+static void nvs_store(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(MAINT_NVS, NVS_READWRITE, &h) == ESP_OK)
+    {
+        nvs_set_i64(h, "last", (int64_t)rtc.last);
+        nvs_set_str(h, "result", rtc.result);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+static void nvs_restore(void)
+{
+    nvs_handle_t h;
+    if (rtc.last || nvs_open(MAINT_NVS, NVS_READONLY, &h) != ESP_OK)
+    {
+        return;
+    }
+    int64_t last = 0;
+    size_t len = sizeof(rtc.result);
+    if (nvs_get_i64(h, "last", &last) == ESP_OK && nvs_get_str(h, "result", rtc.result, &len) == ESP_OK)
+    {
+        rtc.last = (time_t)last;
+    }
+    else
+    {
+        rtc.result[0] = 0;
+    }
+    nvs_close(h);
+}
+
+void maint_log_status(void)
+{
+    esp_log_level_set(TAG, ESP_LOG_INFO);
+    rtc_check();
+    nvs_restore();
+    char last[24] = "none yet", next[24] = "none";
+    struct tm tm;
+    if (rtc.last > CLOCK_VALID)
+    {
+        localtime_r(&rtc.last, &tm);
+        strftime(last, sizeof(last), "%d.%m. %H:%M", &tm);
+    }
+    if (rtc.next > CLOCK_VALID)
+    {
+        localtime_r(&rtc.next, &tm);
+        strftime(next, sizeof(next), "%d.%m. %H:%M", &tm);
+    }
+    ESP_LOGI(TAG, "Nightly update: last %s%s%s, next planned %s", last, rtc.last > CLOCK_VALID ? ": " : "",
+             rtc.last > CLOCK_VALID ? rtc.result : "", next);
+}
+
 time_t maint_last(const char **result)
 {
     rtc_check();
+    nvs_restore();
     *result = rtc.result;
     return rtc.last;
 }
@@ -343,6 +402,7 @@ static void finish(const char *fmt, int a, int b)
     snprintf(rtc.result, sizeof(rtc.result), fmt, a, b);
     rtc.last = time(NULL);
     ESP_LOGI(TAG, "Done: %s", rtc.result);
+    nvs_store();
 }
 
 void maint_run(void)
