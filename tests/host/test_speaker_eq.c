@@ -78,7 +78,8 @@ int main(int argc, char **argv)
     CHECK(fabs(harsh - SPEAKER_EQ_PRESENCE_DB) < 0.5, "1.65 kHz cut %.2f", harsh);
     /* the measured dip at 3.15 kHz is left alone */
     CHECK(response_db(eq[2], fs, 3150) > -1.0, "3.15 kHz nearly untouched: %.2f", response_db(eq[2], fs, 3150));
-    CHECK(fabs(response_db(eq[2], fs, 12000)) < 0.2, "12 kHz untouched: %.2f", response_db(eq[2], fs, 12000));
+    CHECK(fabs(response_db(eq[2], fs, SPEAKER_EQ_SIBILANCE_HZ) - SPEAKER_EQ_SIBILANCE_DB) < 0.3, "6.3 kHz cut %.2f", response_db(eq[2], fs, SPEAKER_EQ_SIBILANCE_HZ));
+    CHECK(fabs(response_db(eq[2], fs, 12000)) < 0.3, "12 kHz nearly untouched: %.2f", response_db(eq[2], fs, 12000));
 
     CHECK(speaker_eq_parse("full") == SPEAKER_EQ_FULL && speaker_eq_parse("1") == SPEAKER_EQ_LOWCUT && speaker_eq_parse("x") == -1, "parse");
 

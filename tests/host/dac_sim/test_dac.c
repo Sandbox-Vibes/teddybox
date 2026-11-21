@@ -30,6 +30,9 @@ int main(void)
     dac3100_init(&cfg);
     CHECK(dac3100_get_output() == DAC3100_OUT_SPEAKER, "speaker after init");
     CHECK(regs[0][60] == 0x19, "PRB_P25");
+    /* clocks within the data sheet limits at BCLK 1.536 MHz: PLL 98.3, DAC_CLK 49.152, DAC_MOD_CLK 6.144 MHz */
+    CHECK(regs[0][4] == 0x07 && regs[0][5] == 0x92 && regs[0][6] == 0x20, "PLL BCLK x 2 x 32");
+    CHECK(regs[0][11] == 0x82 && regs[0][12] == 0x88 && regs[0][13] == 0x00 && regs[0][14] == 0x80, "NDAC 2, MDAC 8, DOSR 128");
     CHECK(regs[0][63] == 0xFD, "speaker mono mix 0x%02x", regs[0][63]);
     CHECK(regs[1][32] == 0x86, "class-D on");
     CHECK(regs[1][31] == 0x00, "HP drivers off, got 0x%02x", regs[1][31]);

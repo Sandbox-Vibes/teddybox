@@ -174,7 +174,7 @@ read from the flash dump):
   `speaker_eq` in teddybox.ini, on the setup page and as a select in Home
   Assistant (applied immediately, saved to the INI):
   - `full` (default): 4th order Butterworth high-pass at 150 Hz, -5 dB at
-    470 Hz (Q 1.4), -3 dB at 1.65 kHz (Q 1.8)
+    470 Hz (Q 1.4), -3 dB at 1.65 kHz (Q 1.8), -3 dB at 6.3 kHz (Q 3)
   - `lowcut`: only the high-pass
   - `off`: flat, as the original firmware
   The speaker is specified for 180 Hz - 15 kHz; the high-pass removes what

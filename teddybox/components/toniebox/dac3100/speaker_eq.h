@@ -8,8 +8,9 @@
  * third-octave bands relative to 1 kHz (2026-11-21), repeatable within about
  * 1.5 dB: steep bass roll-off below 250 Hz (speaker), +4.6/+4.9 dB at
  * 400/500 Hz (closed foam cube), +3.5 dB at 1.6 kHz, a dip of -3.7 dB at
- * 3.15 kHz, above 10 kHz not reliable (microphone). Only cuts, so nothing
- * can clip.
+ * 3.15 kHz. Checked again after the DAC clock fix (c15e59c), which brought
+ * back everything above 5 kHz: same mid range, +2.6 dB at 6.3 kHz, flat up
+ * to 16 kHz within about 4 dB. Only cuts, so nothing can clip.
  */
 
 #include <stdint.h>
@@ -36,6 +37,10 @@ typedef enum
 #define SPEAKER_EQ_PRESENCE_HZ 1650.0
 #define SPEAKER_EQ_PRESENCE_DB -3.0
 #define SPEAKER_EQ_PRESENCE_Q 1.8
+/* narrow peak at 6.3 kHz (+2.6 dB, seen in every measurement; sharp "s") */
+#define SPEAKER_EQ_SIBILANCE_HZ 6300.0
+#define SPEAKER_EQ_SIBILANCE_DB -3.0
+#define SPEAKER_EQ_SIBILANCE_Q 3.0
 
 /* DAC3100 coefficient format (1.15):
  * H(z) = (N0 + 2*N1 z^-1 + N2 z^-2) / (2^15 - 2*D1 z^-1 - D2 z^-2) */
