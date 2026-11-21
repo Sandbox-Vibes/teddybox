@@ -12,6 +12,7 @@
 #include "sdkconfig.h"
 #include "audio_element.h"
 #include "ringbuf.h"
+#include "readahead.h"
 #include "audio_pipeline.h"
 #include "audio_event_iface.h"
 #include "audio_common.h"
@@ -289,6 +290,15 @@ void pb_toniefile_close(pb_toniefile_t *info)
         return;
     }
 
+    if (info->ra)
+    {
+        uint32_t hits, misses;
+        readahead_stats(info->ra, &hits, &misses);
+        ESP_LOGI(TAG, "Read-ahead: %u blocks from the buffer, %u read directly", (unsigned)hits, (unsigned)misses);
+        readahead_destroy(info->ra);
+        info->ra = NULL;
+    }
+
     FILE *fd = info->fd;
     info->valid = false;
     info->fd = NULL;
@@ -445,6 +455,84 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE *shared)
     return info->current_block_avail > offset ? (size_t)(info->current_block_avail - offset) : 0;
 }
 
+/* read-ahead: 8 blocks = 32 KiB, about 2.7 s at 96 kbit/s */
+#define PB_READAHEAD_BLOCKS 8
+#define PB_READAHEAD_PRIO 6
+
+typedef struct
+{
+    char *filename;
+    FILE *fd;
+} pb_ra_ctx_t;
+
+/* in the read-ahead task: own read-only handle, retried like the playback's */
+static int pb_ra_read(void *ctx, uint32_t block, uint8_t *buf)
+{
+    pb_ra_ctx_t *c = ctx;
+    int n = pb_read_block(NULL, &c->fd, c->filename, (long)block * TONIEFILE_FRAME_SIZE, buf, TONIEFILE_FRAME_SIZE);
+    if (n < TONIEFILE_FRAME_SIZE && c->fd)
+    {
+        /* a read handle knows only the size at its opening: open again next
+           time to see what the download wrote meanwhile */
+        fclose(c->fd);
+        c->fd = NULL;
+    }
+    return n;
+}
+
+static void pb_ra_free(void *ctx)
+{
+    pb_ra_ctx_t *c = ctx;
+    if (c->fd)
+    {
+        fclose(c->fd);
+    }
+    free(c->filename);
+    free(c);
+}
+
+/* the current position from the block buffer or the read-ahead, without the
+   download's file lock (the download may hold it for seconds while the SD
+   card hangs). 0: read it the normal way. */
+static int pb_try_buffered(pb_toniefile_t *info)
+{
+    if (!info->initialized || pb_default_content)
+    {
+        return 0;
+    }
+    int32_t block = info->current_pos / TONIEFILE_FRAME_SIZE;
+    int32_t offset = info->current_pos % TONIEFILE_FRAME_SIZE;
+    if (block == info->current_block && offset < info->current_block_avail)
+    {
+        return info->current_block_avail - offset;
+    }
+
+    if (!info->ra && info->taf)
+    {
+        pb_ra_ctx_t *c = calloc(1, sizeof(*c));
+        if (c)
+        {
+            c->filename = strdup(info->filename);
+            uint32_t limit = 1 + (info->taf->num_bytes + TONIEFILE_FRAME_SIZE - 1) / TONIEFILE_FRAME_SIZE;
+            info->ra = readahead_create(PB_READAHEAD_BLOCKS, TONIEFILE_FRAME_SIZE, limit, pb_ra_read, c, pb_ra_free,
+                                        PB_READAHEAD_PRIO, tskNO_AFFINITY);
+        }
+    }
+    if (!info->ra || !readahead_get(info->ra, block, info->current_block_buffer))
+    {
+        return 0;
+    }
+    info->current_block = block;
+    info->current_block_avail = TONIEFILE_FRAME_SIZE;
+    uint64_t g = pb_ogg_granule(info->current_block_buffer, info->current_block_avail);
+    if (g != PB_NO_GRANULE)
+    {
+        info->granule = g;
+    }
+    pb_last_play_position = info->current_block;
+    return TONIEFILE_FRAME_SIZE - offset;
+}
+
 int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickType_t ticks_to_wait, void *context)
 {
     pb_toniefile_t *info = (pb_toniefile_t *)context;
@@ -563,8 +651,12 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
     }
 
     int bytes_read = 0;
-    int avail = 0;
-    if (current_dl_req)
+    int avail = pb_try_buffered(info);
+    if (avail > 0)
+    {
+        /* from the block buffer or the read-ahead */
+    }
+    else if (current_dl_req)
     {
         /* while the download runs, missing data means "not yet", not "end";
            wait a while for it (bounded, so a stop request is not held up) */

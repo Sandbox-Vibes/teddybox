@@ -104,6 +104,8 @@ typedef struct
     uint64_t granule;
     uint64_t total_granule;
     TonieboxAudioFileHeader *taf;
+    /* read-ahead task (tonies only, not the system sounds) */
+    struct readahead *ra;
 } pb_toniefile_t;
 
 void pb_init(esp_periph_set_handle_t set);

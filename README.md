@@ -223,6 +223,14 @@ FATFS then marks the open file as broken, so every later access fails.
   (digital pads would lose their level otherwise).
 - Idle power off after 60 s by default (`idle_timeout`).
 
+- Read-ahead (`main/readahead.c`, like the original's separate SD task): an
+  own task reads the next 8 blocks (32 KiB, about 2.7 s of audio) of a
+  tonie, so a hanging SD card (sdmmc 0x107 for about 1 s, seen after long
+  downloads) does not interrupt the sound. The log shows at the end
+  `Read-ahead: <n> blocks from the buffer, <m> read directly`. QEMU test:
+  `tests/qemu/qemu_ra_test.c` (simulated hangs, seek, a file that grows while
+  it is read, ending while the task hangs).
+
 - Downloads run at full speed also while a tonie plays (about 300 KiB/s;
   CELT at 160 MHz then needs 40.7 % of one core, sound clean).
   `download_playing = <KiB/s>` limits it (0 = unlimited, default). With
