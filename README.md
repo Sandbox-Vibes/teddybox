@@ -229,7 +229,13 @@ FATFS then marks the open file as broken, so every later access fails.
   downloads) does not interrupt the sound. The log shows at the end
   `Read-ahead: <n> blocks from the buffer, <m> read directly`. QEMU test:
   `tests/qemu/qemu_ra_test.c` (simulated hangs, seek, a file that grows while
-  it is read, ending while the task hangs).
+  it is read, ending while the task hangs). `readahead = 0` (or the setup page)
+  switches it off for diagnosis.
+- Glitch monitor: every 5 ms while playing; the log shows
+  `Audio gap near m:ss: decoder late n x (longest x ms), output late n x
+  (longest x ms)` for gaps far shorter than the 5 s rate check sees.
+  Decoder late = PCM buffer empty, output late = I2S standing still with
+  data waiting. Dropped Ogg packets are logged by the decoder (`Ogg: ...`).
 
 - Downloads run at full speed also while a tonie plays (about 300 KiB/s;
   CELT at 160 MHz then needs 40.7 % of one core, sound clean).

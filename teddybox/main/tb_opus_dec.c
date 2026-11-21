@@ -22,6 +22,8 @@ typedef struct
 {
     OpusDecoder *dec;
     ogg_demux_t *demux;
+    uint32_t logged_dropped, logged_sync;
+    int drop_logs;
     int16_t *pcm;
     int preskip;
     bool info_reported;
@@ -121,6 +123,8 @@ static esp_err_t tb_open(audio_element_handle_t self)
     }
     opus_decoder_init(o->dec, 48000, 2);
     ogg_demux_init(o->demux);
+    o->logged_dropped = o->logged_sync = 0;
+    o->drop_logs = 0;
     o->preskip = 0;
     o->info_reported = false;
     o->out_error = 0;
@@ -154,6 +158,14 @@ static audio_element_err_t tb_process(audio_element_handle_t self, char *in_buff
         return r;
     }
     ogg_demux_feed(o->demux, (const uint8_t *)in_buffer, r, on_packet, self);
+    if ((o->demux->dropped != o->logged_dropped || o->demux->sync_lost != o->logged_sync) && o->drop_logs < 20)
+    {
+        o->drop_logs++;
+        ESP_LOGW(TAG, "Ogg: %u packet(s) dropped, %u bytes skipped to resync (since start)",
+                 (unsigned)o->demux->dropped, (unsigned)o->demux->sync_lost);
+    }
+    o->logged_dropped = o->demux->dropped;
+    o->logged_sync = o->demux->sync_lost;
     if (o->out_error)
     {
         return o->out_error;

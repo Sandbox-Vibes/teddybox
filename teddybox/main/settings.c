@@ -39,6 +39,7 @@ static settings_t settings = {
     .mem_log = true,
     .update_hour = 3,
     .claim = false,
+    .readahead = true,
     .decoder_celt = true,
     .cpu_mhz = 160,
     .dl_playing_kib_s = 0,
@@ -135,7 +136,9 @@ int settings_save_ini(const char *path)
                      "cpu_mhz = %u\n"
                      "# download speed while a tonie plays in KiB/s (playback needs about 12), 0 = unlimited (default, about 300; decoder = adf: max 96);\n"
                      "# without playback (nightly update, idle box) always unlimited\n"
-                     "download_playing = %u\n",
+                     "download_playing = %u\n"
+                     "# read the next 32 KB of a tonie ahead (against SD card hangs), 0 only for diagnosis\n"
+                     "readahead = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -146,7 +149,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -331,6 +334,17 @@ void settings_load_ini(void)
             else
             {
                 ESP_LOGW(TAG, "Invalid download_playing '%s' (0 or 32..4096 KiB/s)", val);
+            }
+        }
+        else if (!strcmp(key, "readahead"))
+        {
+            if (!strcmp(val, "0") || !strcmp(val, "1"))
+            {
+                settings.readahead = val[0] == '1';
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid readahead '%s' (0 or 1)", val);
             }
         }
         else if (!strcmp(key, "claim"))

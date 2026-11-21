@@ -121,6 +121,87 @@ static void pb_decoder_load_log(void)
    Only problems are logged; the first 2 s after a start are skipped (the
    clock change at the start pauses the output briefly). */
 #define PB_RATE_CHECK_MS 5000
+static volatile int pb_prog_total = -1, pb_prog_chapter = -1, pb_prog_pos_ds = -1, pb_prog_dur_ds = -1, pb_prog_dl = -1;
+
+/* glitch monitor: every 5 ms while playing, catches gaps far shorter than the
+   5 s window of the rate check. Empty PCM buffer = the decoder was late;
+   I2S position standing still with data waiting = the output was late. */
+#define PB_MON_US 5000
+#define PB_MON_EMPTY_MS 15
+#define PB_MON_STALL_MS 60
+static esp_timer_handle_t pb_mon_timer;
+static volatile bool pb_i2s_paused;
+static volatile uint32_t pb_mon_empty, pb_mon_empty_max, pb_mon_stall, pb_mon_stall_max;
+
+static void pb_mon_cb(void *arg)
+{
+    static int empty_run, stall_run;
+    static int64_t last_pos;
+    if (!pb_playing || pb_i2s_paused || !i2s_stream_writer)
+    {
+        empty_run = stall_run = 0;
+        return;
+    }
+    ringbuf_handle_t rb = audio_element_get_input_ringbuf(i2s_stream_writer);
+    if (!rb)
+    {
+        return;
+    }
+    int fill = rb_bytes_filled(rb);
+    audio_element_info_t info = {0};
+    audio_element_getinfo(i2s_stream_writer, &info);
+
+    if (fill < 512)
+    {
+        empty_run++;
+    }
+    else
+    {
+        uint32_t ms = empty_run * PB_MON_US / 1000;
+        if (ms >= PB_MON_EMPTY_MS)
+        {
+            pb_mon_empty++;
+            if (ms > pb_mon_empty_max)
+            {
+                pb_mon_empty_max = ms;
+            }
+        }
+        empty_run = 0;
+    }
+
+    if (info.byte_pos == last_pos && fill >= 4096)
+    {
+        stall_run++;
+    }
+    else
+    {
+        uint32_t ms = stall_run * PB_MON_US / 1000;
+        if (ms >= PB_MON_STALL_MS)
+        {
+            pb_mon_stall++;
+            if (ms > pb_mon_stall_max)
+            {
+                pb_mon_stall_max = ms;
+            }
+        }
+        stall_run = 0;
+    }
+    last_pos = info.byte_pos;
+}
+
+static void pb_mon_start(void)
+{
+    if (pb_mon_timer)
+    {
+        return;
+    }
+    const esp_timer_create_args_t a = {.callback = pb_mon_cb, .name = "pb_mon"};
+    if (esp_timer_create(&a, &pb_mon_timer) == ESP_OK)
+    {
+        esp_timer_start_periodic(pb_mon_timer, PB_MON_US);
+    }
+}
+
 static void pb_audio_rate_check(void)
 {
     static int64_t t0 = 0, started = 0;
@@ -162,6 +243,14 @@ static void pb_audio_rate_check(void)
     int rate = (int)((info.byte_pos - pos0) * 1000000LL / (now - t0));
     int expected = info.sample_rates * info.channels * info.bits / 8;
     int pct = expected ? rate * 100 / expected : 0;
+    uint32_t me = pb_mon_empty, mem = pb_mon_empty_max, ms = pb_mon_stall, msm = pb_mon_stall_max;
+    pb_mon_empty = pb_mon_empty_max = pb_mon_stall = pb_mon_stall_max = 0;
+    if (me || ms)
+    {
+        int32_t sec = pb_prog_pos_ds > 0 ? pb_prog_pos_ds / 10 : 0;
+        ESP_LOGW(TAG, "Audio gap near %d:%02d: decoder late %u x (longest %u ms), output late %u x (longest %u ms)",
+                 (int)(sec / 60), (int)(sec % 60), (unsigned)me, (unsigned)mem, (unsigned)ms, (unsigned)msm);
+    }
     if (pct < 97 || pct > 103 || empty * 10 > samples)
     {
         ESP_LOGW(TAG, "Audio: %d B/s to I2S (%d %% of %d Hz/%d ch), PCM buffer empty %d of %d times", rate, pct,
@@ -315,7 +404,6 @@ void pb_toniefile_close(pb_toniefile_t *info)
 }
 
 /* progress for MQTT: written by the playback side only, read as plain ints */
-static volatile int pb_prog_total = -1, pb_prog_chapter = -1, pb_prog_pos_ds = -1, pb_prog_dur_ds = -1, pb_prog_dl = -1;
 
 static void pb_progress_reset(void)
 {
@@ -507,7 +595,7 @@ static int pb_try_buffered(pb_toniefile_t *info)
         return info->current_block_avail - offset;
     }
 
-    if (!info->ra && info->taf)
+    if (!info->ra && info->taf && settings_get()->readahead)
     {
         pb_ra_ctx_t *c = calloc(1, sizeof(*c));
         if (c)
@@ -1410,6 +1498,10 @@ void pb_mainthread(void *arg)
                     {
                     case AEL_STATUS_STATE_PAUSED:
                         ESP_LOGW(TAG, "[Event] [%s] Pause", source);
+                        if (msg.source == (void *)i2s_stream_writer)
+                        {
+                            pb_i2s_paused = true;
+                        }
                         pb_playing = true;
                         dac3100_set_mute(true);
                         pb_led_download = false;
@@ -1420,6 +1512,10 @@ void pb_mainthread(void *arg)
                         break;
                     case AEL_STATUS_STATE_RUNNING:
                         ESP_LOGW(TAG, "[Event] [%s] Run", source);
+                        if (msg.source == (void *)i2s_stream_writer)
+                        {
+                            pb_i2s_paused = false;
+                        }
                         pb_playing = true;
                         dac3100_set_mute(false);
                         if (!pb_default_content)
@@ -1479,6 +1575,7 @@ void pb_init(esp_periph_set_handle_t set)
     pipeline = audio_pipeline_init(&pipeline_cfg);
     mem_assert(pipeline);
 
+    pb_mon_start();
     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
     i2s_cfg.type = AUDIO_STREAM_WRITER;
     /* same DMA buffering as with IDF 4.4: 4 x 512 frames */

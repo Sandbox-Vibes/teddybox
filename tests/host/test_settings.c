@@ -15,7 +15,7 @@ int main(void)
 
     settings_t *s = settings_get_mutable();
     /* compiled-in defaults */
-    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0);
+    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead);
     strcpy(s->cloud_host, "192.168.178.20");
     s->cloud_port = 8443;
     s->cloud_enabled = true;   /* the setup page sets this together with the host */
@@ -122,6 +122,13 @@ int main(void)
     settings_load_ini();
     CHECK(!s->decoder_celt);
     s->decoder_celt = true; s->cpu_mhz = 240;
+
+    /* read-ahead switch */
+    s->readahead = true;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("readahead = 0\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(!s->readahead);
+    s->readahead = true;
 
     /* download limit while playing */
     s->dl_playing_kib_s = 96;
