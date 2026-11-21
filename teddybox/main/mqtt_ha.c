@@ -220,7 +220,23 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         /* commands are tiny, ignore fragmented messages */
         if (event->current_data_offset == 0 && event->total_data_len == event->data_len)
         {
-            mqtt_handle_command(event->topic, event->topic_len, event->data, event->data_len);
+            if (event->retain)
+            {
+                /* a command stored on the broker (published with retain) would
+                   be repeated at every start: ignore it and delete it there */
+                if (event->data_len > 0 && event->topic_len < 120)
+                {
+                    char topic[128];
+                    memcpy(topic, event->topic, event->topic_len);
+                    topic[event->topic_len] = 0;
+                    ESP_LOGW(TAG, "Ignoring retained command on '%s', removing it from the broker", topic);
+                    esp_mqtt_client_publish(client, topic, "", 0, 1, 1);
+                }
+            }
+            else
+            {
+                mqtt_handle_command(event->topic, event->topic_len, event->data, event->data_len);
+            }
         }
         break;
 
