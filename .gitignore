@@ -10,5 +10,3 @@ tests/host/test_*
 !tests/host/test_*.c
 tests/host/dac_sim/test_dac
 tests/host/nfc_sim/sim
-# local build configuration
-teddybox/sdkconfig
