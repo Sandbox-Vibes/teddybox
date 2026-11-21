@@ -477,3 +477,9 @@ QEMU tests (decoder, downloads, read-ahead, hash check): see
 `docs/original-firmware.md` collects what the flash dump of the original
 firmware shows (structure, cloud requests, NVS, SD layout) and what TeddyBox
 took over from it.
+
+## License
+
+The work of this fork is MIT or CC0-1.0, at your choice; upstream TeddyBox
+and the bundled third-party code keep their own licenses. See `LICENSE` and
+`LICENSES.md`.
