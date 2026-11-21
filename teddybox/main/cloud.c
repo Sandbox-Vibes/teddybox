@@ -639,7 +639,9 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
     /* connection failed before any response: make sure the waiting side gets an answer */
     if (content_req->state != CC_STATE_FINISHED && content_req->state != CC_STATE_ERROR)
     {
-        ESP_LOGE(TAG, "[CDL] Request for '%s' failed", content_req->location);
+        ESP_LOGE(TAG, "[CDL] Request for '%s' failed: no HTTP answer (%s)", content_req->location,
+                 ret == ESP_OK ? "teddyCloud closed the connection, its log says why, e.g. no access to the Tonies cloud for a new tonie"
+                               : "teddyCloud not reachable");
         content_req->state = CC_STATE_ERROR;
         xSemaphoreGive(content_req->update_sem);
     }

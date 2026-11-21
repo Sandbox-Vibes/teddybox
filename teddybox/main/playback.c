@@ -1251,6 +1251,9 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
 
         free(filename);
         ledman_change("failed");
+        /* audible: the original's sound for connection problems */
+        pb_int_stop();
+        pb_int_play_default(settings_get()->lang_id, CONTENT_DEFAULT_NETWORK_ERROR);
         return ESP_ERR_NOT_FOUND;
     }
 
