@@ -5,3 +5,10 @@ tests/host/battery_sim/sim
 tests/host/battery_sim/battery_copy.c
 tests/host/battery_sim/stub/battery.h
 teddybox/sdkconfig.old
+# host test executables
+tests/host/test_*
+!tests/host/test_*.c
+tests/host/dac_sim/test_dac
+tests/host/nfc_sim/sim
+# local build configuration
+teddybox/sdkconfig
