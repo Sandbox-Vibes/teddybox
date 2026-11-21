@@ -1,13 +1,45 @@
 # TeddyBox
 
-Custom firmware for the ESP32-S3 based Toniebox. It runs from a free OTA
-slot next to the original Boxine firmware, which stays untouched and can be
-booted again at any time.
+Custom firmware for the ESP32-S3 based Toniebox, for use with
+[teddyCloud](https://github.com/toniebox-reverse-engineering/teddycloud).
+It runs in the OTA slots next to the original Boxine firmware (`toniebox-esp32-eu`),
+which is never touched and can be booted again at any time by holding both
+ears for 5 seconds.
+
+Built with ESP-IDF 5.5 and ESP-ADF 2.8. Tested on one box (ESP32-S3, 8 MB
+flash, LIS3DH accelerometer) against teddyCloud.
+
+## TeddyBox compared with the original firmware
+
+| | Original firmware (`toniebox-esp32-eu` v5.235) | TeddyBox |
+|---|---|---|
+| Content source | Boxine cloud, or teddyCloud with a patched CA | teddyCloud only; Boxine cloud as optional fallback (`boxine_fallback`, off) |
+| Talks to Boxine | yes: content, time, claim, log upload (`/v1/log`), firmware checks (`/v1/ota`), live log (`rtnl.bxcl.de`) | no (teddyCloud may, if its own cloud access is on) |
+| Telemetry, logs to the cloud | yes | none |
+| New tonie, never played before | loaded from the Boxine cloud | loaded through teddyCloud, which needs cloud access for it; a hint sound if that fails |
+| Tonie placed is reported (claim) | always | off by default (`claim = 1`) |
+| Freshness check (new episodes, changed content) | yes | yes, same protocol |
+| Downloads | to `.tmp`, renamed when complete | the same; plus SHA-1 check of every file against its header, damaged files are downloaded again |
+| Nightly content update | — | optional, at a set hour, on the charger or from 50 % battery |
+| Opus decoder | libopus, CELT only | the same (libopus 1.5.2, CELT only, fixed point), ESP-ADF as fallback |
+| SD card hangs during playback | own SD task with double buffers | own read-ahead task, 32 KB (about 2.7 s) |
+| Setup | Tonies app, hotspot `Toniebox-XXXX` | own setup page, hotspot `TeddyBox-XXXX` (big ear while switching on); WiFi of the original is used as is |
+| Settings | Tonies app / cloud | setup page, `teddybox.ini` on the SD card, Home Assistant |
+| Home Assistant | — (only what teddyCloud derives from the box) | MQTT discovery: playback, tonie, chapters, progress, volume, battery, settings, diagnostics, buttons |
+| Speaker sound | flat | three profiles in the DAC's own filters: flat, low cut, tuned (measured, default) |
+| Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original) |
+| System sounds | yes | the same sounds, read from the box's assets |
+| Firmware updates | from Boxine, automatically | uploaded on the setup page, A/B with rollback |
+| Back to the other firmware | — | both ears for 5 seconds |
+| Certificate / flash backup | — | on the setup page (needs a press on the box) |
+| MMA8451 accelerometer (some boxes) | yes | no, LIS3DH only |
+| Tonies app pairing, settings from the app / teddyCloud | yes | no; settings on the setup page, in the INI or in Home Assistant |
 
 ## What works
 
-- Playback of Tonie content (TAF files) from the SD card, seeking, chapters
+- Playback of tonie content (TAF files) from the SD card, seeking, chapters
 - NFC (TRF7962A), ears for volume, headphone detection, LEDs, accelerometer
+  (slap and tilt for chapters)
 - **WiFi from the original firmware**: networks stored by the Tonies app
   (NVS `TB_WIFI`, `SSID0..6`/`PW0..6`) are used directly, newest first.
   WPS push button as fallback, credentials are stored in the same format.
@@ -20,14 +52,11 @@ booted again at any time.
 - **Battery monitoring** (GPIO9, 100k/33k divider) and charger detection
   (GPIO8, 100k/100k): warning sound when low (never interrupts a story),
   announcement and power off when critical
-- **Back to the original firmware without a cable**: hold both ears for
-  5 seconds
 - Content download from teddyCloud (`/v2/content`, resume via `Range`),
-  tag password read from the tag and sent as `Authorization: BD <hex>`
-- **Freshness check** like the original firmware: changed content (new
-  episodes, creative tonies, live content) is detected and downloaded again
-- **Home Assistant** via MQTT discovery (see below)
-- Firmware updates through the setup page with rollback (A/B in ota_0/ota_1), never touching the EU app
+  tag password read from the tag and sent as `Authorization: BD <hex>`;
+  playback starts after a few blocks while the rest downloads
+- **Freshness check**, **nightly update**, **Home Assistant**, **firmware
+  updates**: see below
 
 ## Setup page
 
@@ -37,10 +66,12 @@ announcement, blinks blue/green and opens the WiFi hotspot `TeddyBox-XXXX`
 (no password, only while setup runs). Phones show the setup page
 automatically, otherwise open `http://192.168.4.1/`. It configures WiFi
 (with network scan), teddyCloud (address, port, CA upload as DER or PEM),
-Home Assistant (MQTT) and volume, language and power off time. Saving
-writes `teddybox.ini`, stores the WiFi in the original firmware's format and
-restarts. Unused for 15 minutes, the box switches off. Needs about 18 KB RAM;
-cloud, MQTT and NFC do not run in setup mode.
+Home Assistant (MQTT), volume, language, power off time, speaker sound, LED,
+slap and tilt, the nightly update hour and (section "Decoder und
+Prozessortakt") decoder, CPU clock, download speed while playing and the
+read-ahead. Saving writes `teddybox.ini`, stores the WiFi in the original
+firmware's format and restarts. Unused for 15 minutes, the box switches off.
+Cloud, MQTT and NFC do not run in setup mode.
 
 ### Backup (setup page)
 
@@ -59,30 +90,32 @@ files contain the private key of the box.
 
 ## Configuration: `teddybox.ini` on the SD card
 
-All keys are optional.
+Written by the setup page; all keys are optional.
 
-```ini
-# teddyCloud host or IP; the cloud stays off while this is empty
-cloud_host = 192.168.1.20
-cloud_port = 443
-# CA of your teddyCloud (certs/server/ca.der). The CA in flash only works
-# if it was already replaced by the teddyCloud patch
-ca_path = /sdcard/teddybox/ca.der
-# cloud_enabled = 0        # force off even with a host set
-
-# Home Assistant / MQTT; off while mqtt_host is empty
-mqtt_host = 192.168.1.10
-mqtt_port = 1883
-mqtt_user = teddybox
-mqtt_pass = secret
-# mqtt_topic = teddybox/<mac>          # default
-# ha_discovery_prefix = homeassistant  # default
-
-lang_id = 1                # system sounds: 0=EN-GB 1=DE 2=EN-US 3=FR
-volume_max = 80            # percent
-volume_default = 50
-idle_timeout = 60          # seconds until power off
-```
+| Key | Default | |
+|---|---|---|
+| `cloud_host`, `cloud_port` | empty, 443 | teddyCloud; the cloud stays off while `cloud_host` is empty |
+| `ca_path` | `/spiflash/cert/ca.der` | CA of teddyCloud (`certs/server/ca.der`); the CA in flash only works if it was replaced by the teddyCloud patch, otherwise put it on the SD card |
+| `cloud_enabled` | on with a host | `0` forces the cloud off |
+| `boxine_fallback`, `boxine_host` | 0, `prod.de.tbs.toys` | see below |
+| `user_agent_original` | 0 | see below |
+| `mqtt_host`, `mqtt_port`, `mqtt_user`, `mqtt_pass` | empty, 1883 | Home Assistant; off while `mqtt_host` is empty |
+| `mqtt_topic`, `ha_discovery_prefix` | `teddybox/<mac>`, `homeassistant` | |
+| `lang_id` | from NVS | system sounds: 0=EN-GB 1=DE 2=EN-US 3=FR |
+| `volume_max`, `volume_default` | 100, 50 | percent |
+| `idle_timeout` | 60 | seconds until power off |
+| `speaker_eq` | `full` | `off`, `lowcut`, `full`, see Audio |
+| `led_brightness` | 3 | 0 (off) to 3 |
+| `slap`, `slap_reverse` | 3, 0 | slap on the side for next/previous chapter: 0 off, 1 firm to 5 light |
+| `tilt` | 3 | tilt for chapter/seek: 0 off, 1 far to 5 a little |
+| `update_hour` | 3 | nightly update, -1 off |
+| `timezone` | `CET-1CEST,M3.5.0,M10.5.0/3` | POSIX TZ |
+| `claim` | 0 | report placed tonies to teddyCloud |
+| `decoder` | `celt` | `celt` or `adf` |
+| `cpu_mhz` | 160 | 160 or 240 (`decoder = adf` always uses 240) |
+| `download_playing` | 0 | KiB/s while a tonie plays, 0 = unlimited |
+| `readahead` | 1 | 0 only for diagnosis |
+| `mem_log` | 1 | memory lines in the serial log |
 
 The cloud is off by default on purpose: the box certificate would otherwise
 be used against the Boxine cloud by a non-original firmware.
@@ -90,13 +123,7 @@ be used against the Boxine cloud by a non-original firmware.
 ### Optional: Boxine fallback and original user agent
 
 Both are off by default and can be switched on in the setup page
-("Erweitert") or in `teddybox.ini`:
-
-```ini
-boxine_fallback = 1          # use the Boxine cloud when teddyCloud is missing or down
-boxine_host = prod.de.tbs.toys
-user_agent_original = 1      # send "toniebox-esp32-eu/v5.x" (read from the original app)
-```
+("Erweitert") or in `teddybox.ini`.
 
 - With `boxine_fallback`, the box tries teddyCloud first and uses the Boxine
   cloud only if teddyCloud does not answer; every 5 minutes it checks whether
@@ -106,9 +133,10 @@ user_agent_original = 1      # send "toniebox-esp32-eu/v5.x" (read from the orig
   `user_agent_original`, Boxine therefore sees `toniebox-esp32-teddybox/...`
   whenever teddyCloud fetches content for TeddyBox.
 - The user agent is not the only difference: TLS handshake (mbedTLS 3.6 from
-  IDF 5.5 instead of the original's IDF 5.0, TLS 1.2 only) and behaviour (no log upload, no
-  firmware checks) differ as well. If Boxine blocks the box certificate, the
-  Boxine cloud stops working for the original firmware and teddyCloud too.
+  IDF 5.5 instead of the original's IDF 5.0, TLS 1.2 only) and behaviour (no
+  log upload, no firmware checks) differ as well. If Boxine blocks the box
+  certificate, the Boxine cloud stops working for the original firmware and
+  teddyCloud too.
 
 ## teddyCloud
 
@@ -117,9 +145,16 @@ TeddyBox uses the same protocol as the original firmware: `GET /v1/time`,
 for resuming. teddyCloud identifies it as an ESP32 box by the user agent
 `toniebox-esp32-teddybox/<version>`. Requirements:
 
-- `cloud_host` set to teddyCloud in `teddybox.ini`
-- teddyCloud's CA (`certs/server/ca.der`) on the SD card, `ca_path` pointing to it
-- the box certificates known to teddyCloud (`certs/client/<mac>/`), as for the original firmware
+- `cloud_host` set to teddyCloud
+- teddyCloud's CA (`certs/server/ca.der`) reachable via `ca_path`
+- the box certificates known to teddyCloud (`certs/client/<mac>/`), as for
+  the original firmware
+
+A tonie that teddyCloud does not have yet can only be loaded if teddyCloud
+may fetch it from the Boxine cloud (`cloud.enabled` and content v2 in
+teddyCloud). Otherwise teddyCloud closes the connection without an answer;
+the box logs that and plays the original's network error sound. Placing the
+tonie again loads it once teddyCloud has it.
 
 ### Freshness check
 
@@ -128,182 +163,41 @@ sends UID and `audio_id` of every tonie on the SD card to
 `POST /v1/freshness-check`. teddyCloud answers with the tonies that have new
 content: a newer version in its library, a newer version in the Boxine
 cloud (if cloud access is enabled in teddyCloud) or live content. Those
-files are renamed to `<file>.old`; the next time the tonie is placed, the new
-version is downloaded. If that fails (no WiFi, teddyCloud down), the `.old`
+files are renamed to `<file>.old`; the next time the tonie is placed (or in
+the nightly update) the new version is downloaded. If that fails, the `.old`
 version is played instead. `.old` files are removed once the new version is
 complete. A tonie that is playing during the check is handled next time.
-Up to 128 tonies per check.
+Up to 128 tonies per check. teddyCloud's box settings in the answer (max
+volume, slap, LED) are only logged so far, not applied.
 
-## Home Assistant
+### Claim (tonie placed)
 
-With `mqtt_host` set, the box registers itself via MQTT discovery as device
-"TeddyBox" with these entities (`<id>` = `teddybox_<mac>`):
+Like the original box, TeddyBox can report a placed tonie to teddyCloud with
+`GET /v1/claim/<rUID>` and the tonie's token (5 s after placing). teddyCloud
+shows it as the box's last tonie and marks it as claimed. It is never sent
+to the Boxine fallback; but teddyCloud itself forwards claims to the Boxine
+cloud if its cloud access and "Forward claim" are enabled, so every placed
+tonie would reach Boxine. Therefore it is off by default; `claim = 1` turns
+it on. Home Assistant shows the current tonie anyway.
 
-| Entity | |
-|---|---|
-| `sensor.<id>_status` | playing / idle |
-| `sensor.<id>_tonie` | UID of the current tonie |
-| `sensor.<id>_chapter`, `_chapters` | current chapter, number of chapters |
-| `number.<id>_volume` | volume, settable, limited by `volume_max` |
-| `sensor.<id>_battery` | charge, estimate from the voltage (NiMH curve, amplifier load added back, unknown while charging) |
-| `sensor.<id>_battery_voltage` | battery voltage |
-| `binary_sensor.<id>_charging`, `_battery_low` | on the charger, battery low |
-| `binary_sensor.<id>_headphones` | headphones connected |
-| `sensor.<id>_rssi` | WiFi signal |
-| `button.<id>_stop`, `_next`, `_prev`, `_poweroff` | control |
+## Downloads
 
-Topics: `teddybox/<mac>/state` (JSON), `teddybox/<mac>/availability`
-(`online`/`offline`, also as last will) and `teddybox/<mac>/cmd/<command>`.
-The box powers off when idle (`idle_timeout`), Home Assistant then shows it
-as unavailable. Needs about 16 KB of RAM.
-
-## Audio
-
-Output and volume work as in the original firmware (driver `CO3100.c`,
-read from the flash dump):
-
-- speaker: both channels mixed to mono (the class-D amplifier only gets
-  the left DAC, so stereo content used to lose its right channel), driver
-  gain 6 dB
-- headphones: stereo, the speaker is powered down while they are plugged in
-  (and the other way round)
-- 16 volume steps per output, speaker -20 dB to +2.5 dB, headphones -20 dB
-  to -2 dB; each ear press moves one step. The percent values in Home
-  Assistant and in the settings map onto these steps.
-- speaker EQ in the DAC's own biquads (no CPU load), headphones stay flat.
-  `speaker_eq` in teddybox.ini, on the setup page and as a select in Home
-  Assistant (applied immediately, saved to the INI):
-  - `full` (default): 4th order Butterworth high-pass at 150 Hz, -5 dB at
-    470 Hz (Q 1.4), -3 dB at 1.65 kHz (Q 1.8), -3 dB at 6.3 kHz (Q 3)
-  - `lowcut`: only the high-pass
-  - `off`: flat, as the original firmware
-  The speaker is specified for 180 Hz - 15 kHz; the high-pass removes what
-  it cannot play anyway and what makes it distort at high volume. The two
-  cuts come from two phone measurements with third-octave test tones and the
-  EQ off (2026-11-21, see speaker_eq.h, repeatable within about 1.5 dB):
-  +4.6/+4.9 dB at 400/500 Hz and +3.5 dB at 1.6 kHz; the former cut at
-  3.2 kHz sat in a dip and is gone.
-- MQTT commands that come with the retain flag (stored on the broker, e.g.
-  published with retain by an automation) are ignored and deleted on the
-  broker: they were repeated at every start and overrode the settings. The EQ
-  only cuts, so it cannot clip. `tests/host/test_speaker_eq` checks the
-  response computed from the rounded 16 bit coefficients.
-- checked against a register model: `tests/host/dac_sim`
-
-## Home Assistant: progress and LED
-
-- `Fortschritt` (% of the tonie), `Kapitel-Fortschritt`, `Gespielt` and
-  `Gesamtdauer` (minutes, from the Ogg granule positions; every TAF block
-  starts with an Ogg page, the duration is the last page of the file) and
-  `Download` (% of a running download). Unknown values are sent as null and
-  show as "unknown". Progress alone goes out at most every 10 s.
-- `LED-Helligkeit` 0 (off) to 3, also `led_brightness` in teddybox.ini and on
-  the setup page. The setup mode lights up at level 1 at least.
-
-## SD card errors
-
-The SD card occasionally times out (`0x107`), with or without a download.
-FATFS then marks the open file as broken, so every later access fails.
-
-- Downloads are written in 4 KiB blocks aligned to the file offset. A failed
-  write reopens the file and retries up to 3 times. `received` only counts
-  data that reached the card, so a resume continues at the right place.
-- Playback reopens and retries failed reads. While the tonie is still
-  downloading it waits up to 3 s for data instead of treating it as the end.
-- Opus PCM ring buffer is 8 KiB.
-- Log lines: `SD write … ms/s` (download line), `SD write/read at … failed,
-  reopening`, `Waited … for the download's file lock`,
-  `Playback caught up with the download`.
-- `tests/host` does not cover this; the download path was tested on a PC
-  against a local teddyCloud with injected write errors.
-
-## Power
-
-- The NFC reader's RF field (70-130 mA while on) is only switched on for the
-  moments a tag is queried: every 250 ms without a tonie, every 500 ms with
-  one. A Tonie returns to privacy mode without field, so each check unlocks
-  it again with the password that worked before. Simulated with a virtual
-  Tonie (`tests/host/nfc_sim`): field on 3-4 % of the time instead of
-  65-100 %, tonie removal noticed after about 0.7 s.
-- Peripheral power and SD card power are held off during deep sleep
-  (digital pads would lose their level otherwise).
-- Idle power off after 60 s by default (`idle_timeout`).
-
-- Read-ahead (`main/readahead.c`, like the original's separate SD task): an
-  own task reads the next 8 blocks (32 KiB, about 2.7 s of audio) of a
-  tonie, so a hanging SD card (sdmmc 0x107 for about 1 s, seen after long
-  downloads) does not interrupt the sound. The log shows at the end
-  `Read-ahead: <n> blocks from the buffer, <m> read directly`. QEMU test:
-  `tests/qemu/qemu_ra_test.c` (simulated hangs, seek, a file that grows while
-  it is read, ending while the task hangs). `readahead = 0` (or the setup page)
-  switches it off for diagnosis.
-- Glitch monitor: every 5 ms while playing; the log shows
-  `Audio gap near m:ss: decoder late n x (longest x ms), output late n x
-  (longest x ms)` for gaps far shorter than the 5 s rate check sees.
-  Decoder late = PCM buffer empty, output late = I2S standing still with
-  data waiting. Dropped Ogg packets are logged by the decoder (`Ogg: ...`). For the first output
-  stop in a window the line adds the state of the `i2s` and `dec` tasks and
-  what ran on each core.
-- The decoder task runs on core 1 (ESP-ADF's default was core 0, shared with
-  WiFi, lwIP, esp_timer and the I2S output).
-- Hash check (`main/taf_verify.c`): after each download and once per start
+- As in the original firmware, a download is written to `<file>.tmp` and only
+  renamed to the tonie file when it is complete and valid, so a partial
+  download never looks like a tonie. An interrupted download continues from
+  the `.tmp` the next time. Tested in QEMU against teddyCloud
+  (`tests/qemu/qemu_dl_test.c`).
+- Full speed also while a tonie plays (about 300 KiB/s; the decoder then
+  needs about 40 % of one core at 160 MHz). `download_playing = <KiB/s>`
+  limits it. With `decoder = adf` at most 96 KiB/s.
+- **Hash check** (`main/taf_verify.c`): after each download and once per start
   for every tonie played, a background task compares the SHA-1 of the audio
-  data with the one in the TAF header (`Verify: Audio hash OK` /
-  `MISMATCH`). A damaged file is renamed to `<file>.bad` (when its playback
-  ends) and downloaded again next time. QEMU test: `tests/qemu/qemu_verify_test.c`.
-
-- Downloads run at full speed also while a tonie plays (about 300 KiB/s;
-  CELT at 160 MHz then needs 40.7 % of one core, sound clean).
-  `download_playing = <KiB/s>` limits it (0 = unlimited, default). With
-  `decoder = adf` at most 96 KiB/s: full speed made ESP-ADF stutter.
-
-- (History, ESP-ADF decoder) The CPU ran at 240 MHz: at 160 MHz some tonies (teddyCloud encoded)
-  played slowed and stuttering while WiFi/TLS were busy. A `[PB]: Audio:`
-  warning in the log means the output did not get its 192000 B/s (wrong
-  clock) or the decoder fell behind (PCM buffer empty).
-
-## Opus decoder and CPU clock
-
-`teddybox.ini`: `decoder = celt` (default since 2026-11; sounded fine on the
-box) or `decoder = adf` (ESP-ADF's esp_audio_codec, full Opus incl.
-SILK/hybrid, kept as fallback). CELT: libopus 1.5.2, fixed point, only the CELT part, like the
-original firmware's decoder (`components/opus_celt`, symbols prefixed with
-`tb_` because ESP-ADF links its own libopus). Tonie files are CELT only
-(also teddyCloud's 96 kbit/s encodes); a SILK/hybrid packet is skipped with a
-log hint to use `decoder = adf`. Own Ogg demuxer (`main/ogg_demux.c`).
-
-- RAM while decoding music (QEMU): about 60 KB instead of 126 KB.
-- Output is bit exact with the libopus reference (32 bit multiply path, as
-  on every 32 bit CPU): `tests/qemu/qemu_codec_test.c` and
-  `celt_host_reference.c`.
-- `cpu_mhz = 160` (default) or `240`: fixed clock via power management (no
-  light sleep). CELT at 160 MHz: 33.8 % of one core while a download runs,
-  sounds clean. The ADF decoder stuttered at 160 MHz on some tonies, so
-  `decoder = adf` always runs at 240 MHz.
-- While a tonie plays the log shows after 10 s, then every 30 s,
-  `Decoder <adf|celt> at <MHz> MHz: <x> % CPU (of one core)`.
-
-## Downloads go to a .tmp file
-
-As in the original firmware, a download is written to `<file>.tmp` and only
-renamed to the tonie file when it is complete and valid, so a partial download
-never looks like a tonie (power loss, removed tonie). An interrupted download
-continues from the `.tmp` the next time; partial files of older TeddyBox
-versions are taken over. A complete `.tmp` that was not renamed (power lost at
-the end) is taken over when the tonie is placed or during the nightly update.
-Tested in QEMU against teddyCloud: `tests/qemu/qemu_dl_test.c`.
-
-## Claim (tonie placed)
-
-Like the original box, TeddyBox reports a placed tonie to teddyCloud with
-`GET /v1/claim/<rUID>` and the tonie's token (5 s after placing, so the TLS
-handshake does not compete with the playback start). teddyCloud shows it as
-the box's last tonie, sends an MQTT event and marks the tonie as claimed. It
-is only sent to teddyCloud, never to the Boxine fallback; teddyCloud itself
-forwards claims to the Boxine cloud if its cloud access and "Forward claim"
-are enabled, so every placed tonie would reach Boxine. Therefore it is off by
-default; `claim = 1` in `teddybox.ini` turns it on. Home Assistant shows the
-current tonie anyway (MQTT).
+  data with the one in the TAF header (`Verify: Audio hash OK` / `MISMATCH`,
+  about 30 s for 30 MB). A damaged file is renamed to `<file>.bad` (when its
+  playback ends) and downloaded again next time
+  (`tests/qemu/qemu_verify_test.c`).
+- A failed download (teddyCloud unreachable or without the content) plays
+  the original's network error sound.
 
 ## Nightly update
 
@@ -319,21 +213,145 @@ unfinished download, one after another.
   rest continues the next night or when the tonie is placed.
 - Downloading without the tonie on the box needs its token. It is stored when
   a tonie is placed (`/sdcard/TOKENS/<dir>/<file>`, same names as in
-  `CONTENT`, 32 bytes, only written when it changes; FATFS names are limited
-  to 16 characters). Tonies not placed since this version are skipped.
-  **The tokens give access to the tonie's content in the cloud: whoever has
-  the SD card has them.** Delete the `TOKENS` folder to remove them.
+  `CONTENT`, 32 bytes, only written when it changes). Tonies not placed since
+  this version are skipped. **The tokens give access to the tonie's content in
+  the cloud: whoever has the SD card has them.** Delete the `TOKENS` folder to
+  remove them.
 - Needs a valid clock (set from teddyCloud on every connection; kept in deep
   sleep, lost when the battery is removed: then the next normal start plans
   it again).
-- Result in Home Assistant: diagnostic sensor "Letzte nächtliche
-  Aktualisierung" (`update` in `<base>/diag`).
-- `update_hour = -1` turns it off.
-
-- The result (also "skipped (battery x %)") is stored in NVS as well, so it
-  survives power loss and flashing; after a run the box waits up to 30 s for
-  MQTT so Home Assistant gets it right away. Every start logs
+- The result (also "skipped (battery x %)") is kept in NVS, so it survives
+  power loss and flashing. After a run the box waits up to 30 s for MQTT, so
+  Home Assistant gets it right away (diagnostic sensor "Letzte nächtliche
+  Aktualisierung"). Every start logs
   `Maint: Nightly update: last <date>: <result>, next planned <date>`.
+
+## Home Assistant
+
+With `mqtt_host` set, the box registers itself via MQTT discovery as device
+"TeddyBox" (`<id>` = `teddybox_<mac>`, 31 entities):
+
+| Entities | |
+|---|---|
+| Status, Tonie, Kapitel, Kapitel gesamt | playing / idle, UID of the current tonie, chapter |
+| Fortschritt, Kapitel-Fortschritt, Gespielt, Gesamtdauer | progress in % and minutes (from the Ogg granule positions), at most every 10 s |
+| Download | % of a running download |
+| Lautstärke | number, limited by `volume_max` |
+| Akku (geschätzt), Akkuspannung, Lädt, Akku schwach | charge estimated from the voltage (NiMH curve, amplifier load added back, unknown while charging) |
+| Kopfhörer, WLAN-Signal | |
+| LED-Helligkeit, Klapsen, Klapsen umgekehrt, Kippen, Lautsprecher-Klang | settings, applied at once and saved to the INI |
+| Stopp, Nächstes/Vorheriges Kapitel, Ausschalten | buttons |
+| Diagnostics | free heap (now and minimum), start time, reason of the last start, firmware slot, last nightly update |
+
+Topics: `teddybox/<mac>/state` and `/diag` (JSON),
+`teddybox/<mac>/availability` (`online`/`offline`, also as last will) and
+`teddybox/<mac>/cmd/<command>`. Commands that come with the retain flag
+(stored on the broker) are ignored and deleted there: they would be repeated
+at every start and override the settings. The box powers off when idle
+(`idle_timeout`), Home Assistant then shows it as unavailable.
+
+## Audio
+
+Output and volume work as in the original firmware (driver `CO3100.c`,
+read from the flash dump):
+
+- speaker: both channels mixed to mono (the class-D amplifier only gets the
+  left DAC), driver gain 6 dB
+- headphones: stereo, the speaker is powered down while they are plugged in
+  (and the other way round)
+- 16 volume steps per output, speaker -20 dB to +2.5 dB, headphones -20 dB
+  to -2 dB; each ear press moves one step. The percent values in Home
+  Assistant and in the settings map onto these steps.
+- **DAC clocks within the data sheet**: PLL 98.3 MHz, DAC_CLK 49.152 MHz,
+  DAC_MOD_CLK 6.144 MHz, DOSR 128. The values taken over earlier from
+  RvX_TLV320DAC3100 ran the PLL at 295 MHz and the DAC far above its limits:
+  high tones came out as strong spurs below them, nothing above 10 kHz
+  reached the speaker. See `docs/original-firmware.md`.
+- **Speaker EQ** in the DAC's own biquads (no CPU load), headphones stay
+  flat. `speaker_eq` in the INI, on the setup page and in Home Assistant:
+  - `full` (default, "Optimiert"): 4th order Butterworth high-pass at 150 Hz,
+    -5 dB at 470 Hz (Q 1.4), -3 dB at 1.65 kHz (Q 1.8), -3 dB at 6.3 kHz (Q 3)
+  - `lowcut` ("Nur Tiefenfilter"): only the high-pass
+  - `off` ("Wie Original"): flat, as the original firmware
+
+  The cuts come from phone measurements with third-octave test tones and pink
+  noise (2026-11-21, see `speaker_eq.h`): flat, the box has +4 to +5 dB at
+  400-500 Hz (closed foam cube), +3.5 dB at 1.6 kHz and +2.6 dB at 6.3 kHz.
+  With `full` it is within about ±4 dB from 250 Hz to 16 kHz; measured with
+  pink noise the EQ matches the computed curve within about 0.3 dB. The EQ
+  only cuts, so it cannot clip. After writing, the coefficients are read back
+  from the DAC (`DAC3100: EQ: full (coefficients checked)`).
+- tests: `tests/host/test_speaker_eq` (response from the rounded 16 bit
+  coefficients), `tests/host/dac_sim` (register model incl. clocks)
+
+## Playback
+
+### Opus decoder and CPU clock
+
+`decoder = celt` (default): libopus 1.5.2, fixed point, only the CELT part,
+like the original firmware's decoder (`components/opus_celt`, symbols
+prefixed with `tb_` because ESP-ADF links its own libopus), with an own Ogg
+demuxer (`main/ogg_demux.c`). Tonie files are CELT only (also teddyCloud's
+encodes); a SILK/hybrid packet is skipped with a log hint to use
+`decoder = adf` (ESP-ADF's esp_audio_codec, full Opus, kept as fallback).
+
+- The decoder task runs on core 1. ESP-ADF's default, core 0, shares the
+  core with WiFi, lwIP, esp_timer and the I2S output, and the decoder at the
+  highest priority delayed the output there: small clicks, mostly at 160 MHz.
+- `cpu_mhz = 160` (default) or `240`: fixed clock via power management (no
+  light sleep). CELT at 160 MHz: about 32 % of one core, about 40 % while
+  downloading. `decoder = adf` always runs at 240 MHz.
+- RAM while decoding music: about 60 KB instead of 126 KB with ESP-ADF; on
+  the box about 125 KB free while playing (85 KB with read-ahead and hash
+  check running), about 60 KB during a download.
+- Output is bit exact with the libopus reference (32 bit multiply path, as
+  on every 32 bit CPU): `tests/qemu/qemu_codec_test.c` and
+  `celt_host_reference.c`.
+
+### SD card hangs and read-ahead
+
+Some SD cards stop answering for about 1 s now and then (`sdmmc ... 0x107`),
+often right after a long download.
+
+- **Read-ahead** (`main/readahead.c`, like the original's separate SD task):
+  an own task reads the next 8 blocks (32 KiB, about 2.7 s of audio) of a
+  tonie, so a hanging card does not interrupt the sound. At the end of a
+  tonie the log shows `Read-ahead: <n> blocks from the buffer, <m> read
+  directly`. QEMU test `tests/qemu/qemu_ra_test.c` (simulated hangs, seek, a
+  file that grows while it is read, ending while the task hangs).
+  `readahead = 0` switches it off for diagnosis.
+- Playback reopens and retries failed reads. While the tonie is still
+  downloading it waits up to 3 s for data instead of treating it as the end.
+- Downloads are written in 4 KiB blocks aligned to the file offset. A failed
+  write reopens the file and retries up to 3 times. `received` only counts
+  data that reached the card, so a resume continues at the right place.
+
+### Diagnostics in the log
+
+- `Decoder <adf|celt> at <MHz> MHz: <x> % CPU (of one core)` after 10 s of a
+  tonie, then every 30 s
+- `[PB]: Audio: ...`: the output did not get its 192000 B/s over 5 s
+- `Audio gap near m:ss: decoder late n x (longest x ms), output late n x
+  (longest x ms)`: a 5 ms monitor; decoder late = PCM buffer empty, output
+  late = I2S standing still with data waiting (the first one in a window adds
+  the state of the `i2s` and `dec` tasks and what ran on each core)
+- `Ogg: ... dropped`: packets the decoder had to drop
+- `SD write ... ms/s`, `SD read at ... failed, reopening`, `Waited ... for the
+  download's file lock`, `Playback caught up with the download`
+
+## Power
+
+- The NFC reader's RF field (70-130 mA while on) is only switched on for the
+  moments a tag is queried: every 250 ms without a tonie, every 500 ms with
+  one. A tonie returns to privacy mode without field, so each check unlocks
+  it again with the password that worked before. Simulated with a virtual
+  tonie (`tests/host/nfc_sim`): field on 3-4 % of the time instead of
+  65-100 %, tonie removal noticed after about 0.7 s.
+- Peripheral power and SD card power are held off during deep sleep
+  (digital pads would lose their level otherwise).
+- On the charger the box sleeps with the ears as wake source and checks every
+  5 minutes whether it was taken off.
+- Idle power off after 60 s by default (`idle_timeout`).
 
 ## Network traffic
 
@@ -342,9 +360,9 @@ teddyCloud (`cloud_host`) and the MQTT broker (`mqtt_host`), plus WiFi,
 DHCP, ARP and DNS lookups for those host names in the local network. No
 time servers (the time comes from teddyCloud), no mDNS, no telemetry.
 It shows up in the router as `teddybox-xxxx`. Inbound, nothing listens
-in normal mode. Checked with a
-packet capture in QEMU (Ethernet instead of WiFi). Note that teddyCloud
-itself contacts the Boxine cloud if its `cloud.enabled` is on.
+in normal mode. Checked with a packet capture in QEMU (Ethernet instead of
+WiFi). Note that teddyCloud itself contacts the Boxine cloud if its
+`cloud.enabled` is on.
 
 ## Flash layout
 
@@ -355,7 +373,7 @@ the PD app, after that TeddyBox alternates between ota_0 and ota_1:
 | Slot   | Address  | Original firmware            | TeddyBox installed | after the first update |
 |--------|----------|------------------------------|--------------------|------------------------|
 | ota_0  | 0x180000 | `toniebox-esp32-pd` (factory/fallback) | unchanged | **TeddyBox** (A/B) |
-| ota_1  | 0x3a0000 | free (`TB_OTA/FREE`)         | **TeddyBox**       | **TeddyBox** (A/B)     |
+| ota_1  | 0x3a0000 | free (`TB_OTA/FREE`, may hold an old copy of the EU app) | **TeddyBox** | **TeddyBox** (A/B) |
 | ota_2  | 0x5c0000 | `toniebox-esp32-eu`          | unchanged          | unchanged              |
 
 Check your own layout first (`tools/make_otadata.py` prints the current
@@ -366,13 +384,55 @@ the EU app is missing or invalid and then demands an update ("Codewort
 Murmeltier"); without it there is no such fallback, but TeddyBox stays
 bootable. Keep the flash dump: it contains the PD app if you want it back.
 
+## Install (into the free slot)
+
+Make a full backup first and keep it safe (it contains the box certificate):
+
+```sh
+esptool.py -b 921600 read_flash 0x0 0x800000 backup.bin
+python3 tools/make_otadata.py backup.bin 1 otadata_teddybox.bin
+esptool.py -b 921600 write_flash 0x3a0000 teddybox/build/teddybox.bin 0x16f000 otadata_teddybox.bin
+```
+
+Only the free slot and the 8 KiB boot selection are written. Bootloader,
+partition table, NVS, certificates and both original apps stay as they are.
+
+Back to the original firmware: hold both ears for 5 seconds, or
+
+```sh
+dd if=backup.bin of=otadata_original.bin bs=4096 skip=367 count=2
+esptool.py write_flash 0x16f000 otadata_original.bin
+```
+
+## Firmware updates
+
+Updates of TeddyBox itself are uploaded on the setup page (hold the big ear
+while switching on, section "Firmware aktualisieren"). There is no network
+port for updates, so physical access to the box is required.
+
+- The upload is checked before anything is written: ESP32-S3 image with
+  project name `teddybox` (original Boxine apps are refused), fits the slot,
+  SHA-256 verified at the end.
+- The first update needs the slot of the PD app (stock layout: PD,
+  TeddyBox, EU app); the page asks before using it. After that TeddyBox
+  alternates between the two slots, the EU app is never touched.
+- Rollback: the original bootloader supports it. A new version boots "on
+  probation", checks SD card, DAC, accelerometer and NFC chip and confirms
+  itself after running 10 seconds (or once the setup page is up). If it
+  crashes, restarts or a check fails before that, the bootloader starts the
+  previous version again.
+- Switching to the original firmware (both ears) marks it valid right away,
+  so it does not fall back to TeddyBox after its first restart.
+
+Tested in QEMU with the original bootloader from a flash dump: refused
+images, PD consent, update, rollback of an unconfirmed version, alternating
+updates, switch to the original firmware.
+
 ## Build
 
 Built and tested on Linux with ESP-IDF v5.5.6 (supported by Espressif until
 January 2028) and ESP-ADF v2.8 (only its components and esp-adf-libs; ADF's
-own esp-idf copy is not used). Older versions of TeddyBox used IDF 4.4.4,
-whose branch reached end of life in July 2024, with a patch to the IDF heap;
-that patch is gone.
+own esp-idf copy is not used).
 
 ```sh
 ./setup_libs.sh            # clones esp-idf v5.5.6 and esp-adf v2.8
@@ -395,44 +455,13 @@ Notes on the IDF 5 port:
 - TRF7962A direct commands need an extra SPI clock; the ESP32-S3 cannot send
   a single extra bit, so it sends two (`trf7962a_command`). At start the
   driver checks that a direct command (software init) has an effect.
-- A firmware on probation (just installed) checks SD card, DAC, accelerometer
-  and NFC chip first and goes back to the previous firmware if one fails.
 - Release build (`-O2`); TLS handshakes in QEMU about 20 % faster than -Og.
 - TCP window and WiFi RX buffers as with IDF 4.4. A 23 KB window with 32
-  dynamic RX buffers (f9d700e) let the free heap fall to 8 KB on the box
-  during a download.
-- Home Assistant diagnostics (entity category "diagnostic", topic
-  `<base>/diag`, every minute): free heap, lowest free heap since start,
-  start time, reason of the last start (power on, crash, task watchdog,
-  brownout, ...) and the running slot.
-- Task watchdog panics (reboot) if an idle task is starved for 5 s.
-- `mem_log = 0` in `teddybox.ini` turns off the memory lines in the serial
-  log (failed allocations are always logged).
+  dynamic RX buffers let the free heap fall to 8 KB on the box during a
+  download.
 - WiFi, lwIP, heap and FreeRTOS functions stay in flash, not IRAM: about
-  70 KiB more heap at start (330 instead of 260 KiB). Most of it is used
-  again at runtime: the IDF 4.4 version kept the Opus decoder's ~56 KiB in
-  static buffers (heap patch), now the decoder allocates them. On the box
-  while playing (no download): about 65 KiB free, IDF 4.4 about 59 KiB.
-
-## Install (into the free slot)
-
-Make a full backup first and keep it safe (it contains the box certificate):
-
-```sh
-esptool.py -b 921600 read_flash 0x0 0x800000 backup.bin
-python3 tools/make_otadata.py backup.bin 1 otadata_teddybox.bin
-esptool.py -b 921600 write_flash 0x3a0000 teddybox/build/teddybox.bin 0x16f000 otadata_teddybox.bin
-```
-
-Only the free slot and the 8 KiB boot selection are written. Bootloader,
-partition table, NVS, certificates and both original apps stay as they are.
-
-Back to the original firmware: hold both ears for 5 seconds, or
-
-```sh
-dd if=backup.bin of=otadata_original.bin bs=4096 skip=367 count=2
-esptool.py write_flash 0x16f000 otadata_original.bin
-```
+  70 KiB more heap at start (330 instead of 260 KiB).
+- Task watchdog panics (reboot) if an idle task is starved for 5 s.
 
 ## Tests
 
@@ -440,25 +469,11 @@ esptool.py write_flash 0x16f000 otadata_original.bin
 make -C tests/host     # host unit tests, no ESP-IDF needed
 ```
 
-## Firmware updates
+QEMU tests (decoder, downloads, read-ahead, hash check): see
+`tests/qemu/README.md`.
 
-Updates of TeddyBox itself are uploaded on the setup page (hold the big ear
-while switching on, section "Firmware aktualisieren"). There is no network
-port for updates, so physical access to the box is required.
+## Background
 
-- The upload is checked before anything is written: ESP32-S3 image with
-  project name `teddybox` (original Boxine apps are refused), fits the slot,
-  SHA-256 verified at the end.
-- The first update needs the slot of the PD app (stock layout: PD,
-  TeddyBox, EU app); the page asks before using it. After that TeddyBox
-  alternates between the two slots, the EU app is never touched.
-- Rollback: the original bootloader supports it. A new version boots "on
-  probation" and confirms itself after running 10 seconds (or once the setup
-  page is up). If it crashes or restarts before that, the bootloader starts
-  the previous version again.
-- Switching to the original firmware (both ears) marks it valid right away,
-  so it does not fall back to TeddyBox after its first restart.
-
-Tested in QEMU with the original bootloader from a flash dump: refused
-images, PD consent, update, rollback of an unconfirmed version, alternating
-updates, switch to the original firmware.
+`docs/original-firmware.md` collects what the flash dump of the original
+firmware shows (structure, cloud requests, NVS, SD layout) and what TeddyBox
+took over from it.

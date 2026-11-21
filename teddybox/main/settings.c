@@ -112,7 +112,7 @@ int settings_save_ini(const char *path)
                      "volume_max = %u\n"
                      "volume_default = %u\n"
                      "idle_timeout = %u\n"
-                     "# speaker EQ: off, lowcut (high-pass 150 Hz) or full (plus gentle cuts at 400 Hz and 3.2 kHz)\n"
+                     "# speaker EQ: off, lowcut (high-pass 150 Hz) or full (plus cuts at 470 Hz, 1.65 kHz and 6.3 kHz, measured)\n"
                      "speaker_eq = %s\n"
                      "# LED brightness: 0 (off) to 3 (full)\n"
                      "led_brightness = %u\n"
