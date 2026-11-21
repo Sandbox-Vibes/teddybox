@@ -59,7 +59,7 @@ void speaker_eq_design(speaker_eq_t mode, double fs, dac3100_biquad_t bq[SPEAKER
     if (mode == SPEAKER_EQ_FULL)
     {
         f[2] = bq_peak(fs, SPEAKER_EQ_BOX_HZ, SPEAKER_EQ_BOX_DB, SPEAKER_EQ_BOX_Q);
-        f[3] = bq_peak(fs, SPEAKER_EQ_HARSH_HZ, SPEAKER_EQ_HARSH_DB, SPEAKER_EQ_HARSH_Q);
+        f[3] = bq_peak(fs, SPEAKER_EQ_PRESENCE_HZ, SPEAKER_EQ_PRESENCE_DB, SPEAKER_EQ_PRESENCE_Q);
     }
     for (int i = 0; i < SPEAKER_EQ_BIQUADS; i++)
     {

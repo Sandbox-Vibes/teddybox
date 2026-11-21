@@ -72,17 +72,19 @@ int main(int argc, char **argv)
 
     /* full: the two cuts, close to their nominal depth (the high-pass adds a little near 400 Hz) */
     double box = response_db(eq[2], fs, SPEAKER_EQ_BOX_HZ) - response_db(eq[1], fs, SPEAKER_EQ_BOX_HZ);
-    double harsh = response_db(eq[2], fs, SPEAKER_EQ_HARSH_HZ) - response_db(eq[1], fs, SPEAKER_EQ_HARSH_HZ);
-    CHECK(fabs(box - SPEAKER_EQ_BOX_DB) < 0.15, "400 Hz cut %.2f", box);
-    CHECK(fabs(harsh - SPEAKER_EQ_HARSH_DB) < 0.15, "3.2 kHz cut %.2f", harsh);
-    CHECK(fabs(response_db(eq[2], fs, 1400)) < 0.6, "1.4 kHz nearly untouched: %.2f", response_db(eq[2], fs, 1400));
+    double harsh = response_db(eq[2], fs, SPEAKER_EQ_PRESENCE_HZ) - response_db(eq[1], fs, SPEAKER_EQ_PRESENCE_HZ);
+    CHECK(fabs(box - SPEAKER_EQ_BOX_DB) < 0.15, "450 Hz cut %.2f", box);
+    /* the box cut adds a little at 1.65 kHz */
+    CHECK(fabs(harsh - SPEAKER_EQ_PRESENCE_DB) < 0.5, "1.65 kHz cut %.2f", harsh);
+    /* the measured dip at 3.15 kHz is left alone */
+    CHECK(response_db(eq[2], fs, 3150) > -1.0, "3.15 kHz nearly untouched: %.2f", response_db(eq[2], fs, 3150));
     CHECK(fabs(response_db(eq[2], fs, 12000)) < 0.2, "12 kHz untouched: %.2f", response_db(eq[2], fs, 12000));
 
     CHECK(speaker_eq_parse("full") == SPEAKER_EQ_FULL && speaker_eq_parse("1") == SPEAKER_EQ_LOWCUT && speaker_eq_parse("x") == -1, "parse");
 
-    printf("speaker_eq: lowcut %.1f dB @75 Hz, %.1f dB @150 Hz, %.2f dB @1 kHz; full %.1f dB @400 Hz, %.1f dB @3.2 kHz\n",
+    printf("speaker_eq: lowcut %.1f dB @75 Hz, %.1f dB @150 Hz, %.2f dB @1 kHz; full %.1f dB @450 Hz, %.1f dB @1.65 kHz\n",
            response_db(eq[1], fs, 75), response_db(eq[1], fs, 150), response_db(eq[1], fs, 1000),
-           response_db(eq[2], fs, 400), response_db(eq[2], fs, 3200));
+           response_db(eq[2], fs, 450), response_db(eq[2], fs, 1650));
     printf("speaker_eq: %s\n", fails ? "FAILED" : "all tests ok");
     return fails != 0;
 }

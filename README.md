@@ -173,13 +173,15 @@ read from the flash dump):
 - speaker EQ in the DAC's own biquads (no CPU load), headphones stay flat.
   `speaker_eq` in teddybox.ini, on the setup page and as a select in Home
   Assistant (applied immediately, saved to the INI):
-  - `full` (default): 4th order Butterworth high-pass at 150 Hz, -2.5 dB at
-    400 Hz (Q 1.0), -1.5 dB at 3.2 kHz (Q 1.4)
+  - `full` (default): 4th order Butterworth high-pass at 150 Hz, -6 dB at
+    450 Hz (Q 1.2), -3 dB at 1.65 kHz (Q 1.8)
   - `lowcut`: only the high-pass
   - `off`: flat, as the original firmware
   The speaker is specified for 180 Hz - 15 kHz; the high-pass removes what
   it cannot play anyway and what makes it distort at high volume. The two
-  cuts are a best guess for a small closed enclosure, not measured. The EQ
+  cuts come from one phone measurement with third-octave test tones
+  (2026-11-21, see speaker_eq.h): +6.5 dB at 400-500 Hz and +3.4 dB at
+  1.6 kHz without EQ; the former cut at 3.2 kHz sat in a dip and is gone. The EQ
   only cuts, so it cannot clip. `tests/host/test_speaker_eq` checks the
   response computed from the rounded 16 bit coefficients.
 - checked against a register model: `tests/host/dac_sim`
