@@ -106,3 +106,15 @@ implements all of them (`handleCloudClaim`, `handleCloudLog`, RTNL decoding).
   would report every placed tonie; Home Assistant shows the tonie anyway
 - SD read-ahead in an own task (`main/readahead.c`, 8 blocks), after SD hangs right after a long download interrupted the sound (2026-11)
 - CELT-only decoder (`decoder = celt`, default since 2026-11 after a listening test on the box; ESP-ADF stays as `decoder = adf` fallback). With CELT the box runs at 160 MHz by default (33.8 % of one core while downloading); ADF forces 240 MHz
+
+## DAC3100 clocks (2026-11-21)
+
+The register values taken over from RvX_TLV320DAC3100 (PLL R=6, J=32, NDAC 4,
+MDAC 6, DOSR 256 with BCLK as PLL input) gave the right sample rate but ran
+the PLL at 295 MHz, DAC_CLK at 74 MHz and DAC_MOD_CLK at 12.3 MHz, far above
+the TLV320DAC3100 data sheet limits (110 / 49.152 / 6.758 MHz). A recorded
+test tone file showed strong spurs below high tones (12.5 kHz -> 10.3 kHz,
+16 kHz -> 6.8 kHz, 6.3-10 kHz with a spur 2.4 kHz below) while the decoded
+PCM was clean. Now R=2, J=32, NDAC 2, MDAC 8, DOSR 128 (98.3 / 49.152 / 6.144
+MHz at 48 kHz). Not yet compared with the original firmware's registers.
+

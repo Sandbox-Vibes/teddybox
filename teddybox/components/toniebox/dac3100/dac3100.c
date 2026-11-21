@@ -247,14 +247,23 @@ esp_err_t dac3100_init(audio_hal_codec_config_t *cfg)
     dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
     // dac3100_write_reg(SOFTWARE_RESET, 0x01);
     dac3100_write_reg(CLOCKGEN_MUX, 0x07);     // 0000:reserved, 01:PLL_CLKIN=BCLK, 11:CODEC_CLKIN=PLL_CLK
-    dac3100_write_reg(PLL_J_VAL, 0x20);        // 00:reserved, 100000:PLL multiplier J=32 (0x20)
-    dac3100_write_reg(PLL_D_VAL_MSB, 0x00);    // 00:reserved, 000000:fraktional multiplier D-value = 0
-    dac3100_write_reg(PLL_D_VAL_LSB, 0x00);    // 00:reserved, 000000:fraktional multiplier D-value = 0
-    dac3100_write_reg(PLL_P_R_VAL, 0x96);      // 1:PLL is power up, 001:PLL divider P=1, 110:PLL multiplier R=6
-    dac3100_write_reg(DAC_NDAC_VAL, 0x84);     // 1:NDAC divider powered up, 0000100:DAC NDAC divider=4
-    dac3100_write_reg(DAC_MDAC_VAL, 0x86);     // 1:MDAC divider powered up, 0000100:DAC MDAC divider=6
-    dac3100_write_reg(DAC_DOSR_VAL_MSB, 0x01); // 000000:reserved, 01:DAC OSR MSB =256
-    dac3100_write_reg(DAC_DOSR_VAL_LSB, 0x00); // 00000000:DAC OSR LSB
+    /* BCLK = 32 x fs (16 bit stereo): 1.536 MHz at 48 kHz, 1.4112 MHz at 44.1 kHz.
+       The former values (R=6, J=32, NDAC 4, MDAC 6, DOSR 256) gave the right
+       fs but ran far outside the data sheet limits: PLL_CLK 295 MHz (max
+       110), DAC_CLK 74 MHz (max 49.152), DAC_MOD_CLK 12.3 MHz (max 6.758);
+       high tones came out with strong spurs below them. Now at 48 kHz:
+       PLL_CLK = 1.536 MHz x R 2 x J 32 / P 1 = 98.304 MHz,
+       DAC_CLK = / NDAC 2 = 49.152 MHz, DAC_MOD_CLK = / MDAC 8 = 6.144 MHz,
+       fs = / DOSR 128 = 48 kHz (44.1 kHz input: 90.3 / 45.2 / 5.6 MHz).
+       PRB_P25 needs MDAC x DOSR / 32 = 32 >= its resource class. */
+    dac3100_write_reg(PLL_J_VAL, 0x20);        // J = 32
+    dac3100_write_reg(PLL_D_VAL_MSB, 0x00);    // D = 0
+    dac3100_write_reg(PLL_D_VAL_LSB, 0x00);
+    dac3100_write_reg(PLL_P_R_VAL, 0x92);      // 1: PLL powered up, P = 1, R = 2
+    dac3100_write_reg(DAC_NDAC_VAL, 0x82);     // NDAC powered up, divider 2
+    dac3100_write_reg(DAC_MDAC_VAL, 0x88);     // MDAC powered up, divider 8
+    dac3100_write_reg(DAC_DOSR_VAL_MSB, 0x00); // DOSR = 128
+    dac3100_write_reg(DAC_DOSR_VAL_LSB, 0x80);
 
     vTaskDelay(10 / portTICK_RATE_MS);
 
