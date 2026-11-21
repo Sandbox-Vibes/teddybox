@@ -13,6 +13,7 @@
 #include "audio_element.h"
 #include "ringbuf.h"
 #include "readahead.h"
+#include "taf_verify.h"
 #include "audio_pipeline.h"
 #include "audio_event_iface.h"
 #include "audio_common.h"
@@ -136,8 +137,20 @@ static volatile uint32_t pb_mon_empty, pb_mon_empty_max, pb_mon_stall, pb_mon_st
 static void pb_mon_cb(void *arg)
 {
     static int empty_run, stall_run;
-    static int64_t last_pos;
+    static int64_t last_pos, since;
     if (!pb_playing || pb_i2s_paused || !i2s_stream_writer)
+    {
+        empty_run = stall_run = 0;
+        since = 0;
+        return;
+    }
+    /* the start (and a restart after a pause) has its own short stops */
+    int64_t now = esp_timer_get_time();
+    if (!since)
+    {
+        since = now;
+    }
+    if (now - since < 2000000)
     {
         empty_run = stall_run = 0;
         return;
@@ -399,6 +412,11 @@ void pb_toniefile_close(pb_toniefile_t *info)
     }
     toniebox_audio_file_header__free_unpacked(info->taf, NULL);
     info->taf = NULL;
+    if (info->filename)
+    {
+        /* a file found damaged meanwhile is renamed now */
+        taf_verify_file_closed(info->filename);
+    }
     free(info->filename);
     info->filename = NULL;
 }
@@ -938,6 +956,18 @@ bool pb_finish_tmp(const char *filename)
         return false;
     }
     ESP_LOGI(TAG, "Download complete: '%s'", filename);
+    /* check the new file once in the background */
+    FILE *fd = fopen(filename, "rb");
+    if (fd)
+    {
+        TonieboxAudioFileHeader *taf = pb_toniefile_get_header(fd);
+        fclose(fd);
+        if (taf)
+        {
+            taf_verify_start(filename, taf->sha1_hash.data, taf->sha1_hash.len, taf->num_bytes, taf->audio_id);
+            toniebox_audio_file_header__free_unpacked(taf, NULL);
+        }
+    }
     return true;
 }
 
@@ -1144,6 +1174,18 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
     {
         ESP_LOGE(TAG, "Failed to play file: '%s'", file);
         return ESP_FAIL;
+    }
+
+    if (!pb_default_content && pb_toniefile_info.taf)
+    {
+        TonieboxAudioFileHeader *taf = pb_toniefile_info.taf;
+        taf_verify_set_playing(pb_toniefile_info.filename);
+        /* a complete file: check its hash once per start in the background */
+        if (!pb_dl_running(current_dl_req))
+        {
+            taf_verify_start(pb_toniefile_info.filename, taf->sha1_hash.data, taf->sha1_hash.len, taf->num_bytes,
+                             taf->audio_id);
+        }
     }
 
     if (!pb_default_content)

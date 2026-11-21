@@ -236,6 +236,11 @@ FATFS then marks the open file as broken, so every later access fails.
   (longest x ms)` for gaps far shorter than the 5 s rate check sees.
   Decoder late = PCM buffer empty, output late = I2S standing still with
   data waiting. Dropped Ogg packets are logged by the decoder (`Ogg: ...`).
+- Hash check (`main/taf_verify.c`): after each download and once per start
+  for every tonie played, a background task compares the SHA-1 of the audio
+  data with the one in the TAF header (`Verify: Audio hash OK` /
+  `MISMATCH`). A damaged file is renamed to `<file>.bad` (when its playback
+  ends) and downloaded again next time. QEMU test: `tests/qemu/qemu_verify_test.c`.
 
 - Downloads run at full speed also while a tonie plays (about 300 KiB/s;
   CELT at 160 MHz then needs 40.7 % of one core, sound clean).
