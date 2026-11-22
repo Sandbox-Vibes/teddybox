@@ -392,12 +392,31 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
 
     /* the server may ignore our Range request and send everything again */
     bool resume = range_start > 0 && range_start == req->received;
+    bool skip = false;
+    if (!resume && req->resume_attempt > 0 && req->received > 0)
+    {
+        /* automatic resume while the tonie may be playing from this file: do
+           not truncate it, drop the part we already have (only if it is the
+           same content: same length) */
+        if (total_length != req->content_length)
+        {
+            ESP_LOGE(TAG, "[CDL] Content changed during the download (%u instead of %u bytes)", (unsigned)total_length,
+                     (unsigned)req->content_length);
+            return ESP_FAIL;
+        }
+        ESP_LOGW(TAG, "[CDL] Server sends from the start, dropping the first %u bytes", (unsigned)req->received);
+        req->skip_left = req->received;
+        skip = true;
+        range_start = req->received;
+        resume = true;
+    }
     req->received = range_start;
     req->content_length = total_length;
     req->speed_start_us = esp_timer_get_time();
     req->speed_start_bytes = range_start;
 
-    ESP_LOGI(TAG, "[CDL] download %u-%u to '%s'%s", req->received, req->content_length, req->tmpname, resume ? " (resume)" : "");
+    ESP_LOGI(TAG, "[CDL] download %u-%u to '%s'%s", req->received, req->content_length, req->tmpname,
+             skip ? " (resume, skipping)" : resume ? " (resume)" : "");
 
     cloud_create_directories(req->tmpname);
     if (!req->wbuf)
@@ -412,8 +431,15 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
     req->wbuf_len = 0;
     req->sd_write_us = 0;
     req->synced = req->received;
-    /* "wb+" would truncate the part we already have */
+    /* "wb+" would truncate the part we already have; the playback may use
+       the handle, so it is replaced under the file lock */
+    xSemaphoreTake(req->file_sem, portMAX_DELAY);
+    if (req->handle)
+    {
+        fclose(req->handle);
+    }
     req->handle = fopen(req->tmpname, resume ? "rb+" : "wb+");
+    xSemaphoreGive(req->file_sem);
     if (!req->handle)
     {
         ESP_LOGE(TAG, "[CDL] Failed to open '%s'", req->tmpname);
@@ -540,6 +566,14 @@ esp_err_t cloud_content_cbr(void *ctx, uint8_t *data, size_t length)
         return ESP_FAIL;
     }
 
+    if (req->skip_left)
+    {
+        uint32_t n = length < req->skip_left ? length : req->skip_left;
+        req->skip_left -= n;
+        data += n;
+        length -= n;
+    }
+
     while (length > 0)
     {
         /* the first block may be shorter so that all others start at a 4 KB boundary */
@@ -599,13 +633,69 @@ esp_err_t cloud_content_end_cbr(void *ctx)
     {
         req->state = CC_STATE_FINISHED;
     }
+    else if (req->state == CC_STATE_RECEIVING && !req->abort)
+    {
+        /* connection lost midway: the cloud task tries again with Range */
+        req->state = CC_STATE_RESUMING;
+    }
     else
     {
-        /* aborted, HTTP error (state already ERROR) or connection lost midway */
+        /* aborted or HTTP error (state already ERROR) */
         req->state = CC_STATE_ERROR;
     }
     xSemaphoreGive(req->update_sem);
     return ESP_OK;
+}
+
+/* a download that lost its connection midway is resumed with Range, while
+   the requester waits (the tonie plays on from what is there). Boxine's CDN
+   drops connections that teddyCloud passes through slowly
+   (teddycloud#585); teddyCloud relies on the box to resume. */
+esp_err_t cloud_process_request(cloud_content_req_t *content_req);
+#define CLOUD_RESUME_TRIES 6
+static const uint8_t resume_delay_s[CLOUD_RESUME_TRIES] = {2, 4, 8, 15, 30, 30};
+
+static void cloud_resume_lost(cloud_content_req_t *req)
+{
+    int tries = 0;
+    uint32_t last = req->received;
+    while (req->state == CC_STATE_RESUMING)
+    {
+        if (req->received > last)
+        {
+            /* it made progress: start counting again */
+            tries = 0;
+            last = req->received;
+        }
+        if (tries >= CLOUD_RESUME_TRIES)
+        {
+            ESP_LOGE(TAG, "[CDL] Giving up after %d attempts at %u of %u bytes", tries, (unsigned)req->received,
+                     (unsigned)req->content_length);
+            req->state = CC_STATE_ERROR;
+            break;
+        }
+        int delay_s = resume_delay_s[tries++];
+        ESP_LOGW(TAG, "[CDL] Connection lost at %u of %u bytes, resuming in %d s (attempt %d of %d)",
+                 (unsigned)req->received, (unsigned)req->content_length, delay_s, tries, CLOUD_RESUME_TRIES);
+        for (int t = 0; t < delay_s * 10 && !req->abort; t++)
+        {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (req->abort)
+        {
+            req->state = CC_STATE_ABORTED;
+            break;
+        }
+        if (!wifi_is_connected())
+        {
+            continue;
+        }
+        req->resume_attempt = tries;
+        req->skip_left = 0;
+        req->status_code = 0;
+        cloud_process_request(req);
+    }
+    xSemaphoreGive(req->update_sem);
 }
 
 esp_err_t cloud_process_request(cloud_content_req_t *content_req)
@@ -637,7 +727,14 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
     free(http_parser_handler_ctx.header_buffer);
 
     /* connection failed before any response: make sure the waiting side gets an answer */
-    if (content_req->state != CC_STATE_FINISHED && content_req->state != CC_STATE_ERROR)
+    if (content_req->resume_attempt > 0 && !content_req->abort && content_req->state != CC_STATE_FINISHED &&
+        content_req->state != CC_STATE_ERROR)
+    {
+        /* an automatic resume that did not get through: the next attempt follows */
+        content_req->state = CC_STATE_RESUMING;
+    }
+    else if (content_req->state != CC_STATE_FINISHED && content_req->state != CC_STATE_ERROR &&
+             content_req->state != CC_STATE_RESUMING)
     {
         ESP_LOGE(TAG, "[CDL] Request for '%s' failed: no HTTP answer (%s)", content_req->location,
                  ret == ESP_OK ? "teddyCloud closed the connection, its log says why, e.g. no access to the Tonies cloud for a new tonie"
@@ -1099,6 +1196,10 @@ static void cloud_task(void *ctx)
         else if (cloud_process_request(req) != ESP_OK && req->status_code == 0)
         {
             connection_failed = true;
+        }
+        else
+        {
+            cloud_resume_lost(req);
         }
         /* last access to req, the requester frees it after this */
         req->done = true;

@@ -325,6 +325,14 @@ often right after a long download.
 - Downloads are written in 4 KiB blocks aligned to the file offset. A failed
   write reopens the file and retries up to 3 times. `received` only counts
   data that reached the card, so a resume continues at the right place.
+- A download that loses its connection midway is resumed automatically
+  with `Range` while the tonie stays on the box and keeps playing what is
+  there: up to 6 attempts after 2, 4, 8, 15, 30 and 30 s, counted again
+  after every attempt that brought data. Boxine's CDN sometimes drops
+  connections that teddyCloud passes through slowly (teddycloud#585). If a
+  server ignores the `Range`, the part already on the card is skipped
+  instead of overwritten. Log: `[CDL] Connection lost at <x> of <y> bytes,
+  resuming in <n> s (attempt <k> of 6)`. QEMU test `tests/qemu/mkqresume.sh`.
 
 ### Diagnostics in the log
 

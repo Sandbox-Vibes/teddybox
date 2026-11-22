@@ -31,6 +31,8 @@ typedef enum
     CC_STATE_CONNECTING,
     CC_STATE_CONNECTED,
     CC_STATE_RECEIVING,
+    /* connection lost midway: the cloud task resumes it with Range (still running) */
+    CC_STATE_RESUMING,
     CC_STATE_ABORTED,
     CC_STATE_FINISHED,
     CC_STATE_ERROR
@@ -74,6 +76,10 @@ typedef struct
        SD error the download never seeks beyond it (that would extend the file
        with whatever is in the new clusters) */
     uint32_t synced;
+    /* automatic resume after a lost connection: number of the attempt, and
+       bytes to drop when the server ignored the Range and sends from 0 */
+    int resume_attempt;
+    uint32_t skip_left;
     SemaphoreHandle_t file_sem;
     FILE *handle;
 } cloud_content_req_t;
