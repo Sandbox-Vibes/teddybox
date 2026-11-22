@@ -15,7 +15,7 @@ int main(void)
 
     settings_t *s = settings_get_mutable();
     /* compiled-in defaults */
-    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead);
+    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead && s->volume_max_hdp == 100 && s->tc_box_settings);
     strcpy(s->cloud_host, "192.168.178.20");
     s->cloud_port = 8443;
     s->cloud_enabled = true;   /* the setup page sets this together with the host */
@@ -25,6 +25,8 @@ int main(void)
     strcpy(s->mqtt_pass, "p#ss=wo;rd");   /* characters that matter for INI parsing */
     s->lang_id = 3;
     s->volume_max = 70;
+    s->volume_max_hdp = 40;
+    s->tc_box_settings = false;
     s->idle_timeout_s = 300;
     s->speaker_eq = SPEAKER_EQ_LOWCUT;
     s->led_brightness = 1;
@@ -48,6 +50,7 @@ int main(void)
     CHECK(!strcmp(s->mqtt_host, "ha.local"));
     CHECK(!strcmp(s->mqtt_pass, "p#ss=wo;rd"));
     CHECK(s->lang_id == 3 && s->volume_max == 70 && s->idle_timeout_s == 300);
+    CHECK(s->volume_max_hdp == 40 && !s->tc_box_settings);
     CHECK(s->boxine_fallback && s->user_agent_original);
     CHECK(s->speaker_eq == SPEAKER_EQ_LOWCUT);
     CHECK(s->led_brightness == 1);

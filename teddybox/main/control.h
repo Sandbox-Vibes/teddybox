@@ -8,8 +8,12 @@
  * and handles power off.
  */
 
-/* volume in percent, clamped to 0..volume_max */
+/* volume in percent, clamped to 0..ctrl_volume_max() */
 void ctrl_request_volume(int percent);
+/* current limit: volume_max_hdp with headphones plugged in, else volume_max */
+int ctrl_volume_max(void);
+/* new limits in percent (10..100, -1 = unchanged), saved to the INI by the main loop */
+void ctrl_request_volume_max(int speaker, int headphones);
 /* speaker EQ (speaker_eq_t), applied and saved to the INI by the main loop */
 void ctrl_request_speaker_eq(int mode);
 int ctrl_get_speaker_eq(void);

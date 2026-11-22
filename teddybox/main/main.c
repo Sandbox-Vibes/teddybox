@@ -122,9 +122,28 @@ void ctrl_request_motion(int slap, int tilt, int reverse)
     ctrl_motion_save = true;
 }
 
+int ctrl_volume_max(void)
+{
+    return pb_headphones_connected() ? settings_get()->volume_max_hdp : settings_get()->volume_max;
+}
+
+static volatile int ctrl_vmax_spk_request = -1, ctrl_vmax_hdp_request = -1;
+
+void ctrl_request_volume_max(int speaker, int headphones)
+{
+    if (speaker >= 10 && speaker <= 100)
+    {
+        ctrl_vmax_spk_request = speaker;
+    }
+    if (headphones >= 10 && headphones <= 100)
+    {
+        ctrl_vmax_hdp_request = headphones;
+    }
+}
+
 void ctrl_request_volume(int percent)
 {
-    int max = settings_get()->volume_max;
+    int max = ctrl_volume_max();
     ctrl_volume_request = percent < 0 ? 0 : (percent > max ? max : percent);
 }
 
@@ -345,9 +364,9 @@ void app_main(void)
         pb_set_last(rtc_storage.nfc_uid, rtc_storage.play_position);
     }
 
-    if (rtc_storage.volume > settings_get()->volume_max)
+    if (rtc_storage.volume > ctrl_volume_max())
     {
-        rtc_storage.volume = settings_get()->volume_max;
+        rtc_storage.volume = ctrl_volume_max();
     }
     audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
 
@@ -432,7 +451,7 @@ void app_main(void)
         {
             dac3100_set_mute(false);
             int vol_up = dac3100_volume_step(rtc_storage.volume, 1);
-            if (vol_up >= 0 && vol_up <= settings_get()->volume_max)
+            if (vol_up >= 0 && vol_up <= ctrl_volume_max())
             {
                 ESP_LOGI(TAG, "Volume up");
                 rtc_storage.volume = vol_up;
@@ -480,6 +499,36 @@ void app_main(void)
             rtc_storage.volume = vol_req;
             audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
             last_activity_time = cur_time;
+        }
+        int vmax_spk = ctrl_vmax_spk_request, vmax_hdp = ctrl_vmax_hdp_request;
+        if (vmax_spk >= 0 || vmax_hdp >= 0)
+        {
+            ctrl_vmax_spk_request = ctrl_vmax_hdp_request = -1;
+            settings_t *ms = settings_get_mutable();
+            if (vmax_spk >= 0)
+            {
+                ms->volume_max = vmax_spk;
+            }
+            if (vmax_hdp >= 0)
+            {
+                ms->volume_max_hdp = vmax_hdp;
+            }
+            if (ms->volume_default > ms->volume_max)
+            {
+                ms->volume_default = ms->volume_max;
+            }
+            ESP_LOGI(TAG, "Max volume: speaker %u %%, headphones %u %%", ms->volume_max, ms->volume_max_hdp);
+            if (settings_save_ini(SETTINGS_INI_PATH) != 0)
+            {
+                ESP_LOGW(TAG, "Could not save the max volume");
+            }
+        }
+        /* lower limit (new limit, headphones plugged in): turn down */
+        if (rtc_storage.volume > (uint32_t)ctrl_volume_max())
+        {
+            rtc_storage.volume = ctrl_volume_max();
+            ESP_LOGI(TAG, "Volume lowered to the limit %u %%", (unsigned)rtc_storage.volume);
+            audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
         }
         int led_req = ctrl_led_request;
         if (led_req >= 0)
