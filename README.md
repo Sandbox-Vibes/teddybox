@@ -3,8 +3,8 @@
 Custom firmware for the ESP32-S3 based Toniebox, for use with
 [teddyCloud](https://github.com/toniebox-reverse-engineering/teddycloud).
 It runs in the OTA slots next to the original Boxine firmware (`toniebox-esp32-eu`),
-which is never touched and can be booted again at any time by holding both
-ears for 5 seconds.
+which is never touched and can be booted again at any time: box upside down,
+hold both ears for 5 seconds, let go.
 
 Built with ESP-IDF 5.5 and ESP-ADF 2.8. Tested on one box (ESP32-S3, 8 MB
 flash, LIS3DH accelerometer) against teddyCloud.
@@ -31,7 +31,7 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original) |
 | System sounds | yes | the same sounds, read from the box's assets |
 | Firmware updates | from Boxine, automatically | uploaded on the setup page, A/B with rollback |
-| Back to the other firmware | — | both ears for 5 seconds |
+| Back to the other firmware | — | upside down, both ears 5 s, let go |
 | Certificate / flash backup | — | on the setup page (needs a press on the box) |
 | MMA8451 accelerometer (some boxes) | yes | no, LIS3DH only |
 | Tonies app pairing | yes | no |
@@ -455,7 +455,15 @@ esptool.py -b 921600 write_flash 0x3a0000 teddybox/build/teddybox.bin 0x16f000 o
 Only the free slot and the 8 KiB boot selection are written. Bootloader,
 partition table, NVS, certificates and both original apps stay as they are.
 
-Back to the original firmware: hold both ears for 5 seconds, or
+Back to the original firmware: turn the box **upside down** (ears down),
+hold both ears for 5 seconds until the LED blinks blue and it beeps, then
+**let go**; the original firmware starts. Upside down, so that a child
+pressing both ears on the upright box (in the original firmware that is
+the WiFi setup) does not switch by accident. Letting go first matters: the
+original firmware treats both ears held upside down as restart, and on the
+charger as factory reset. If the ears are not let go within 10 s, the box
+stays in TeddyBox. Without a working accelerometer the box does not need to
+be upside down. Or with esptool:
 
 ```sh
 dd if=backup.bin of=otadata_original.bin bs=4096 skip=367 count=2

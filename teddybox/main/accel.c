@@ -41,6 +41,12 @@ typedef enum
 } accel_state_t;
 
 static accel_state_t current_state = STATE_UNKNOWN;
+static volatile bool upside_down = false;
+static volatile int64_t last_sample_us = 0;
+
+bool accel_upside_down(void) { return accel_working() && upside_down; }
+
+bool accel_working(void) { return last_sample_us && esp_timer_get_time() - last_sample_us < 1000000; }
 uint32_t state_counter = 0;
 
 bool accel_within(float val, float target, float limit)
@@ -304,6 +310,9 @@ void accel_mainthread(void *arg)
 
         float roll = getRoll(x, y, z);
         float pitch = getPitch(x, y, z);
+        upside_down = accel_within(roll, ACCEL_ANGLE_FLIP, ACCEL_UPSIDE_DOWN_LIMIT) &&
+                      accel_within(pitch, ACCEL_ANGLE_STABLE, ACCEL_UPSIDE_DOWN_LIMIT);
+        last_sample_us = esp_timer_get_time();
 
         int tilt = s->tilt_level < ACCEL_LEVELS ? s->tilt_level : 3;
         if (tilt)

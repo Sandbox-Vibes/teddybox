@@ -428,6 +428,8 @@ void app_main(void)
     int64_t last_activity_time = esp_timer_get_time();
     int64_t remute_time = 0;
     int64_t both_ears_since = 0;
+    /* original firmware chosen, waiting for the ears to be let go */
+    int64_t ofw_armed_since = 0;
     /* a new firmware runs on probation until it confirms itself, see ota.h */
     const int64_t confirm_time = esp_timer_get_time() + OTA_CONFIRM_AFTER_US;
     bool confirmed = false;
@@ -604,8 +606,14 @@ void app_main(void)
             rtc_storage.play_position = pb_get_resume_position();
         }
 
-        /* hold both ears for 5 seconds: reboot into the original firmware */
-        if (ear_big && ear_small)
+        /* box upside down, both ears held for 5 seconds: reboot into the
+           original firmware once the ears are let go. Upside down so that a
+           child pressing both ears does not switch by accident; let go first
+           so that the original firmware does not see the ears held upside
+           down (its restart / factory reset gesture). Without a working
+           accelerometer the box does not need to be upside down. */
+        bool ofw_pose = !accel_working() || accel_upside_down();
+        if (ear_big && ear_small && ofw_pose && !ofw_armed_since)
         {
             if (!both_ears_since)
             {
@@ -613,19 +621,38 @@ void app_main(void)
             }
             else if (cur_time - both_ears_since > BOOT_OFW_HOLD_TIME)
             {
-                ESP_LOGW(TAG, "Both ears held, switching to original firmware");
+                ESP_LOGW(TAG, "Both ears held upside down: switching to the original firmware when they are let go");
+                ofw_armed_since = cur_time;
                 ledman_change("fadeblink blue");
                 pb_stop();
+                dac3100_set_mute(false);
+                dac3100_beep(1, 0x400);
+                remute_time = cur_time + 1000000;
+            }
+        }
+        else if (!(ear_big && ear_small))
+        {
+            both_ears_since = 0;
+        }
+        if (ofw_armed_since)
+        {
+            if (!ear_big && !ear_small)
+            {
+                ESP_LOGW(TAG, "Switching to the original firmware");
                 rtc_checksum_update();
                 bootsel_boot_original();
                 /* only returns on error */
                 ledman_change("failed");
+                ofw_armed_since = 0;
                 both_ears_since = 0;
             }
-        }
-        else
-        {
-            both_ears_since = 0;
+            else if (cur_time - ofw_armed_since > BOOT_OFW_RELEASE_TIME)
+            {
+                ESP_LOGW(TAG, "Ears not let go, staying in TeddyBox");
+                ledman_change("idle");
+                ofw_armed_since = 0;
+                both_ears_since = 0;
+            }
         }
 
         battery_state_t bat = battery_get_state();

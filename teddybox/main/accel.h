@@ -20,3 +20,8 @@
 #define ACCEL_ANGLE_FLIP 180
 
 void accel_init(audio_board_handle_t board);
+/* box upside down (ears down): roll within 45 degrees of 180, pitch within 45 */
+#define ACCEL_UPSIDE_DOWN_LIMIT 45
+bool accel_upside_down(void);
+/* the sensor delivered a sample within the last second */
+bool accel_working(void);
