@@ -352,6 +352,15 @@ often right after a long download.
   server ignores the `Range`, the part already on the card is skipped
   instead of overwritten. Log: `[CDL] Connection lost at <x> of <y> bytes,
   resuming in <n> s (attempt <k> of 6)`. QEMU test `tests/qemu/mkqresume.sh`.
+- **teddyCloud streams** (web radio and other live sources) are recognised by
+  their length, which teddyCloud makes no multiple of 4096
+  (`encode.stream_max_size`). A stream always plays from its start, is never
+  resumed with `Range` (teddyCloud cannot continue a stream, teddycloud#606,
+  #608), not resumed automatically after a lost connection, and its `.tmp`
+  is deleted when it ends, so streams do not fill the card and the nightly
+  update does not try to complete them (it also deletes left-over stream
+  files). Log: `[CDL] teddyCloud stream (up to <n> bytes): not resumed, not
+  kept`. QEMU test `tests/qemu/mkqstream.sh`.
 
 ### Diagnostics in the log
 
