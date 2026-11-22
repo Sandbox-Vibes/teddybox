@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "cJSON.h"
 #include "tonie_names.h"
@@ -21,6 +22,16 @@ static const char *TAG = "Names";
 #define STEP_GAP_US (2 * 1000000LL)
 #define SCAN_GAP_US (60 * 60 * 1000000LL)
 #define ERROR_GAP_US (5 * 60 * 1000000LL)
+#define BUSY_GAP_US (30 * 1000000LL)
+/* the answer buffer plus the HTTP client (2 x 1 KB) and some room for lwIP */
+#define FETCH_MIN_BLOCK (RESP_MAX + 1 + 4096)
+
+typedef enum
+{
+    FETCH_DONE,  /* answered (name or none): not asked again this session */
+    FETCH_ERROR, /* teddyCloud not reachable: pause for a while */
+    FETCH_BUSY,  /* not enough memory right now (download + playback): later */
+} fetch_result_t;
 
 static uint64_t tried[TRIED_MAX];
 static int tried_n;
@@ -97,10 +108,15 @@ static void scan_card(void)
     closedir(top);
 }
 
-/* returns false on a connection problem (try again later) */
-static bool fetch(uint64_t uid)
+static fetch_result_t fetch(uint64_t uid)
 {
     const settings_t *s = settings_get();
+    /* while a tonie downloads and plays, the largest free block is ~7.5 KB:
+       wait instead of failing the allocation (and skipping the tonie) */
+    if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < FETCH_MIN_BLOCK)
+    {
+        return FETCH_BUSY;
+    }
     char *file = pb_build_filename(uid); /* /sdcard/CONTENT/XXXXXXXX/YYYYYYYY */
     char query[32] = "ruid=";
     int q = 5;
@@ -125,15 +141,16 @@ static bool fetch(uint64_t uid)
     esp_http_client_handle_t c = esp_http_client_init(&cfg);
     if (!c)
     {
-        return false;
+        return FETCH_BUSY;
     }
-    bool conn_ok = false;
+    bool conn_ok = false, status_ok = false;
     char *buf = NULL;
     if (esp_http_client_open(c, 0) == ESP_OK)
     {
         esp_http_client_fetch_headers(c);
         int status = esp_http_client_get_status_code(c);
         conn_ok = true;
+        status_ok = status == 200;
         if (status == 401 || status == 403)
         {
             ESP_LOGW(TAG, "teddyCloud's web API needs a login (status %d): no names from there", status);
@@ -158,12 +175,16 @@ static bool fetch(uint64_t uid)
     if (!conn_ok)
     {
         ESP_LOGW(TAG, "teddyCloud's web interface (%s:%u) not reachable", s->cloud_host, s->tc_web_port);
-        return false;
+        return FETCH_ERROR;
+    }
+    if (!buf && status_ok)
+    {
+        return FETCH_BUSY; /* the answer buffer did not fit after all */
     }
     mark_tried(uid);
     if (!buf)
     {
-        return true;
+        return FETCH_DONE;
     }
 
     cJSON *j = cJSON_Parse(buf);
@@ -195,7 +216,7 @@ static bool fetch(uint64_t uid)
     {
         ESP_LOGI(TAG, "%016llX: teddyCloud knows no name", (unsigned long long)uid);
     }
-    return true;
+    return FETCH_DONE;
 }
 
 void tonie_names_tc_step(void)
@@ -237,8 +258,26 @@ void tonie_names_tc_step(void)
             }
         }
     }
-    if (uid && !fetch(uid))
+    if (!uid)
+    {
+        return;
+    }
+    fetch_result_t r = fetch(uid);
+    if (r == FETCH_ERROR)
     {
         next_step_us = now + ERROR_GAP_US;
+    }
+    else if (r == FETCH_BUSY)
+    {
+        /* ask again for the same tonie later */
+        if (uid == checked_uid)
+        {
+            checked_uid = 0;
+        }
+        else if (pending_n < PENDING_MAX)
+        {
+            pending[pending_n++] = uid;
+        }
+        next_step_us = now + BUSY_GAP_US;
     }
 }
