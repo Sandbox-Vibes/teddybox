@@ -211,6 +211,8 @@ int dac3100_volume_index(int percent);
 int dac3100_volume_percent(int index);
 /* percent of the next step up (dir > 0) or down, -1 at the end */
 int dac3100_volume_step(int percent, int dir);
+/* DAC digital volume of that step for the current output, 0.5 dB units */
+int dac3100_volume_half_db(int percent);
 
 esp_err_t dac3100_beep_generate(uint16_t sin, uint16_t cos, uint32_t length);
 esp_err_t dac3100_beep(uint16_t index, uint32_t length);

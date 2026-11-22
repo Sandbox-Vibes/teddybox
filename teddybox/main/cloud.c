@@ -59,6 +59,8 @@ typedef struct
 
 static cloud_backend_t backends[2];
 static volatile int active_backend = BACKEND_TEDDYCLOUD;
+/* teddyCloud answers (time sync worked) and is the backend in use */
+static volatile bool teddycloud_up = false;
 static char user_agent[64];
 
 #define CLOUD_HOST (backends[active_backend].host)
@@ -87,6 +89,35 @@ static QueueHandle_t cloud_request_queue;
 /********************************************************/
 /* TLS connection handling                              */
 /********************************************************/
+
+esp_tls_t *cloud_connect_teddycloud(void)
+{
+    /* never the Boxine cloud */
+    if (!teddycloud_up || !client_der)
+    {
+        return NULL;
+    }
+    cloud_backend_t *b = &backends[BACKEND_TEDDYCLOUD];
+    esp_tls_cfg_t cfg = {
+        .cacert_buf = b->ca,
+        .cacert_bytes = b->ca_len,
+        .clientcert_buf = client_der,
+        .clientcert_bytes = client_der_len,
+        .clientkey_buf = private_der,
+        .clientkey_bytes = private_der_len,
+        .timeout_ms = 10000,
+        .common_name = b->tls_name,
+        .skip_common_name = b->tls_name == NULL};
+    bool peak = mempeak_enter("TLS handshake", 8000);
+    esp_tls_t *tls = esp_tls_init();
+    if (tls && esp_tls_conn_new_sync(b->host, strlen(b->host), b->port, &cfg, tls) != 1)
+    {
+        esp_tls_conn_destroy(tls);
+        tls = NULL;
+    }
+    mempeak_leave(peak);
+    return tls;
+}
 
 static esp_err_t cloud_request(cloud_req_t *req)
 {
@@ -1046,6 +1077,8 @@ static void cloud_task(void *ctx)
             }
             next_try = xTaskGetTickCount() + pdMS_TO_TICKS(10000);
         }
+
+        teddycloud_up = cloud_available && active_backend == BACKEND_TEDDYCLOUD;
 
         /* freshness check after boot and then every few hours, between downloads;
            not while something plays, a TLS handshake next to the decoder is the

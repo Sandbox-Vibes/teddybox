@@ -79,6 +79,10 @@ typedef struct
 } cloud_content_req_t;
 
 void cloud_init(void);
+/* TLS connection to teddyCloud's API port with the box certificate, for
+   RTNL; NULL while teddyCloud is not the backend in use (never Boxine) */
+struct esp_tls;
+struct esp_tls *cloud_connect_teddycloud(void);
 /* POST from the cloud task context, response body must fit into resp */
 esp_err_t cloud_post(const char *path, const uint8_t *body, size_t body_len, uint8_t *resp, size_t resp_size, size_t *resp_len);
 esp_err_t cloud_set_time(void);
