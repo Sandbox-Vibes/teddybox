@@ -23,6 +23,7 @@
 
 #include "playback.h"
 #include "rtnl.h"
+#include "taskwatch.h"
 #include "nfc.h"
 #include "settings.h"
 
@@ -51,6 +52,7 @@ static bool pb_playing = false;
 static pb_toniefile_t pb_toniefile_info;
 static volatile bool pb_headset = false;
 static cloud_content_req_t *current_dl_req = NULL;
+static int pb_taskwatch = -1;
 
 /* a teddyCloud stream that ended by itself (connection closed: live channel
    switched, teddyCloud restarted, stream_max_size reached) is requested
@@ -1386,6 +1388,8 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
     while (waiting)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
+        /* a slow download that is still coming is no hang */
+        taskwatch_feed(pb_taskwatch);
         switch (cloud_content_get_state(current_dl_req))
         {
         case CC_STATE_INIT:
@@ -1519,10 +1523,12 @@ void pb_mainthread(void *arg)
     pb_headset = dac3100_headset_detected() != 0;
     dac3100_set_output(pb_headset ? DAC3100_OUT_HEADPHONE : DAC3100_OUT_SPEAKER);
     ESP_LOGI(TAG, "Listen for all pipeline events");
+    pb_taskwatch = taskwatch_add("playback", 90000);
 
     while (1)
     {
         vTaskDelay(50 / portTICK_PERIOD_MS);
+        taskwatch_feed(pb_taskwatch);
 
         /* current_dl_req belongs to this thread, so it is safe to look at here */
         {

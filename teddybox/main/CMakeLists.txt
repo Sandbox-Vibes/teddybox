@@ -9,6 +9,9 @@ set(COMPONENT_REQUIRES toniebox lis3dh trf7962a audio_pipeline audio_stream audi
     espcoredump esp_wifi esp_netif esp_event esp-tls mbedtls esp_http_server mqtt json nvs_flash app_update spi_flash
     esp_partition fatfs vfs wear_levelling spiffs driver esp_adc esp_timer bootloader_support efuse esp_eth protobuf-c)
 
+# own task watchdog (taskwatch.h)
+list(APPEND COMPONENT_SRCS "taskwatch.c")
+
 register_component()
 # see tls_mfl.c; -u because nothing else references that file
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=mbedtls_ssl_conf_ca_chain" "-u __wrap_mbedtls_ssl_conf_ca_chain")

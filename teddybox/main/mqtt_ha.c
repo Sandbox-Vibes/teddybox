@@ -1,4 +1,5 @@
 #include <time.h>
+#include "taskwatch.h"
 #include "esp_ota_ops.h"
 #include "esp_heap_caps.h"
 #include "esp_system.h"
@@ -311,12 +312,20 @@ static void mqtt_publish_diag(void)
         localtime_r(&last, &lt);
         snprintf(update, sizeof(update), "%02d.%02d. %02d:%02d: %s", lt.tm_mday, lt.tm_mon + 1, lt.tm_hour, lt.tm_min, result);
     }
+    /* a restart by the task watchdog names the task */
+    char reset_buf[64];
+    const char *reset_text = reset_reason_text(esp_reset_reason());
+    if (*taskwatch_last_reason())
+    {
+        snprintf(reset_buf, sizeof(reset_buf), "crash: %s", taskwatch_last_reason());
+        reset_text = reset_buf;
+    }
     const esp_partition_t *running = esp_ota_get_running_partition();
     ha_diag_t d = {
         .free_kb = (int)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
         .min_free_kb = (int)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
         .boot_iso = boot_iso,
-        .reset = reset_reason_text(esp_reset_reason()),
+        .reset = reset_text,
         .slot = running ? running->label : "",
         .update = update,
     };

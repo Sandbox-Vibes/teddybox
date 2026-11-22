@@ -18,6 +18,7 @@ media), builds it, patches out the ADC calibration QEMU does not have
 | `mkqcrash.sh` | crash dump: crash on purpose, restart, summary logged and written once to `tb_crash.txt` | |
 | `mkqv.sh` | SHA-1 check of TAF files, rename to `.bad` | `TAF=` a small tonie file (< 300 KB) |
 | `mkqrtnl.sh` | RTNL events reach teddyCloud (`run` reads teddyCloud's `/api/sse`) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
+| `mkqtw.sh` | task watchdog: a task that stops checking in restarts the box, the reason names it | |
 
 Environment:
 
