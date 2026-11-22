@@ -42,6 +42,7 @@ static settings_t settings = {
     .update_hour = 3,
     .claim = false,
     .readahead = true,
+    .rtnl = true,
     .decoder_celt = true,
     .cpu_mhz = 160,
     .dl_playing_kib_s = 0,
@@ -144,7 +145,10 @@ int settings_save_ini(const char *path)
                      "# read the next 32 KB of a tonie ahead (against SD card hangs), 0 only for diagnosis\n"
                      "readahead = %u\n"
                      "# take over box settings changed in teddyCloud (max volume speaker/headphones, LED, slap): 1 on, 0 off\n"
-                     "tc_box_settings = %u\n",
+                     "tc_box_settings = %u\n"
+                     "# send box events (tonie, playback, volume, ears, slap, tilt, charger) to teddyCloud like the original\n"
+                     "# firmware (RTNL; only to teddyCloud, never to Boxine): 1 on, 0 off\n"
+                     "rtnl = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -155,7 +159,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_max_hdp, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0, s->rtnl ? 1 : 0) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -355,6 +359,17 @@ void settings_load_ini(void)
             else
             {
                 ESP_LOGW(TAG, "Invalid download_playing '%s' (0 or 32..4096 KiB/s)", val);
+            }
+        }
+        else if (!strcmp(key, "rtnl"))
+        {
+            if (!strcmp(val, "0") || !strcmp(val, "1"))
+            {
+                settings.rtnl = val[0] == '1';
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid rtnl '%s' (0 or 1)", val);
             }
         }
         else if (!strcmp(key, "readahead"))

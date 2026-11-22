@@ -8,6 +8,7 @@
  * Thresholds come from the original firmware's NVS (TB_SETTINGS):
  *   BAT_CRITICAL (3600 mV), BAT_LOW_LEVEL_D (3670 mV), BAT_LOW_LEVEL_U (3700 mV)
  */
+#include "rtnl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -159,6 +160,7 @@ static void battery_task(void *arg)
         if (charging != was_charging)
         {
             ESP_LOGI(TAG, "Charger %s (%lu mV)", charging ? "connected" : "removed", (unsigned long)chg);
+            rtnl_event(charging ? RTNL3_CHARGER_ON : RTNL3_CHARGER_OFF);
         }
 
         battery_state_t prev = state;

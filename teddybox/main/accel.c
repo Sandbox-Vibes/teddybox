@@ -15,6 +15,7 @@
 #include "accel.h"
 #include "board.h"
 #include "playback.h"
+#include "rtnl.h"
 
 static const char *TAG = "[ACC]";
 
@@ -125,6 +126,7 @@ void accel_handle_angle(float roll, float pitch, float tilt)
             {
                 was_stable = false;
                 ESP_LOGI(TAG, "emit CHAPTER -");
+                rtnl_event(RTNL3_TILT_BACKWARD);
                 pb_seek_chapter(-1);
             }
         }
@@ -134,6 +136,7 @@ void accel_handle_angle(float roll, float pitch, float tilt)
             {
                 was_stable = false;
                 ESP_LOGI(TAG, "emit CHAPTER +");
+                rtnl_event(RTNL3_TILT_FORWARD);
                 pb_seek_chapter(1);
             }
         }
@@ -284,6 +287,7 @@ void accel_mainthread(void *arg)
                     dir = -dir;
                 }
                 ESP_LOGI(TAG, "emit CHAPTER %s (slap)", dir > 0 ? "+" : "-");
+                rtnl_event(dir > 0 ? RTNL3_KNOCK_FORWARD : RTNL3_KNOCK_BACKWARD);
                 pb_seek_chapter(dir);
             }
             continue;
