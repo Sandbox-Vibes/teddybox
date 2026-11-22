@@ -383,6 +383,12 @@ often right after a long download.
   update does not try to complete them (it also deletes left-over stream
   files). Log: `[CDL] teddyCloud stream (up to <n> bytes): not resumed, not
   kept`. QEMU test `tests/qemu/mkqstream.sh`.
+- A stream that **ends by itself** (teddyCloud closed the connection: a
+  live channel was switched (teddycloud#617), teddyCloud restarted, or
+  `stream_max_size` was reached) is requested again after 1 s while its
+  tonie stays on the box, so endless streams keep playing. If it ends three
+  times in a row before 64 KB arrived, the box gives up with the network
+  error sound. Log: `Stream ended after <n> bytes, tonie still there`.
 
 ### Diagnostics in the log
 
