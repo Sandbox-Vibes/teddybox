@@ -82,6 +82,7 @@ typedef struct
     /* teddyCloud stream (Content-Length no multiple of 4096): never resumed
        with Range, the .tmp is deleted afterwards */
     bool is_stream;
+    int64_t end_us; /* when the transfer ended (esp_timer), 0 while running */
     uint32_t skip_left;
     SemaphoreHandle_t file_sem;
     FILE *handle;

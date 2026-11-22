@@ -685,6 +685,7 @@ esp_err_t cloud_content_end_cbr(void *ctx)
         cloud_content_flush(req);
     }
     ESP_LOGI(TAG, "[CDL] End transfer, %d/%d received", req->received, req->content_length);
+    req->end_us = esp_timer_get_time();
 
 /* playback handler initiated the download, it shall close handles
     if (req->handle)
@@ -695,6 +696,13 @@ esp_err_t cloud_content_end_cbr(void *ctx)
 */
     if (req->state == CC_STATE_RECEIVING && req->received >= req->content_length)
     {
+        if (req->is_stream)
+        {
+            /* the "stream" length was just a TAF file whose last page is
+               short: it arrived completely, so it is kept like any tonie */
+            ESP_LOGI(TAG, "[CDL] Complete file with a length that is no multiple of 4096: kept, no stream");
+            req->is_stream = false;
+        }
         req->state = CC_STATE_FINISHED;
     }
     else if (req->state == CC_STATE_RECEIVING && !req->abort && !req->is_stream)

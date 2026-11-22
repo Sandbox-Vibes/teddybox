@@ -61,6 +61,10 @@ static int pb_taskwatch = -1;
 #define PB_STREAM_RESTART_DELAY_MS 1000
 #define PB_STREAM_SHORT_BYTES (64 * 1024)
 #define PB_STREAM_SHORT_MAX 3
+/* teddyCloud encodes files and playlists faster than real time, a radio
+   only in real time: when the playback ends this long after the transfer,
+   the whole content was there and simply played to the end */
+#define PB_STREAM_FINITE_GAP_MS 20000
 static uint64_t pb_stream_restart_uid;
 static TickType_t pb_stream_restart_at;
 static int pb_stream_short;
@@ -1013,8 +1017,13 @@ bool pb_file_is_stream(const char *filename)
         return false;
     }
     TonieboxAudioFileHeader *taf = pb_toniefile_get_header(fd);
+    struct stat st;
+    bool have_size = fstat(fileno(fd), &st) == 0;
     fclose(fd);
-    bool stream = taf && PB_IS_STREAM_LENGTH(taf->num_bytes);
+    /* a complete file is a tonie, whatever its length: real TAF files can
+       end with a short page (teddyCloud stream files never complete) */
+    bool stream = taf && PB_IS_STREAM_LENGTH(taf->num_bytes) &&
+                  !(have_size && (uint64_t)st.st_size >= (uint64_t)taf->num_bytes + TONIEFILE_FRAME_SIZE);
     if (taf)
     {
         toniebox_audio_file_header__free_unpacked(taf, NULL);
@@ -1500,9 +1509,17 @@ static esp_err_t pb_req_handle_default(pb_req_default_t *req)
 /* main loop, calls functions above                     */
 /********************************************************/
 
-static void pb_stream_ended(uint32_t received)
+static void pb_stream_ended(uint32_t received, int64_t end_us)
 {
     uint64_t uid = pb_get_current_uid();
+    int64_t gap_ms = end_us ? (esp_timer_get_time() - end_us) / 1000 : 0;
+    if (gap_ms >= PB_STREAM_FINITE_GAP_MS)
+    {
+        ESP_LOGI(TAG, "Stream played to the end (%u bytes, transfer ended %lld s before): not requested again",
+                 (unsigned)received, (long long)(gap_ms / 1000));
+        pb_stream_short = 0;
+        return;
+    }
     if (uid != pb_stream_short_uid)
     {
         pb_stream_short_uid = uid;
@@ -1722,7 +1739,7 @@ void pb_mainthread(void *arg)
                             if (!pb_default_content && dl && dl->is_stream && !dl->abort && !pb_dl_running(dl) &&
                                 (int)msg.data == AEL_STATUS_STATE_FINISHED)
                             {
-                                pb_stream_ended(dl->received);
+                                pb_stream_ended(dl->received, dl->end_us);
                             }
                             pb_default_content = false;
                             pb_playing = false;
