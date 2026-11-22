@@ -464,6 +464,24 @@ often right after a long download.
   5 minutes whether it was taken off.
 - Idle power off after 60 s by default (`idle_timeout`).
 
+## Crash dumps
+
+On a crash (exception, watchdog) the box writes a core dump to the
+`coredump` partition (0x7e0000, 128 KB, already in the original partition
+table) and restarts. At the next start the summary is logged
+(`CRASH: Last crash (this firmware …): task …, PC …, backtrace …`) and,
+once per crash, appended to `tb_crash.txt` on the SD card. Decode it with
+the `.elf` of the same version (release files):
+
+```sh
+xtensa-esp32s3-elf-addr2line -pfiaC -e teddybox-vX.Y.Z.elf 0x4200aafa 0x42025b2a
+```
+
+or read the full dump with esptool (`read_flash 0x7e0000 0x20000 core.bin`)
+and `idf.py coredump-info --core core.bin --core-format raw`. A dump holds
+RAM contents (possibly WiFi data and keys): share the decoded backtrace, not
+the dump. QEMU test `tests/qemu/mkqcrash.sh`.
+
 ## Network traffic
 
 Without `boxine_fallback` the box only talks to what is configured:

@@ -46,6 +46,7 @@
 #include "bootsel.h"
 #include "control.h"
 #include "rtnl.h"
+#include "crashlog.h"
 #include "sleep_timer.h"
 #include "mqtt_ha.h"
 #include "setup_portal.h"
@@ -350,6 +351,7 @@ void app_main(void)
     setenv("TZ", settings_get()->timezone, 1);
     tzset();
     maint_log_status();
+    crashlog_check();
     /* fixed CPU clock from teddybox.ini (power management only for that, no light sleep) */
     {
         int mhz = settings_get()->cpu_mhz;

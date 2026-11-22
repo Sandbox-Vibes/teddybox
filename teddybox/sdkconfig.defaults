@@ -122,3 +122,8 @@ CONFIG_ESP_TASK_WDT_PANIC=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 # only to set the CPU clock from teddybox.ini (cpu_mhz), fixed, no light sleep
 CONFIG_PM_ENABLE=y
+
+# crash dumps into the coredump partition (summary logged at the next start, see crashlog.c)
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
