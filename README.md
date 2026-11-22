@@ -24,7 +24,7 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Opus decoder | libopus, CELT only | the same (libopus 1.5.2, CELT only, fixed point), ESP-ADF as fallback |
 | SD card hangs during playback | own SD task with double buffers | own read-ahead task, 32 KB (about 2.7 s) |
 | Setup | Tonies app, hotspot `Toniebox-XXXX` | own setup page, hotspot `TeddyBox-XXXX` (big ear while switching on); WiFi of the original is used as is |
-| Settings | Tonies app / cloud | setup page, `teddybox.ini` on the SD card, Home Assistant |
+| Settings | Tonies app / cloud | setup page, `teddybox.ini` on the SD card, Home Assistant; max volume (speaker/headphones), LED and slap also from teddyCloud |
 | Home Assistant | — (only what teddyCloud derives from the box) | MQTT discovery: playback, tonie, chapters, progress, volume, battery, settings, diagnostics, buttons |
 | Speaker sound | flat | three profiles in the DAC's own filters: flat, low cut, tuned (measured, default) |
 | Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original) |
@@ -33,7 +33,7 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Back to the other firmware | — | both ears for 5 seconds |
 | Certificate / flash backup | — | on the setup page (needs a press on the box) |
 | MMA8451 accelerometer (some boxes) | yes | no, LIS3DH only |
-| Tonies app pairing, settings from the app / teddyCloud | yes | no; settings on the setup page, in the INI or in Home Assistant |
+| Tonies app pairing | yes | no |
 
 ## What works
 
@@ -103,6 +103,8 @@ Written by the setup page; all keys are optional.
 | `mqtt_topic`, `ha_discovery_prefix` | `teddybox/<mac>`, `homeassistant` | |
 | `lang_id` | from NVS | system sounds: 0=EN-GB 1=DE 2=EN-US 3=FR |
 | `volume_max`, `volume_default` | 100, 50 | percent |
+| `volume_max_hdp` | 100 | percent, with headphones plugged in |
+| `tc_box_settings` | 1 | take over box settings changed in teddyCloud, see below |
 | `idle_timeout` | 60 | seconds until power off |
 | `speaker_eq` | `full` | `off`, `lowcut`, `full`, see Audio |
 | `led_brightness` | 3 | 0 (off) to 3 |
@@ -167,8 +169,25 @@ files are renamed to `<file>.old`; the next time the tonie is placed (or in
 the nightly update) the new version is downloaded. If that fails, the `.old`
 version is played instead. `.old` files are removed once the new version is
 complete. A tonie that is playing during the check is handled next time.
-Up to 128 tonies per check. teddyCloud's box settings in the answer (max
-volume, slap, LED) are only logged so far, not applied.
+Up to 128 tonies per check.
+
+The answer also carries the box settings from teddyCloud (*Settings →
+Toniebox*, per box in the overlay; with "override cloud" off the values from
+the Tonie app). TeddyBox takes over the ones that **changed there** since
+the last check, so a setting changed on the box itself (setup page, INI,
+Home Assistant) stays until it is changed in teddyCloud again. The first
+check after the update only stores the values. `tc_box_settings = 0` ignores
+them.
+
+| teddyCloud | TeddyBox |
+|---|---|
+| max volume speaker / headphones 0–3 | `volume_max` / `volume_max_hdp` 25 / 50 / 75 / 100 % |
+| LED on / off / dimmed | `led_brightness` 3 / 0 / 1 |
+| slap off / on | `slap` 0 / the previous level (3 if it was off) |
+| slap direction "back on the left" | `slap_reverse` |
+
+Log: `TCSET: Applying <n> box setting(s) changed in teddyCloud`. QEMU test
+`tests/qemu/mkqtcset.sh run`.
 
 ### Claim (tonie placed)
 

@@ -33,6 +33,28 @@ int main(void)
 
     /* empty response: nothing marked */
     CHECK(freshness_parse_response(packed, 0, m, 4, &s) == 0);
+
+    /* box settings: first check is only the baseline */
+    freshness_box_changes_t c;
+    freshness_settings_t last = {3, 3, 1, 0, 0}, now = last;
+    CHECK(freshness_box_changes(&now, NULL, 3, &c) == 0 && c.volume_max_spk == -1 && c.led_brightness == -1);
+    /* nothing changed */
+    CHECK(freshness_box_changes(&now, &last, 3, &c) == 0 && c.slap_level == -1 && c.slap_reverse == -1);
+    /* everything changed */
+    now = (freshness_settings_t){.max_vol_spk = 1, .max_vol_hdp = 0, .slap_en = 0, .slap_dir = 1, .led = 2};
+    CHECK(freshness_box_changes(&now, &last, 4, &c) == 5);
+    CHECK(c.volume_max_spk == 50 && c.volume_max_hdp == 25 && c.slap_level == 0 && c.slap_reverse == 1 && c.led_brightness == 1);
+    /* slap on again: keeps the box level, or 3 if it was off; LED off */
+    last = now;
+    now.slap_en = 1;
+    now.led = 1;
+    CHECK(freshness_box_changes(&now, &last, 5, &c) == 2 && c.slap_level == 5 && c.led_brightness == 0 && c.volume_max_spk == -1);
+    CHECK(freshness_box_changes(&now, &last, 0, &c) == 2 && c.slap_level == 3);
+    /* not sent (-1) or out of range: ignored */
+    now = last;
+    now.max_vol_spk = -1;
+    now.led = 7;
+    CHECK(freshness_box_changes(&now, &last, 3, &c) == 0 && c.volume_max_spk == -1 && c.led_brightness == -1);
     /* truncated */
     CHECK(freshness_parse_response(unpacked, 5, m, 4, &s) == -1);
     /* more marked than space: only max stored */

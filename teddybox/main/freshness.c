@@ -92,6 +92,48 @@ static uint64_t read_fixed64(const uint8_t *p)
     return v;
 }
 
+/* teddyCloud: max_vol 0=25 %, 1=50 %, 2=75 %, 3=100 %; led 0=on, 1=off, 2=dimmed;
+   slap_dir 1 = back on the left side (the box's slap_reverse) */
+static int fc_vol_percent(int v) { return v >= 0 && v <= 3 ? 25 * (v + 1) : -1; }
+
+static int fc_led_brightness(int v) { return v == 0 ? 3 : v == 1 ? 0 : v == 2 ? 1 : -1; }
+
+int freshness_box_changes(const freshness_settings_t *now, const freshness_settings_t *last, int cur_slap_level,
+                          freshness_box_changes_t *out)
+{
+    *out = (freshness_box_changes_t){-1, -1, -1, -1, -1};
+    if (!last)
+    {
+        return 0;
+    }
+#define FC_CHANGED(f) (now->f >= 0 && now->f != last->f)
+    int n = 0;
+    if (FC_CHANGED(max_vol_spk) && (out->volume_max_spk = fc_vol_percent(now->max_vol_spk)) >= 0)
+    {
+        n++;
+    }
+    if (FC_CHANGED(max_vol_hdp) && (out->volume_max_hdp = fc_vol_percent(now->max_vol_hdp)) >= 0)
+    {
+        n++;
+    }
+    if (FC_CHANGED(led) && (out->led_brightness = fc_led_brightness(now->led)) >= 0)
+    {
+        n++;
+    }
+    if (FC_CHANGED(slap_en) && (now->slap_en == 0 || now->slap_en == 1))
+    {
+        out->slap_level = now->slap_en ? (cur_slap_level > 0 ? cur_slap_level : 3) : 0;
+        n++;
+    }
+    if (FC_CHANGED(slap_dir) && (now->slap_dir == 0 || now->slap_dir == 1))
+    {
+        out->slap_reverse = now->slap_dir;
+        n++;
+    }
+#undef FC_CHANGED
+    return n;
+}
+
 int freshness_parse_response(const uint8_t *buf, size_t len, uint64_t *marked, int max_marked, freshness_settings_t *settings)
 {
     /* parsed by hand: all fields are "required" in the .proto, a strict
@@ -381,6 +423,7 @@ esp_err_t freshness_run(void)
     }
     ESP_LOGI(TAG, "teddyCloud box settings: max volume speaker %d, headphones %d, slap %d/%d, led %d",
              settings.max_vol_spk, settings.max_vol_hdp, settings.slap_en, settings.slap_dir, settings.led);
+    freshness_box_settings_received(&settings);
     ret = ESP_OK;
 
 out:

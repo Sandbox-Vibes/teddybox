@@ -29,6 +29,8 @@ static settings_t settings = {
     .boxine_host = "prod.de.tbs.toys",
     .user_agent_original = false,
     .volume_max = 100,
+    .volume_max_hdp = 100,
+    .tc_box_settings = true,
     .volume_default = 50,
     .idle_timeout_s = 60,
     .speaker_eq = SPEAKER_EQ_DEFAULT,
@@ -110,6 +112,8 @@ int settings_save_ini(const char *path)
                      "# box\n"
                      "lang_id = %u\n"
                      "volume_max = %u\n"
+                     "# max volume with headphones plugged in\n"
+                     "volume_max_hdp = %u\n"
                      "volume_default = %u\n"
                      "idle_timeout = %u\n"
                      "# speaker EQ: off, lowcut (high-pass 150 Hz) or full (plus cuts at 470 Hz, 1.65 kHz and 6.3 kHz, measured)\n"
@@ -138,7 +142,9 @@ int settings_save_ini(const char *path)
                      "# without playback (nightly update, idle box) always unlimited\n"
                      "download_playing = %u\n"
                      "# read the next 32 KB of a tonie ahead (against SD card hangs), 0 only for diagnosis\n"
-                     "readahead = %u\n",
+                     "readahead = %u\n"
+                     "# take over box settings changed in teddyCloud (max volume speaker/headphones, LED, slap): 1 on, 0 off\n"
+                     "tc_box_settings = %u\n",
                      s->cloud_host, s->cloud_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
@@ -147,9 +153,9 @@ int settings_save_ini(const char *path)
                      s->mqtt_host, s->mqtt_port, s->mqtt_user, s->mqtt_pass,
                      s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
                      s->ha_discovery_prefix,
-                     s->lang_id, s->volume_max, s->volume_default, (unsigned)s->idle_timeout_s,
+                     s->lang_id, s->volume_max, s->volume_max_hdp, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -292,6 +298,21 @@ void settings_load_ini(void)
         else if (!strcmp(key, "volume_max") && num >= 10 && num <= 100)
         {
             settings.volume_max = num;
+        }
+        else if (!strcmp(key, "volume_max_hdp") && num >= 10 && num <= 100)
+        {
+            settings.volume_max_hdp = num;
+        }
+        else if (!strcmp(key, "tc_box_settings"))
+        {
+            if (!strcmp(val, "0") || !strcmp(val, "1"))
+            {
+                settings.tc_box_settings = val[0] == '1';
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid tc_box_settings '%s' (0 or 1)", val);
+            }
         }
         else if (!strcmp(key, "volume_default") && num >= 0 && num <= 100)
         {

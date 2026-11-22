@@ -145,6 +145,8 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(j, "mqtt_pass_set", s->mqtt_pass[0] != 0);
     cJSON_AddNumberToObject(j, "lang_id", s->lang_id);
     cJSON_AddNumberToObject(j, "volume_max", s->volume_max);
+    cJSON_AddNumberToObject(j, "volume_max_hdp", s->volume_max_hdp);
+    cJSON_AddBoolToObject(j, "tc_box_settings", s->tc_box_settings);
     cJSON_AddNumberToObject(j, "idle_timeout", s->idle_timeout_s);
     cJSON_AddStringToObject(j, "speaker_eq", speaker_eq_name(s->speaker_eq));
     cJSON_AddNumberToObject(j, "led_brightness", s->led_brightness);
@@ -387,6 +389,10 @@ static esp_err_t save_handler(httpd_req_t *req)
     {
         s->volume_max = v;
     }
+    if (get_int(o, "volume_max_hdp", 10, 100, &v))
+    {
+        s->volume_max_hdp = v;
+    }
     if (s->volume_default > s->volume_max)
     {
         s->volume_default = s->volume_max;
@@ -443,6 +449,11 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (cJSON_IsBool(b))
     {
         s->user_agent_original = cJSON_IsTrue(b);
+    }
+    b = cJSON_GetObjectItemCaseSensitive(o, "tc_box_settings");
+    if (cJSON_IsBool(b))
+    {
+        s->tc_box_settings = cJSON_IsTrue(b);
     }
     b = cJSON_GetObjectItemCaseSensitive(o, "readahead");
     if (cJSON_IsBool(b))

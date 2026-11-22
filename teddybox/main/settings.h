@@ -45,6 +45,10 @@ typedef struct
 
     /* volume limits in percent (0..100) */
     uint8_t volume_max;
+    /* with headphones plugged in */
+    uint8_t volume_max_hdp;
+    /* take over box settings changed in teddyCloud (max volume, LED, slap) */
+    bool tc_box_settings;
     uint8_t volume_default;
 
     /* speaker EQ, speaker_eq_t: 0 off, 1 lowcut, 2 full */

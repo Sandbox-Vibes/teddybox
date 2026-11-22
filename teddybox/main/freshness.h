@@ -26,6 +26,28 @@ typedef struct
     int led;
 } freshness_settings_t;
 
+/* what the box changes after teddyCloud sent its box settings; -1 = no change */
+typedef struct
+{
+    int volume_max_spk; /* percent */
+    int volume_max_hdp; /* percent */
+    int led_brightness; /* 0..3 */
+    int slap_level;     /* 0..5 */
+    int slap_reverse;   /* 0/1 */
+} freshness_box_changes_t;
+
+/* Only values that changed in teddyCloud since the last check are taken
+   over (last == NULL: first check, nothing is taken, it is the baseline).
+   A setting changed on the box itself stays until it is changed in
+   teddyCloud (or the Tonie app, passed through by teddyCloud) again.
+   cur_slap_level: slap switched on again goes back to 3 if it was off.
+   Returns the number of changes. */
+int freshness_box_changes(const freshness_settings_t *now, const freshness_settings_t *last, int cur_slap_level,
+                          freshness_box_changes_t *out);
+
+/* box settings received: applied by main.c (control.h), stored in NVS */
+void freshness_box_settings_received(const freshness_settings_t *s);
+
 /* runs one check, call from the cloud task only (uses cloud_post) */
 esp_err_t freshness_run(void);
 
