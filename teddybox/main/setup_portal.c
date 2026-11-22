@@ -154,6 +154,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(j, "slap_reverse", s->slap_reverse);
     cJSON_AddNumberToObject(j, "tilt", s->tilt_level);
     cJSON_AddNumberToObject(j, "update_hour", s->update_hour);
+    cJSON_AddNumberToObject(j, "freshness_interval", s->freshness_min);
     cJSON_AddStringToObject(j, "decoder", s->decoder_celt ? "celt" : "adf");
     cJSON_AddNumberToObject(j, "cpu_mhz", s->cpu_mhz);
     cJSON_AddNumberToObject(j, "download_playing", s->dl_playing_kib_s);
@@ -417,6 +418,10 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (get_int(o, "update_hour", -1, 23, &v))
     {
         s->update_hour = v;
+    }
+    if (get_int(o, "freshness_interval", 15, 720, &v))
+    {
+        s->freshness_min = v;
     }
     cJSON *sr = cJSON_GetObjectItemCaseSensitive(o, "slap_reverse");
     if (cJSON_IsBool(sr))

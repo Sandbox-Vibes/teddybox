@@ -40,6 +40,7 @@ static settings_t settings = {
     .tilt_level = 3,
     .mem_log = true,
     .update_hour = 3,
+    .freshness_min = 60,
     .claim = false,
     .readahead = true,
     .rtnl = true,
@@ -160,6 +161,12 @@ int settings_save_ini(const char *path)
                      s->lang_id, s->volume_max, s->volume_max_hdp, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness,
                      s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0, s->rtnl ? 1 : 0) > 0;
+    ok = fprintf(f,
+                 "# freshness check with teddyCloud (new tonie versions, box settings): every n minutes while\n"
+                 "# nothing plays and after a tonie was removed (at most every 15 minutes), 15-720\n"
+                 "freshness_interval = %u\n",
+                 s->freshness_min) > 0 &&
+         ok;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)
@@ -392,6 +399,17 @@ void settings_load_ini(void)
             else
             {
                 ESP_LOGW(TAG, "Invalid claim '%s' (0 or 1)", val);
+            }
+        }
+        else if (!strcmp(key, "freshness_interval"))
+        {
+            if (num >= 15 && num <= 720)
+            {
+                settings.freshness_min = num;
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid freshness_interval '%s' (15 to 720 minutes)", val);
             }
         }
         else if (!strcmp(key, "update_hour"))

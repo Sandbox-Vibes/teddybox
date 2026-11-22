@@ -11,6 +11,7 @@ int main(void)
 {
     remove(SETTINGS_INI_PATH);
     CHECK(!settings_ini_exists());
+    CHECK(settings_get()->freshness_min == 60);
     settings_init();
 
     settings_t *s = settings_get_mutable();
@@ -18,6 +19,7 @@ int main(void)
     CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead && s->volume_max_hdp == 100 && s->tc_box_settings);
     strcpy(s->cloud_host, "192.168.178.20");
     s->cloud_port = 8443;
+    s->freshness_min = 30;
     s->cloud_enabled = true;   /* the setup page sets this together with the host */
     strcpy(s->ca_path, "/sdcard/teddybox/ca.der");
     strcpy(s->mqtt_host, "ha.local");
@@ -45,6 +47,7 @@ int main(void)
     settings_load_ini();
     CHECK(!strcmp(s->cloud_host, saved.cloud_host));
     CHECK(s->cloud_port == 8443);
+    CHECK(s->freshness_min == 30);
     CHECK(s->cloud_enabled);
     CHECK(!strcmp(s->ca_path, saved.ca_path));
     CHECK(!strcmp(s->mqtt_host, "ha.local"));

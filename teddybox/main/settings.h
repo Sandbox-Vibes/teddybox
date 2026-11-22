@@ -65,6 +65,9 @@ typedef struct
     bool mem_log;
     /* nightly update of the tonies at this hour (local time), -1 = off */
     int8_t update_hour;
+    /* freshness check (new versions, box settings from teddyCloud) every
+       that many minutes while nothing plays, and after a tonie was removed */
+    uint16_t freshness_min;
     /* report placed tonies to teddyCloud (/v1/claim) like the original box */
     bool claim;
     /* read-ahead task for tonie playback (diagnosis: readahead = 0) */
