@@ -18,6 +18,7 @@
 #include "mbedtls/x509_crt.h"
 
 #include "setup_portal.h"
+#include "bootsel.h"
 #include "backup.h"
 #include "speaker_eq.h"
 #include "settings.h"
@@ -152,6 +153,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "led_brightness", s->led_brightness);
     cJSON_AddNumberToObject(j, "slap", s->slap_level);
     cJSON_AddBoolToObject(j, "slap_reverse", s->slap_reverse);
+    cJSON_AddBoolToObject(j, "ears_poweroff", s->ears_poweroff);
     cJSON_AddNumberToObject(j, "tilt", s->tilt_level);
     cJSON_AddNumberToObject(j, "update_hour", s->update_hour);
     cJSON_AddNumberToObject(j, "freshness_interval", s->freshness_min);
@@ -428,6 +430,11 @@ static esp_err_t save_handler(httpd_req_t *req)
     {
         s->slap_reverse = cJSON_IsTrue(sr);
     }
+    cJSON *ep = cJSON_GetObjectItemCaseSensitive(o, "ears_poweroff");
+    if (cJSON_IsBool(ep))
+    {
+        s->ears_poweroff = cJSON_IsTrue(ep);
+    }
     cJSON *dec = cJSON_GetObjectItemCaseSensitive(o, "decoder");
     if (cJSON_IsString(dec) && (!strcmp(dec->valuestring, "adf") || !strcmp(dec->valuestring, "celt")))
     {
@@ -596,6 +603,18 @@ static esp_err_t redirect_handler(httpd_req_t *req, httpd_err_code_t err)
     return httpd_resp_send(req, NULL, 0);
 }
 
+/* start the original firmware (button on the setup page) */
+static volatile bool original_requested = false;
+
+static esp_err_t original_handler(httpd_req_t *req)
+{
+    touch();
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    original_requested = true;
+    return ESP_OK;
+}
+
 esp_err_t setup_portal_register(httpd_handle_t server)
 {
     static const httpd_uri_t uris[] = {
@@ -605,6 +624,7 @@ esp_err_t setup_portal_register(httpd_handle_t server)
         {.uri = "/api/ca", .method = HTTP_POST, .handler = ca_handler},
         {.uri = "/api/save", .method = HTTP_POST, .handler = save_handler},
         {.uri = "/api/firmware", .method = HTTP_POST, .handler = firmware_handler},
+        {.uri = "/api/original", .method = HTTP_POST, .handler = original_handler},
     };
     for (int i = 0; i < sizeof(uris) / sizeof(uris[0]); i++)
     {
@@ -740,6 +760,15 @@ void setup_portal_run(void)
     while (!saved)
     {
         vTaskDelay(pdMS_TO_TICKS(500));
+        if (original_requested)
+        {
+            ESP_LOGW(TAG, "Starting the original firmware (setup page)");
+            /* let the response reach the phone */
+            vTaskDelay(pdMS_TO_TICKS(1500));
+            bootsel_boot_original();
+            /* only returns on error */
+            original_requested = false;
+        }
         /* the announcement resets the LED to idle when it ends, show setup mode again */
         if (!led_set && !pb_is_playing())
         {

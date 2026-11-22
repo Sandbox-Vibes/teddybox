@@ -3,7 +3,8 @@ MAIN := ../../teddybox/main
 DAC := ../../teddybox/components/toniebox/dac3100
 CFLAGS := -Wall -Wextra -O1 -I$(MAIN)
 
-test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time test_ogg_demux test_rtnl test_sleep_timer
+test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time test_ogg_demux test_rtnl test_sleep_timer test_ear_gestures
+	./test_ear_gestures
 	./test_sleep_timer
 	./test_rtnl
 	./test_backup_zip /tmp/teddybox_test_backup.zip
@@ -20,6 +21,9 @@ test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg
 	./test_mqtt_ha_payload
 	./test_mqtt_ha_payload discovery | python3 -c "import sys,json; [json.loads(l.split('\t')[1]) for l in sys.stdin]; print('discovery JSON ok')"
 	./test_mqtt_ha_payload state | python3 check_state.py
+
+test_ear_gestures: test_ear_gestures.c $(MAIN)/ear_gestures.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 test_sleep_timer: test_sleep_timer.c $(MAIN)/sleep_timer.c
 	$(CC) $(CFLAGS) $^ -o $@
@@ -61,4 +65,4 @@ clean:
 	$(MAKE) -C nfc_sim clean
 	$(MAKE) -C battery_sim clean
 	$(MAKE) -C dac_sim clean
-	rm -f test_sleep_timer test_rtnl test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time test_ogg_demux
+	rm -f test_ear_gestures test_sleep_timer test_rtnl test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg_pos test_backup_zip test_maint_time test_ogg_demux

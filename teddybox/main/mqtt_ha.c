@@ -188,6 +188,10 @@ static void mqtt_handle_command(const char *topic, int topic_len, const char *da
         ESP_LOGI(TAG, "Command: sleep timer %d min", value);
         ctrl_request_sleep_timer(value);
         break;
+    case HA_CMD_BOOT_ORIGINAL:
+        ESP_LOGW(TAG, "Command: start the original firmware");
+        ctrl_request_boot_original();
+        break;
     case HA_CMD_POWEROFF:
         ESP_LOGI(TAG, "Command: power off");
         ctrl_request_poweroff();

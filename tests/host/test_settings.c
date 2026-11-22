@@ -16,7 +16,7 @@ int main(void)
 
     settings_t *s = settings_get_mutable();
     /* compiled-in defaults */
-    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead && s->volume_max_hdp == 100 && s->tc_box_settings);
+    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead && s->volume_max_hdp == 100 && s->tc_box_settings && s->ears_poweroff);
     strcpy(s->cloud_host, "192.168.178.20");
     s->cloud_port = 8443;
     s->freshness_min = 30;

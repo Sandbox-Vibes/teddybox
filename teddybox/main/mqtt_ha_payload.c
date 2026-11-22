@@ -92,6 +92,9 @@ static const ha_entity_t entities[] = {
      "\"command_topic\":\"%s/cmd/prev\",\"icon\":\"mdi:skip-previous\""},
     {"button", "poweroff", "Ausschalten",
      "\"command_topic\":\"%s/cmd/poweroff\",\"icon\":\"mdi:power\""},
+    {"button", "original", "Original-Firmware starten",
+     "\"command_topic\":\"%s/cmd/original\",\"icon\":\"mdi:swap-horizontal-bold\",\"entity_category\":\"config\","
+     "\"enabled_by_default\":false"},
     {"number", "sleep_timer", "Schlaf-Timer",
      "\"value_template\":\"{{ value_json.sleep_timer }}\",\"command_topic\":\"%s/cmd/sleep_timer\",\"min\":0,\"max\":240,"
      "\"step\":5,\"unit_of_measurement\":\"min\",\"icon\":\"mdi:sleep\""},
@@ -279,6 +282,10 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     if (IS("poweroff"))
     {
         return HA_CMD_POWEROFF;
+    }
+    if (IS("original"))
+    {
+        return HA_CMD_BOOT_ORIGINAL;
     }
     if (IS("slap_reverse"))
     {
