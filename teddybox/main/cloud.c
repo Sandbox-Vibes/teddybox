@@ -1151,6 +1151,7 @@ static void cloud_task(void *ctx)
     TickType_t next_try = 0;
     bool fc_done = false;
     TickType_t fc_last = 0;
+    bool fc_played = false;
     TickType_t backend_since = 0;
     while (true)
     {
@@ -1199,19 +1200,28 @@ static void cloud_task(void *ctx)
 
         teddycloud_up = cloud_available && active_backend == BACKEND_TEDDYCLOUD;
 
-        /* freshness check after boot and then every few hours, between downloads;
-           not while something plays, a TLS handshake next to the decoder is the
-           tightest spot for the internal RAM */
-        if (cloud_available && !pb_is_playing() &&
-            (!fc_done || xTaskGetTickCount() - fc_last >= pdMS_TO_TICKS(FRESHNESS_INTERVAL_MS)))
+        /* freshness check after boot, then every freshness_interval minutes
+           and after a tonie was removed (at most every 15 minutes), between
+           downloads; not while something plays, a TLS handshake next to the
+           decoder is the tightest spot for the internal RAM */
+        bool playing = pb_is_playing();
+        if (playing)
         {
+            fc_played = true;
+        }
+        TickType_t fc_age = xTaskGetTickCount() - fc_last;
+        TickType_t fc_interval = pdMS_TO_TICKS((uint32_t)settings_get()->freshness_min * FRESHNESS_MINUTE_MS);
+        bool after_play = fc_played && fc_age >= pdMS_TO_TICKS(FRESHNESS_AFTER_PLAY_MIN * FRESHNESS_MINUTE_MS);
+        if (cloud_available && !playing && (!fc_done || fc_age >= fc_interval || after_play))
+        {
+            fc_played = false;
             fc_last = xTaskGetTickCount();
             fc_done = freshness_run() == ESP_OK;
             if (!fc_done)
             {
                 /* retry in a minute, not in a loop */
                 fc_done = true;
-                fc_last = xTaskGetTickCount() - pdMS_TO_TICKS(FRESHNESS_INTERVAL_MS) + pdMS_TO_TICKS(60000);
+                fc_last = xTaskGetTickCount() - fc_interval + pdMS_TO_TICKS(FRESHNESS_MINUTE_MS);
             }
         }
 

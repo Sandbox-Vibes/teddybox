@@ -112,6 +112,7 @@ Written by the setup page; all keys are optional.
 | `slap`, `slap_reverse` | 3, 0 | slap on the side for next/previous chapter: 0 off, 1 firm to 5 light |
 | `tilt` | 3 | tilt for chapter/seek: 0 off, 1 far to 5 a little |
 | `update_hour` | 3 | nightly update, -1 off |
+| `freshness_interval` | 60 | minutes between freshness checks (15-720), see below |
 | `timezone` | `CET-1CEST,M3.5.0,M10.5.0/3` | POSIX TZ |
 | `claim` | 0 | report placed tonies to teddyCloud |
 | `decoder` | `celt` | `celt` or `adf` |
@@ -162,7 +163,9 @@ tonie again loads it once teddyCloud has it.
 
 ### Freshness check
 
-After boot (as soon as teddyCloud is reachable) and every 6 hours the box
+After boot (as soon as teddyCloud is reachable), every hour
+(`freshness_interval`, 15 to 720 minutes) and after a tonie was removed (at
+most every 15 minutes), always only while nothing plays, the box
 sends UID and `audio_id` of every tonie on the SD card to
 `POST /v1/freshness-check`. teddyCloud answers with the tonies that have new
 content: a newer version in its library, a newer version in the Boxine

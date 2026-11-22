@@ -1,7 +1,7 @@
 /* QEMU test: box settings changed in teddyCloud are taken over (freshness
    check). The first check only stores the baseline; then the host script
    (mkqtcset.sh run) changes slap settings in teddyCloud when the log says
-   "CHANGE NOW". The freshness interval is shortened to 15 s in this build. */
+   "CHANGE NOW". A minute lasts 1 s in this build, the freshness interval is 15 s. */
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -118,6 +118,7 @@ void app_main(void)
     s->slap_level = 4;
     s->slap_reverse = false;
     s->tc_box_settings = true;
+    s->freshness_min = 15;
 
     /* a tonie on the card, else the check has nothing to ask */
     if (fsize(FINAL) != TOTAL)

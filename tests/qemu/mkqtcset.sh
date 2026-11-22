@@ -9,7 +9,8 @@ QEMU_NET=1
 . "$(dirname "$0")/common.sh"
 qemu_prepare "$T/qemu_tcset_test.c"
 sed -i 's#/spiflash/cert/#/sdcard/CERT/#g' "$WORK/main/cloud.c"
-sed -i 's#define FRESHNESS_INTERVAL_MS .*#define FRESHNESS_INTERVAL_MS 15000#' "$WORK/main/freshness.h"
+# a "minute" of 1 s: freshness_interval = 15 gives a check every 15 s
+sed -i "s#define FRESHNESS_MINUTE_MS .*#define FRESHNESS_MINUTE_MS 1000#" "$WORK/main/freshness.h"
 qemu_build
 [ "$1" = run ] || exit 0
 TC=${TC_API:-http://127.0.0.1}

@@ -14,7 +14,10 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-#define FRESHNESS_INTERVAL_MS (6 * 60 * 60 * 1000)
+/* interval: settings freshness_interval (minutes, default 60) while nothing
+   plays; after a tonie was removed at most every FRESHNESS_AFTER_PLAY_MIN */
+#define FRESHNESS_MINUTE_MS (60 * 1000)
+#define FRESHNESS_AFTER_PLAY_MIN 15
 
 typedef struct
 {
