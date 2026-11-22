@@ -167,6 +167,66 @@ void ctrl_request_boot_original(void)
     ctrl_boot_original_request = true;
 }
 
+static void rtc_checksum_update(void);
+
+/* feedback for the main loop (EG_RESTART_ARMED, EG_OFW_ARMED, EG_CANCELLED) */
+static volatile int ears_signal = EG_NONE;
+
+/* gestures with both ears as in the original firmware / Hackiebox CFW, see
+   ear_gestures.h. Own small task so that restart and switching to the
+   original firmware still work when the main loop hangs (idea from the
+   jcarletto27/teddybox fork). Without a working accelerometer the long
+   gestures also work upright. */
+static void ears_task(void *arg)
+{
+    ear_gesture_t g = {0};
+    while (true)
+    {
+        vTaskDelay(pdMS_TO_TICKS(50));
+        int64_t now = esp_timer_get_time();
+        eg_action_t a = ear_gesture_step(&g, now, audio_board_ear_big(), audio_board_ear_small(),
+                                         !accel_working() || accel_upside_down());
+        switch (a)
+        {
+        case EG_RESTART_ARMED:
+            ESP_LOGW(TAG, "Both ears held upside down 10 s: restart when let go (hold on to 20 s: original firmware)");
+            ears_signal = a;
+            break;
+        case EG_OFW_ARMED:
+            ESP_LOGW(TAG, "Both ears held upside down 20 s: original firmware when let go");
+            ears_signal = a;
+            break;
+        case EG_CANCELLED:
+            ESP_LOGW(TAG, "Both ears held too long or box turned: nothing");
+            ears_signal = a;
+            break;
+        case EG_RESTART:
+            ESP_LOGW(TAG, "Restart (both ears upside down)");
+            rtc_checksum_update();
+            vTaskDelay(pdMS_TO_TICKS(200));
+            esp_restart();
+            break;
+        case EG_OFW:
+            ESP_LOGW(TAG, "Switching to the original firmware (both ears upside down)");
+            pb_stop();
+            rtc_checksum_update();
+            bootsel_boot_original();
+            /* only returns on error */
+            ledman_change("failed");
+            break;
+        case EG_POWEROFF:
+            if (settings_get()->ears_poweroff)
+            {
+                ESP_LOGI(TAG, "Both ears pressed briefly: power off");
+                ctrl_request_poweroff();
+            }
+            break;
+        default:
+            break;
+        }
+    }
+}
+
 /* sleep timer, driven by the main loop */
 #define SLEEP_TIMER_GESTURE_MIN 30
 #define SLEEP_TIMER_HOLD_US (2 * 1000000LL)
@@ -452,8 +512,7 @@ void app_main(void)
 
     int64_t last_activity_time = esp_timer_get_time();
     int64_t remute_time = 0;
-    ear_gesture_t ear_gesture = {0};
-    bool ears_poweroff = false;
+    xTaskCreatePinnedToCore(ears_task, "[TB] ears", 3072, NULL, 4, NULL, tskNO_AFFINITY);
     /* small ear held alone: sleep timer on/off */
     int64_t small_ear_since = 0;
     uint32_t small_ear_volume = 0;
@@ -702,51 +761,31 @@ void app_main(void)
             rtc_storage.play_position = pb_get_resume_position();
         }
 
-        /* gestures with both ears as in the original firmware / Hackiebox CFW,
-           see ear_gestures.h; without a working accelerometer the long
-           gestures also work upright */
-        switch (ear_gesture_step(&ear_gesture, cur_time, ear_big, ear_small, !accel_working() || accel_upside_down()))
+        /* feedback for the gestures with both ears; they are evaluated by
+           ears_task, so restart and original firmware work even when this
+           loop hangs */
+        int ears_sig = ears_signal;
+        if (ears_sig != EG_NONE)
         {
-        case EG_RESTART_ARMED:
-            ESP_LOGW(TAG, "Both ears held upside down 10 s: restart when let go (hold on to 20 s: original firmware)");
-            pb_stop();
-            dac3100_set_mute(false);
-            dac3100_beep(1, 0x400);
-            remute_time = cur_time + 1000000;
-            break;
-        case EG_OFW_ARMED:
-            ESP_LOGW(TAG, "Both ears held upside down 20 s: original firmware when let go");
-            ledman_change("fadeblink blue");
-            dac3100_set_mute(false);
-            dac3100_beep(1, 0x400);
-            remute_time = cur_time + 1000000;
-            break;
-        case EG_CANCELLED:
-            ESP_LOGW(TAG, "Both ears held too long or box turned: nothing");
-            ledman_change("idle");
-            break;
-        case EG_RESTART:
-            ESP_LOGW(TAG, "Restart (both ears upside down)");
-            rtc_checksum_update();
-            vTaskDelay(pdMS_TO_TICKS(200));
-            esp_restart();
-            break;
-        case EG_OFW:
-            ctrl_boot_original_request = true;
-            break;
-        case EG_POWEROFF:
-            if (settings_get()->ears_poweroff)
+            ears_signal = EG_NONE;
+            if (ears_sig == EG_RESTART_ARMED || ears_sig == EG_OFW_ARMED)
             {
-                ESP_LOGI(TAG, "Both ears pressed briefly: power off");
-                ears_poweroff = true;
+                if (ears_sig == EG_RESTART_ARMED)
+                {
+                    pb_stop();
+                }
+                else
+                {
+                    ledman_change("fadeblink blue");
+                }
+                dac3100_set_mute(false);
+                dac3100_beep(1, 0x400);
+                remute_time = cur_time + 1000000;
             }
-            break;
-        default:
-            break;
-        }
-        if (ears_poweroff)
-        {
-            break;
+            else if (ears_sig == EG_CANCELLED)
+            {
+                ledman_change("idle");
+            }
         }
         if (ctrl_boot_original_request)
         {
