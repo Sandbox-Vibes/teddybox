@@ -28,12 +28,31 @@ button.link{background:none;border:0;color:var(--accent);font:inherit;padding:.2
 .status{font-size:.875rem;margin:.4rem 0 .6rem;min-height:1.2em}
 .ok{color:var(--ok)}.err{color:var(--err)}
 details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem 0}
+.tabs{position:sticky;top:0;z-index:5;display:flex;gap:.25rem;background:var(--bg);padding:.5rem 0 .6rem;margin:0 0 .5rem;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{flex:1 0 auto;font:inherit;font-size:.9rem;font-weight:600;padding:.5rem .75rem;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--text);cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+.tab[hidden]{display:none}
+.tonie{border:1px solid var(--line);border-radius:10px;padding:.6rem .7rem;margin:0 0 .5rem;background:var(--bg)}
+.tonie .uid{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;word-break:break-all}
+.tonie .name{font-weight:700;font-size:1.05rem}.tonie .name+.uid{font-weight:400;font-size:.8rem;color:var(--muted)}
+.tonie .meta{color:var(--muted);font-size:.85rem}
+.tonie .acts{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin-top:.35rem}
+.badge{display:inline-block;font-size:.75rem;font-weight:600;padding:.05rem .45rem;border-radius:999px;border:1px solid var(--line);margin:0 .25rem .15rem 0}
+.badge.own{border-color:var(--accent);color:var(--accent)}.badge.warn{border-color:var(--err);color:var(--err)}.badge.good{border-color:var(--ok);color:var(--ok)}
+progress{width:100%;height:.6rem;accent-color:var(--accent)}
 </style>
 </head>
 <body>
 <main>
 <h1>TeddyBox einrichten</h1>
 <p class="sub">Alles ist optional bis auf das WLAN. Nach dem Speichern startet die Box neu. Diese Seite kommt wieder, wenn du beim Einschalten das große Ohr gedrückt hältst.</p>
+<nav class="tabs" role="tablist">
+<button type="button" role="tab" data-tab="net">Verbindung</button>
+<button type="button" role="tab" data-tab="box">Box</button>
+<button type="button" role="tab" data-tab="tonies">Tonies</button>
+<button type="button" role="tab" data-tab="sys">System</button>
+</nav>
+<div class="tab" id="tab-net">
 
 <section>
 <h2>WLAN</h2>
@@ -70,7 +89,9 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <div><label for="mpass">Passwort</label><input id="mpass" type="password" autocomplete="off"></div>
 </div>
 </section>
+</div>
 
+<div class="tab" id="tab-box" hidden>
 <section>
 <h2>Box</h2>
 <div class="row">
@@ -114,7 +135,31 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <p class="hint">Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.</p>
 </details>
 </section>
+</div>
 
+<div class="tab" id="tab-tonies" hidden>
+<section>
+<h2>Tonies auf der SD-Karte</h2>
+<p class="hint" id="tnspace">Lade Liste …</p>
+<div id="tnlist"></div>
+<button class="link" type="button" id="tnreload">Liste neu laden</button>
+</section>
+<section>
+<h2>Tonie bespielen</h2>
+<p class="hint">Eine fertige TAF-Datei (z.&nbsp;B. aus teddyCloud oder TonieToolbox) für einen Tonie hochladen. Die Box prüft Header, Länge und Prüfsumme. Hochgeladene Dateien sind geschützt: teddyCloud und die nächtliche Aktualisierung ersetzen sie nicht.</p>
+<label for="tnuid">Tonie</label>
+<select id="tnseen"><option value="">– zuletzt aufgelegt –</option></select>
+<input id="tnuid" placeholder="UID, z. B. E00403500EEA5646" autocapitalize="characters" spellcheck="false" style="margin-top:.4rem">
+<p class="hint">Ein neuer Tonie erscheint oben, sobald er einmal auf der Box lag (auch ohne Inhalt).</p>
+<label for="tnfile">TAF-Datei</label>
+<input id="tnfile" type="file" accept=".taf,application/octet-stream">
+<progress id="tnprog" max="100" value="0" hidden></progress>
+<div class="status" id="tnstatus"></div>
+<button class="main" id="tnbtn" type="button" style="background:var(--text)">Hochladen</button>
+</section>
+</div>
+
+<div class="tab" id="tab-sys" hidden>
 <section>
 <h2>Sicherung</h2>
 <p class="hint">Die Zertifikate sind für jede Box einzigartig. Ohne sie kommt die Box weder zu teddyCloud noch zur Tonies-Cloud. Das Flash-Abbild enthält zusätzlich die Original-Firmware und die WLAN-Daten und stellt die Box mit esptool komplett wieder her.</p>
@@ -143,9 +188,12 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <button class="main" id="fwbtn" type="button" style="background:var(--text)">Firmware hochladen</button>
 <p class="hint">Die neue Version startet auf Probe. Läuft sie nicht sauber an, startet die Box beim nächsten Mal wieder die bisherige.</p>
 </section>
+</div>
 
+<div id="savebar">
 <div class="status" id="status"></div>
 <button class="main" id="save" type="button">Speichern und neu starten</button>
+</div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -245,6 +293,91 @@ $('bksd').onclick=async()=>{$('bksd').disabled=true;setStatus($('bkstatus'),'Sch
     setStatus($('bkstatus'),j.ok?'Gesichert in '+j.dir+' auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.':'Sichern auf die SD-Karte fehlgeschlagen.',j.ok?'ok':'err');}
   catch(e){setStatus($('bkstatus'),'Keine Antwort der Box.','err');}
   $('bksd').disabled=false;};
+function showTab(name){
+  if(!$('tab-'+name))name='net';
+  document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!=='tab-'+name);
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));
+  $('savebar').hidden=!(name==='net'||name==='box');
+  if(name==='tonies'&&!tnLoaded)tnLoad();
+  try{history.replaceState(null,'','#'+name);}catch(e){}
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+let tnLoaded=false,tnHave={};
+function mb(b){return b<0?'–':(b/1048576).toFixed(b<10485760?1:0)+' MB';}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function tnState(t){
+  const b=[];
+  if(t.state==='ok'||t.state==='ok_old')b.push('<span class="badge good">vollständig</span>');
+  if(t.state==='partial'){b.push('<span class="badge warn">unvollständig'+(t.tmp>=0?' ('+mb(t.tmp)+' geladen)':'')+'</span>');}
+  if(t.state==='ok_old'||t.state==='old')b.push('<span class="badge">neue Version wartet</span>');
+  if(t.bad)b.push('<span class="badge warn">beschädigte Datei</span>');
+  if(t.stream)b.push('<span class="badge">Stream</span>');
+  b.push(t.own?'<span class="badge own">eigene Datei (geschützt)</span>':'<span class="badge">von teddyCloud</span>');
+  return b.join('');
+}
+async function tnLoad(){
+  tnLoaded=true;setStatus($('tnspace'),'Lade Liste …');
+  try{
+    const j=await (await fetch('/api/tonies')).json();
+    $('tnspace').textContent=j.tonies.length+' Tonie(s), '+j.free_mb+' MB von '+j.total_mb+' MB frei';
+    tnHave={};const list=$('tnlist');list.innerHTML='';
+    j.tonies.sort((a,b)=>(!a.alias-!b.alias)||(a.alias||a.uid).localeCompare(b.alias||b.uid,'de')).forEach(t=>{
+      tnHave[t.uid]=t;
+      const d=document.createElement('div');d.className='tonie';
+      d.innerHTML=(t.alias?'<div class="name">'+esc(t.alias)+'</div>':'')+'<div class="uid">'+esc(t.uid)+'</div><div>'+tnState(t)+'</div><div class="meta">'+
+        (t.size>=0?mb(t.size)+(t.chapters?', '+t.chapters+' Kapitel':'')+(t.audio_id?', Audio-ID '+t.audio_id.toString(16).toUpperCase():''):'keine abspielbare Datei')+'</div>';
+      const a=document.createElement('div');a.className='acts';
+      const rep=document.createElement('button');rep.className='link';rep.type='button';rep.textContent='Datei hochladen';
+      rep.onclick=()=>{$('tnuid').value=t.uid;$('tnseen').value='';$('tnfile').click();};
+      const nm=document.createElement('button');nm.className='link';nm.type='button';nm.textContent=t.alias?'Name ändern':'Name geben';
+      nm.onclick=()=>tnAlias(t.uid,t.alias);
+      a.append(rep,nm);
+      if(t.size>=0){
+        const own=document.createElement('button');own.className='link';own.type='button';
+        own.textContent=t.own?'Schutz aufheben':'Vor teddyCloud schützen';
+        own.onclick=async()=>{await fetch('/api/tonie/own?uid='+t.uid+'&on='+(t.own?0:1),{method:'POST'});tnLoad();};
+        a.append(own);
+      }
+      const del=document.createElement('button');del.className='link';del.type='button';del.textContent='Löschen';
+      del.onclick=async()=>{if(!confirm('Alle Dateien von '+t.uid+' löschen?'))return;await fetch('/api/tonie/delete?uid='+t.uid,{method:'POST'});tnLoad();};
+      a.append(del);d.append(a);list.append(d);
+    });
+    if(!j.tonies.length)list.innerHTML='<p class="hint">Noch keine Tonies auf der Karte.</p>';
+    const sel=$('tnseen');sel.innerHTML='<option value="">– zuletzt aufgelegt –</option>';
+    j.seen.forEach(s=>{const o=document.createElement('option');o.value=s.uid;
+      const when=s.time?new Date(s.time*1000).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):'';
+      o.textContent=(s.alias?s.alias+' – ':'')+s.uid+(tnHave[s.uid]?' (auf der Karte)':' (neu)')+(when?', '+when:'');sel.append(o);});
+  }catch(e){setStatus($('tnspace'),'Liste konnte nicht geladen werden.','err');}
+}
+async function tnAlias(uid,old){
+  const n=prompt('Name für '+uid+' (nur für diese Übersicht, leer = keiner):',old||'');
+  if(n===null)return;
+  try{const j=await (await fetch('/api/tonie/alias?uid='+uid,{method:'POST',body:n.trim().slice(0,40)})).json();
+    if(!j.ok)alert('Fehler: '+j.error);}catch(e){alert('Keine Verbindung zur Box.');}
+  tnLoad();
+}
+$('tnreload').onclick=tnLoad;
+$('tnseen').onchange=()=>{if($('tnseen').value)$('tnuid').value=$('tnseen').value;};
+$('tnfile').onchange=()=>{if($('tnfile').files[0]&&$('tnuid').value)setStatus($('tnstatus'),'Bereit: '+$('tnfile').files[0].name+' für '+$('tnuid').value);};
+$('tnbtn').onclick=()=>{
+  const uid=$('tnuid').value.trim().toUpperCase().replace(/[^0-9A-F]/g,'');
+  const f=$('tnfile').files[0];
+  if(uid.length!==16){setStatus($('tnstatus'),'Bitte einen Tonie wählen oder die 16-stellige UID eingeben.','err');return;}
+  if(!f){setStatus($('tnstatus'),'Bitte eine TAF-Datei auswählen.','err');return;}
+  if(tnHave[uid]&&tnHave[uid].size>=0&&!confirm('Die vorhandene Datei von '+uid+' wird ersetzt. Weiter?'))return;
+  const x=new XMLHttpRequest();x.open('POST','/api/tonie/upload?uid='+uid);
+  $('tnprog').hidden=false;$('tnprog').value=0;$('tnbtn').disabled=true;
+  x.upload.onprogress=e=>{if(e.lengthComputable){$('tnprog').value=e.loaded*100/e.total;setStatus($('tnstatus'),'Lade hoch … '+Math.round(e.loaded*100/e.total)+' %');}};
+  x.onload=()=>{
+    let j={};try{j=JSON.parse(x.responseText);}catch(e){}
+    $('tnbtn').disabled=false;$('tnprog').hidden=true;
+    if(j.ok){setStatus($('tnstatus'),'Gespeichert: '+j.chapters+' Kapitel, Prüfsumme stimmt.','ok');$('tnfile').value='';tnLoad();}
+    else setStatus($('tnstatus'),'Fehler: '+(j.error||'unbekannt'),'err');
+  };
+  x.onerror=()=>{$('tnbtn').disabled=false;$('tnprog').hidden=true;setStatus($('tnstatus'),'Upload abgebrochen.','err');};
+  setStatus($('tnstatus'),'Lade hoch …');x.send(f);
+};
+showTab(location.hash.slice(1));
 load();
 </script>
 </body>

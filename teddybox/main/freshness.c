@@ -270,6 +270,11 @@ static int collect_tonies(TonieFCInfo *infos, int max)
             }
             char path[64];
             snprintf(path, sizeof(path), "%s/%.8s", dir_path, fe->d_name);
+            if (pb_file_is_own(path))
+            {
+                /* uploaded on the setup page: not teddyCloud's business */
+                continue;
+            }
 
             FILE *f = fopen(path, "rb");
             if (!f)
@@ -314,6 +319,12 @@ static void park_outdated(uint64_t uid)
 
     char *file = pb_build_filename(uid);
     struct stat st;
+    if (pb_file_is_own(file))
+    {
+        ESP_LOGI(TAG, "  %016llX was uploaded on the setup page, kept", (unsigned long long)uid);
+        free(file);
+        return;
+    }
     if (stat(file, &st) != 0)
     {
         /* teddyCloud may report tonies it knows for this box that were never played here */

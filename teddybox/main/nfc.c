@@ -11,6 +11,7 @@
 
 #include "playback.h"
 #include "rtnl.h"
+#include "tonie_seen.h"
 #include "taskwatch.h"
 #include "board.h"
 #include "nfc.h"
@@ -229,6 +230,7 @@ static void nfc_new_tag(trf7962a_t trf, const char *what)
     ESP_LOGI(TAG, "Tag %s: %llX", what, nfc_get_current_uid());
     /* before the playback starts, teddyCloud expects the tag first */
     rtnl_tag(nfc_get_current_uid(), true);
+    tonie_seen_add(nfc_get_current_uid());
     nfc_play();
     /* field is still on and the tag unlocked; received_data is reused, the UID is copied */
     nfc_read_token(trf);

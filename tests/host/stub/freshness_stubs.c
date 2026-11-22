@@ -8,3 +8,4 @@ TonieboxAudioFileHeader *pb_toniefile_get_header(FILE *fd) { return NULL; }
 bool pb_is_playing(void) { return false; }
 uint64_t pb_get_current_uid(void) { return 0; }
 void freshness_box_settings_received(const freshness_settings_t *s) {}
+bool pb_file_is_own(const char *filename) { return false; }

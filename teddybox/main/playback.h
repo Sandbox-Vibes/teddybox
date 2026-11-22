@@ -139,6 +139,9 @@ bool pb_finish_tmp(const char *filename);
    never complete, resumed or kept */
 #define PB_IS_STREAM_LENGTH(len) (((len) % 4096) != 0)
 bool pb_file_is_stream(const char *filename);
+/* uploaded on the setup page ("<filename>.own" exists): teddyCloud's
+   freshness check and the nightly update leave it alone */
+bool pb_file_is_own(const char *filename);
 uint32_t pb_get_play_position();
 uint64_t pb_get_current_uid();
 void pb_set_last(uint64_t nfc_uid, uint32_t play_position);
