@@ -101,7 +101,8 @@ esp_err_t nfc_get_rand(trf7962a_t trf, uint8_t *rand)
     nfc_log_dump("GET RANDOM", received_data, received_length);
     if (received_length != 5 || received_data[0] != 0)
     {
-        ESP_LOGE(TAG, "received RAND with %d bytes, status %d", received_length, received_data[0]);
+        /* also a tag without the NXP commands answering with an error */
+        ESP_LOGD(TAG, "received RAND with %d bytes, status %d", received_length, received_data[0]);
         return ESP_FAIL;
     }
 
@@ -308,6 +309,19 @@ void nfc_mainthread(void *arg)
             nfc_field_on(trf);
             if (nfc_get_rand(trf, rand) != ESP_OK)
             {
+                /* tags without the NXP commands (other makers, no privacy mode,
+                   e.g. self-made tonies) answer a plain INVENTORY; a tonie in
+                   privacy mode stays silent there. Only every second search,
+                   the extra exchange keeps the field on longer. */
+                if ((nfc_search_failures & 1) && nfc_inventory(trf))
+                {
+                    ESP_LOGI(TAG, "Tag without privacy mode found");
+                    nfc_search_failures = 0;
+                    nfc_unlock_pass = -1;
+                    nfc_retry = 0;
+                    state = STATE_TAG;
+                    break;
+                }
                 /* nothing there; every few seconds reinitialize the chip in case it got stuck */
                 if (++nfc_search_failures >= NFC_SEARCH_RESET_EVERY)
                 {

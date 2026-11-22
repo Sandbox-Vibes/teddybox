@@ -1,4 +1,6 @@
-/* virtual time + a simulated Tonie (NXP SLIX-L in privacy mode, Boxine password) */
+/* virtual time + a simulated Tonie (NXP SLIX-L in privacy mode, Boxine password).
+   "./sim plain": tonie B is a plain ISO15693 tag of another maker (no GET
+   RANDOM / SET PASSWORD, no privacy mode, answers with an error flag) */
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
@@ -7,6 +9,7 @@
 
 #define TONIE_PASS 0x7FFD6E5B
 int sim_verbose = 0;
+static bool plain_b = false;
 static double now_ms = 0, field_on_since = -1, field_ms = 0;
 static bool field = false;
 static jmp_buf sim_end; static double sim_end_ms;
@@ -44,6 +47,10 @@ esp_err_t trf7962a_xmit(trf7962a_t c, uint8_t *tx, uint8_t txl, uint8_t *rx, uin
     advance(4); tag_update();                 /* one ISO15693 exchange ~4 ms */
     uint64_t t = tag_at(now_ms);
     if (!t || !tag_powered) return ESP_FAIL;  /* timeout, nobody answered */
+    if (plain_b && t == 0xE004035044556677ULL) {
+        if (tx[1] == 0xB2 || tx[1] == 0xB3) { rx[0] = 1; rx[1] = 1; rx[2] = rx[3] = 0; *rxl = 4; return ESP_OK; } /* error: not supported */
+        tag_unlocked = true;                  /* no privacy mode */
+    }
     switch (tx[1]) {
     case 0xB2: rnd[0] = (uint8_t)now_ms; rnd[1] = (uint8_t)(now_ms / 7); rx[0]=0; rx[1]=rnd[0]; rx[2]=rnd[1]; rx[3]=rx[4]=0; *rxl=5; return ESP_OK;
     case 0xB3: { uint32_t p = (tx[4]^rnd[0]) | (tx[5]^rnd[1])<<8 | (tx[6]^rnd[0])<<16 | (uint32_t)(tx[7]^rnd[1])<<24;
@@ -78,7 +85,9 @@ void pb_stop(void) { if (n_stop < 8) stop_at[n_stop++] = now_ms; if (sim_verbose
 void nfc_mainthread(void *arg);
 int main(int argc, char **argv)
 {
-    sim_verbose = argc > 1;
+    plain_b = argc > 1 && !strcmp(argv[1], "plain");
+    sim_verbose = argc > 1 && !plain_b;
+    if (plain_b) printf("  (Tonie B: Tag ohne NXP-Befehle und Privacy-Modus)\n");
     struct { const char *name; double from, to; } phase[] = {{"ohne Tonie", 0, 5000}, {"Tonie liegt auf", 5000, 35000}, {"ohne Tonie", 50000, 60000}};
     /* run once per phase end, measuring the field share inside the phase */
     double prev_field = 0, prev_t = 0;
