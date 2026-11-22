@@ -15,9 +15,9 @@ media), builds it, patches out the ADC calibration QEMU does not have
 | `mkqdl.sh` | downloads: abort, resume, `.tmp` handling, migration | a local teddyCloud with cloud access off, client certificate in the assets FAT under `CERT/` |
 | `mkqra.sh` | read-ahead: SD hangs, seek, growing file, ending during a hang | |
 | `mkqtcset.sh` | box settings from teddyCloud: baseline, change taken over, box change stays (`run` drives teddyCloud's web API) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
-| `mkqtw.sh` | task watchdog: a task that stops checking in restarts the box, the reason names it | |
 | `mkqv.sh` | SHA-1 check of TAF files, rename to `.bad` | `TAF=` a small tonie file (< 300 KB) |
 | `mkqrtnl.sh` | RTNL events reach teddyCloud (`run` reads teddyCloud's `/api/sse`) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
+| `mkqtw.sh` | task watchdog: a task that stops checking in restarts the box, the reason names it | |
 
 Environment:
 
