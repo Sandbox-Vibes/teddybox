@@ -22,6 +22,7 @@
 #include "raw_stream.h"
 
 #include "playback.h"
+#include "rtnl.h"
 #include "settings.h"
 
 #define PB_DL_CONNECT_TIMEOUT_MS 20000
@@ -981,6 +982,23 @@ esp_err_t pb_play(const char *uri)
     return ESP_OK;
 }
 
+bool pb_file_is_stream(const char *filename)
+{
+    FILE *fd = fopen(filename, "rb");
+    if (!fd)
+    {
+        return false;
+    }
+    TonieboxAudioFileHeader *taf = pb_toniefile_get_header(fd);
+    fclose(fd);
+    bool stream = taf && PB_IS_STREAM_LENGTH(taf->num_bytes);
+    if (taf)
+    {
+        toniebox_audio_file_header__free_unpacked(taf, NULL);
+    }
+    return stream;
+}
+
 bool pb_finish_tmp(const char *filename)
 {
     char tmp[64];
@@ -1220,6 +1238,8 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
     if (!pb_default_content && pb_toniefile_info.taf)
     {
         TonieboxAudioFileHeader *taf = pb_toniefile_info.taf;
+        rtnl_audio_id(taf->audio_id);
+        rtnl_event(RTNL3_PLAYBACK_STARTING);
         taf_verify_set_playing(pb_toniefile_info.filename);
         /* a complete file: check its hash once per start in the background */
         if (!pb_dl_running(current_dl_req))
@@ -1391,6 +1411,13 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
             break;
 
         case CC_STATE_RECEIVING:
+            if (current_dl_req->is_stream && start_pos != PB_MIN_DL_BLOCKS)
+            {
+                /* a stream starts anew every time: no position to resume */
+                ESP_LOGI(TAG, "Stream: playing from its start");
+                pb_last_play_position = 0;
+                start_pos = PB_MIN_DL_BLOCKS;
+            }
             if (current_dl_req->received / 4096 > start_pos)
             {
                 ESP_LOGI(TAG, "Download in progress, enough blocks received");
@@ -1599,6 +1626,10 @@ void pb_mainthread(void *arg)
                         if (msg.source == (void *)i2s_stream_writer)
                         {
                             pb_i2s_paused = false;
+                            if (!pb_default_content)
+                            {
+                                rtnl_event(RTNL3_PLAYBACK_STARTED);
+                            }
                         }
                         pb_playing = true;
                         dac3100_set_mute(false);
@@ -1614,6 +1645,10 @@ void pb_mainthread(void *arg)
                         pb_mempeak_release();
                         if (msg.source == (void *)i2s_stream_writer)
                         {
+                            if (!pb_default_content)
+                            {
+                                rtnl_event(RTNL3_PLAYBACK_STOPPED);
+                            }
                             dac3100_set_mute(true);
                             pb_led_download = false;
                             if (!pb_default_content)

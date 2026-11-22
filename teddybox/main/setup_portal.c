@@ -158,6 +158,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "cpu_mhz", s->cpu_mhz);
     cJSON_AddNumberToObject(j, "download_playing", s->dl_playing_kib_s);
     cJSON_AddBoolToObject(j, "readahead", s->readahead);
+    cJSON_AddBoolToObject(j, "rtnl", s->rtnl);
     esp_app_desc_t app;
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_get_partition_description(running, &app);
@@ -454,6 +455,11 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (cJSON_IsBool(b))
     {
         s->tc_box_settings = cJSON_IsTrue(b);
+    }
+    b = cJSON_GetObjectItemCaseSensitive(o, "rtnl");
+    if (cJSON_IsBool(b))
+    {
+        s->rtnl = cJSON_IsTrue(b);
     }
     b = cJSON_GetObjectItemCaseSensitive(o, "readahead");
     if (cJSON_IsBool(b))

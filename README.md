@@ -25,6 +25,7 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | SD card hangs during playback | own SD task with double buffers | own read-ahead task, 32 KB (about 2.7 s) |
 | Setup | Tonies app, hotspot `Toniebox-XXXX` | own setup page, hotspot `TeddyBox-XXXX` (big ear while switching on); WiFi of the original is used as is |
 | Settings | Tonies app / cloud | setup page, `teddybox.ini` on the SD card, Home Assistant; max volume (speaker/headphones), LED and slap also from teddyCloud |
+| Live events (RTNL: tonie, playback, volume, ears, slap, tilt, charger) | to Boxine (`rtnl.bxcl.de`), or to teddyCloud with a patched CA | to teddyCloud only (`rtnl`, on) |
 | Home Assistant | — (only what teddyCloud derives from the box) | MQTT discovery: playback, tonie, chapters, progress, volume, battery, settings, diagnostics, buttons |
 | Speaker sound | flat | three profiles in the DAC's own filters: flat, low cut, tuned (measured, default) |
 | Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original) |
@@ -117,6 +118,7 @@ Written by the setup page; all keys are optional.
 | `cpu_mhz` | 160 | 160 or 240 (`decoder = adf` always uses 240) |
 | `download_playing` | 0 | KiB/s while a tonie plays, 0 = unlimited |
 | `readahead` | 1 | 0 only for diagnosis |
+| `rtnl` | 1 | box events to teddyCloud, see below |
 | `mem_log` | 1 | memory lines in the serial log |
 
 The cloud is off by default on purpose: the box certificate would otherwise
@@ -198,6 +200,26 @@ to the Boxine fallback; but teddyCloud itself forwards claims to the Boxine
 cloud if its cloud access and "Forward claim" are enabled, so every placed
 tonie would reach Boxine. Therefore it is off by default; `claim = 1` turns
 it on. Home Assistant shows the current tonie anyway.
+
+### Live events (RTNL)
+
+Like the original firmware, TeddyBox sends box events over RTNL (4 byte
+length + protobuf `TonieRtnlRPC`, on teddyCloud's API port with the box
+certificate). teddyCloud shows them live in its web interface and passes
+them to its own MQTT / Home Assistant integration; it does not forward them
+to Boxine. Sent: tonie placed and removed, audio id, playback starting /
+started / stopped, volume (level and dB as the original), ears, slap
+(knock), tilt chapter, charger on/off, and the firmware version
+(`TeddyBox <version>`) after connecting. Only while teddyCloud is the
+backend in use, never to the Boxine fallback; events while it is not
+reachable are dropped. The connection is closed after a minute without
+events (it costs RAM). `rtnl = 0` switches it off.
+
+teddyCloud reads the tonie UID with a sign-extension bug: a UID whose lower
+half is `0x80000000` or more shows up with `FFFFFFFF` in front in its event
+view (the same happens with the original box).
+
+QEMU test `tests/qemu/mkqrtnl.sh run` (checks teddyCloud's `/api/sse`).
 
 ## Downloads
 
@@ -352,6 +374,15 @@ often right after a long download.
   server ignores the `Range`, the part already on the card is skipped
   instead of overwritten. Log: `[CDL] Connection lost at <x> of <y> bytes,
   resuming in <n> s (attempt <k> of 6)`. QEMU test `tests/qemu/mkqresume.sh`.
+- **teddyCloud streams** (web radio and other live sources) are recognised by
+  their length, which teddyCloud makes no multiple of 4096
+  (`encode.stream_max_size`). A stream always plays from its start, is never
+  resumed with `Range` (teddyCloud cannot continue a stream, teddycloud#606,
+  #608), not resumed automatically after a lost connection, and its `.tmp`
+  is deleted when it ends, so streams do not fill the card and the nightly
+  update does not try to complete them (it also deletes left-over stream
+  files). Log: `[CDL] teddyCloud stream (up to <n> bytes): not resumed, not
+  kept`. QEMU test `tests/qemu/mkqstream.sh`.
 
 ### Diagnostics in the log
 

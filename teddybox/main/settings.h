@@ -69,6 +69,8 @@ typedef struct
     bool claim;
     /* read-ahead task for tonie playback (diagnosis: readahead = 0) */
     bool readahead;
+    /* box events to teddyCloud (RTNL, like the original firmware) */
+    bool rtnl;
     /* Opus decoder: true = own CELT decoder (libopus, default), false = ESP-ADF (esp_audio_codec, fallback) */
     bool decoder_celt;
     /* CPU clock: 160 or 240 MHz */

@@ -59,6 +59,8 @@ typedef struct
 
 static cloud_backend_t backends[2];
 static volatile int active_backend = BACKEND_TEDDYCLOUD;
+/* teddyCloud answers (time sync worked) and is the backend in use */
+static volatile bool teddycloud_up = false;
 static char user_agent[64];
 
 #define CLOUD_HOST (backends[active_backend].host)
@@ -87,6 +89,35 @@ static QueueHandle_t cloud_request_queue;
 /********************************************************/
 /* TLS connection handling                              */
 /********************************************************/
+
+esp_tls_t *cloud_connect_teddycloud(void)
+{
+    /* never the Boxine cloud */
+    if (!teddycloud_up || !client_der)
+    {
+        return NULL;
+    }
+    cloud_backend_t *b = &backends[BACKEND_TEDDYCLOUD];
+    esp_tls_cfg_t cfg = {
+        .cacert_buf = b->ca,
+        .cacert_bytes = b->ca_len,
+        .clientcert_buf = client_der,
+        .clientcert_bytes = client_der_len,
+        .clientkey_buf = private_der,
+        .clientkey_bytes = private_der_len,
+        .timeout_ms = 10000,
+        .common_name = b->tls_name,
+        .skip_common_name = b->tls_name == NULL};
+    bool peak = mempeak_enter("TLS handshake", 8000);
+    esp_tls_t *tls = esp_tls_init();
+    if (tls && esp_tls_conn_new_sync(b->host, strlen(b->host), b->port, &cfg, tls) != 1)
+    {
+        esp_tls_conn_destroy(tls);
+        tls = NULL;
+    }
+    mempeak_leave(peak);
+    return tls;
+}
 
 static esp_err_t cloud_request(cloud_req_t *req)
 {
@@ -390,6 +421,17 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
         return ESP_FAIL;
     }
 
+    if (PB_IS_STREAM_LENGTH(total_length) && !req->is_stream)
+    {
+        req->is_stream = true;
+        ESP_LOGI(TAG, "[CDL] teddyCloud stream (up to %u bytes): not resumed, not kept", (unsigned)total_length);
+    }
+    if (req->is_stream && range_start > 0)
+    {
+        ESP_LOGE(TAG, "[CDL] Range answer for a stream, giving up");
+        return ESP_FAIL;
+    }
+
     /* the server may ignore our Range request and send everything again */
     bool resume = range_start > 0 && range_start == req->received;
     bool skip = false;
@@ -633,7 +675,7 @@ esp_err_t cloud_content_end_cbr(void *ctx)
     {
         req->state = CC_STATE_FINISHED;
     }
-    else if (req->state == CC_STATE_RECEIVING && !req->abort)
+    else if (req->state == CC_STATE_RECEIVING && !req->abort && !req->is_stream)
     {
         /* connection lost midway: the cloud task tries again with Range */
         req->state = CC_STATE_RESUMING;
@@ -973,7 +1015,12 @@ cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc
         {
             fclose(f);
         }
-        if (valid)
+        if (valid && pb_file_is_stream(req->tmpname))
+        {
+            /* teddyCloud cannot continue a stream (teddycloud#606, #608), it starts anew */
+            ESP_LOGI(TAG, "[CDL] Old stream data (%ld bytes), not resumed", (long)st.st_size);
+        }
+        else if (valid)
         {
             req->received = st.st_size;
             ESP_LOGI(TAG, "[CDL] Partial file, continue at %d", req->received);
@@ -1036,8 +1083,14 @@ void cloud_content_cleanup(cloud_content_req_t *req)
         fclose(req->handle);
         req->handle = NULL;
     }
-    /* complete: becomes the tonie file; partial: stays .tmp for a resume */
-    if (req->filename && req->tmpname)
+    /* complete: becomes the tonie file; partial: stays .tmp for a resume;
+       a stream is not kept (it is never complete and cannot be resumed) */
+    if (req->filename && req->tmpname && req->is_stream)
+    {
+        ESP_LOGI(TAG, "[CDL] Stream ended, deleting '%s' (%u bytes)", req->tmpname, (unsigned)req->received);
+        unlink(req->tmpname);
+    }
+    else if (req->filename && req->tmpname)
     {
         pb_finish_tmp(req->filename);
     }
@@ -1143,6 +1196,8 @@ static void cloud_task(void *ctx)
             }
             next_try = xTaskGetTickCount() + pdMS_TO_TICKS(10000);
         }
+
+        teddycloud_up = cloud_available && active_backend == BACKEND_TEDDYCLOUD;
 
         /* freshness check after boot and then every few hours, between downloads;
            not while something plays, a TLS handshake next to the decoder is the

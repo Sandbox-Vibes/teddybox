@@ -395,6 +395,12 @@ int dac3100_volume_step(int percent, int dir)
     return dac3100_volume_percent(idx);
 }
 
+int dac3100_volume_half_db(int percent)
+{
+    const int8_t *table = cur_output == DAC3100_OUT_HEADPHONE ? vol_table_hp : vol_table_spk;
+    return table[dac3100_volume_index(percent)];
+}
+
 static void dac3100_apply_volume(void)
 {
     const int8_t *table = cur_output == DAC3100_OUT_HEADPHONE ? vol_table_hp : vol_table_spk;
