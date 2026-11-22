@@ -37,7 +37,7 @@ t "empty list, seen tonies listed" '[[ "$L" == *"\"tonies\":[]"* && "$L" == *"$U
 R=$(up good.taf $U); echo "$R"
 t "good upload accepted, 3 chapters" '[[ "$R" == *"\"ok\":true"* && "$R" == *"\"chapters\":3"* ]]'
 L=$(list)
-t "listed complete and own" '[[ "$L" == *"\"uid\":\"$U\",\"state\":\"ok\""* && "$L" == *"\"own\":true"* && "$L" == *"\"audio_id\":1694498817"* ]]'
+t "listed complete and own" '[[ "$L" == *"\"uid\":\"$U\",\"alias\":\"\",\"state\":\"ok\""* && "$L" == *"\"own\":true"* && "$L" == *"\"audio_id\":1694498817"* ]]'
 R=$(up bad.taf $U); echo "$R"
 t "damaged file refused (SHA-1)" '[[ "$R" == *"\"ok\":false"* && "$R" == *SHA-1* ]]'
 R=$(up short.taf $U); echo "$R"
@@ -46,6 +46,12 @@ L=$(list)
 t "good file still there" '[[ "$L" == *"\"audio_id\":1694498817"* ]]'
 R=$(up other.taf $U); L=$(list)
 t "replaced by another file" '[[ "$R" == *"\"ok\":true"* && "$L" == *"\"audio_id\":1694498818"* ]]'
+curl -s -m 30 -X POST --data-binary 'Gute Nacht "Bär"' "$B/api/tonie/alias?uid=$U" > /dev/null
+curl -s -m 30 -X POST --data-binary 'Neuer Tonie' "$B/api/tonie/alias?uid=E004035011223344" > /dev/null; L=$(list)
+t "alias shown (UTF-8, quotes escaped), also for a seen tag" '[[ "$L" == *"\"alias\":\"Gute Nacht \\\"Bär\\\"\""* && "$L" == *"\"alias\":\"Neuer Tonie\""* ]]'
+t "list is valid JSON" 'echo "$L" | python3 -c "import json,sys; json.load(sys.stdin)"'
+curl -s -m 30 -X POST --data-binary '' "$B/api/tonie/alias?uid=E004035011223344" > /dev/null; L=$(list)
+t "alias removed" '[[ "$L" != *"Neuer Tonie"* && "$L" == *Nacht* ]]'
 curl -s -m 30 -X POST "$B/api/tonie/own?uid=$U&on=0" > /dev/null; L=$(list)
 t "protection off" '[[ "$L" == *"\"own\":false"* ]]'
 R=$(curl -s -m 30 -X POST "$B/api/tonie/upload?uid=XYZ"); 

@@ -97,6 +97,10 @@ id, and whether the file came from teddyCloud or was uploaded. For each:
   the freshness check and not touched by the nightly update, so teddyCloud
   never replaces it.
 - **Löschen**: the file and its leftovers (`.tmp`, `.old`, `.bad`).
+- **Name geben / ändern**: a name shown instead of the UID in this
+  overview only (named tonies first, sorted by name). Kept in
+  `tb_alias.txt` on the SD card (`UID=name` per line), also after deleting
+  the file.
 
 A tonie that is not on the card yet: pick it from "zuletzt aufgelegt" (the
 last 8 tags placed on the box, kept in NVS) or type its UID. Only TAF files,

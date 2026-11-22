@@ -34,6 +34,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 .tab[hidden]{display:none}
 .tonie{border:1px solid var(--line);border-radius:10px;padding:.6rem .7rem;margin:0 0 .5rem;background:var(--bg)}
 .tonie .uid{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;word-break:break-all}
+.tonie .name{font-weight:700;font-size:1.05rem}.tonie .name+.uid{font-weight:400;font-size:.8rem;color:var(--muted)}
 .tonie .meta{color:var(--muted);font-size:.85rem}
 .tonie .acts{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin-top:.35rem}
 .badge{display:inline-block;font-size:.75rem;font-weight:600;padding:.05rem .45rem;border-radius:999px;border:1px solid var(--line);margin:0 .25rem .15rem 0}
@@ -320,15 +321,17 @@ async function tnLoad(){
     const j=await (await fetch('/api/tonies')).json();
     $('tnspace').textContent=j.tonies.length+' Tonie(s), '+j.free_mb+' MB von '+j.total_mb+' MB frei';
     tnHave={};const list=$('tnlist');list.innerHTML='';
-    j.tonies.sort((a,b)=>a.uid<b.uid?-1:1).forEach(t=>{
+    j.tonies.sort((a,b)=>(!a.alias-!b.alias)||(a.alias||a.uid).localeCompare(b.alias||b.uid,'de')).forEach(t=>{
       tnHave[t.uid]=t;
       const d=document.createElement('div');d.className='tonie';
-      d.innerHTML='<div class="uid">'+esc(t.uid)+'</div><div>'+tnState(t)+'</div><div class="meta">'+
+      d.innerHTML=(t.alias?'<div class="name">'+esc(t.alias)+'</div>':'')+'<div class="uid">'+esc(t.uid)+'</div><div>'+tnState(t)+'</div><div class="meta">'+
         (t.size>=0?mb(t.size)+(t.chapters?', '+t.chapters+' Kapitel':'')+(t.audio_id?', Audio-ID '+t.audio_id.toString(16).toUpperCase():''):'keine abspielbare Datei')+'</div>';
       const a=document.createElement('div');a.className='acts';
       const rep=document.createElement('button');rep.className='link';rep.type='button';rep.textContent='Datei hochladen';
       rep.onclick=()=>{$('tnuid').value=t.uid;$('tnseen').value='';$('tnfile').click();};
-      a.append(rep);
+      const nm=document.createElement('button');nm.className='link';nm.type='button';nm.textContent=t.alias?'Name ändern':'Name geben';
+      nm.onclick=()=>tnAlias(t.uid,t.alias);
+      a.append(rep,nm);
       if(t.size>=0){
         const own=document.createElement('button');own.className='link';own.type='button';
         own.textContent=t.own?'Schutz aufheben':'Vor teddyCloud schützen';
@@ -343,8 +346,15 @@ async function tnLoad(){
     const sel=$('tnseen');sel.innerHTML='<option value="">– zuletzt aufgelegt –</option>';
     j.seen.forEach(s=>{const o=document.createElement('option');o.value=s.uid;
       const when=s.time?new Date(s.time*1000).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):'';
-      o.textContent=s.uid+(tnHave[s.uid]?' (auf der Karte)':' (neu)')+(when?', '+when:'');sel.append(o);});
+      o.textContent=(s.alias?s.alias+' – ':'')+s.uid+(tnHave[s.uid]?' (auf der Karte)':' (neu)')+(when?', '+when:'');sel.append(o);});
   }catch(e){setStatus($('tnspace'),'Liste konnte nicht geladen werden.','err');}
+}
+async function tnAlias(uid,old){
+  const n=prompt('Name für '+uid+' (nur für diese Übersicht, leer = keiner):',old||'');
+  if(n===null)return;
+  try{const j=await (await fetch('/api/tonie/alias?uid='+uid,{method:'POST',body:n.trim().slice(0,40)})).json();
+    if(!j.ok)alert('Fehler: '+j.error);}catch(e){alert('Keine Verbindung zur Box.');}
+  tnLoad();
 }
 $('tnreload').onclick=tnLoad;
 $('tnseen').onchange=()=>{if($('tnseen').value)$('tnuid').value=$('tnseen').value;};
