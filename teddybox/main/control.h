@@ -26,3 +26,7 @@ void ctrl_request_motion(int slap, int tilt, int reverse);
 uint32_t ctrl_get_volume(void);
 
 void ctrl_request_poweroff(void);
+/* sleep timer: minutes 1..240 start it, 0 stops it; see sleep_timer.h */
+void ctrl_request_sleep_timer(int minutes);
+/* minutes left, 0 = off */
+int ctrl_get_sleep_timer(void);
