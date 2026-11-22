@@ -814,7 +814,8 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
                 ESP_LOGW(TAG, "Waited %d ms for the download's file lock", (int)(wait_us / 1000));
             }
             avail = pb_ensure_block(info, dl->handle);
-            bool more_coming = dl->state == CC_STATE_RECEIVING && !dl->abort &&
+            /* also while the cloud task resumes a lost connection */
+            bool more_coming = pb_dl_running(dl) && dl->content_length && !dl->abort &&
                                (uint32_t)info->current_pos < dl->content_length;
             if (avail <= 0 && more_coming && info->fd)
             {
@@ -824,7 +825,13 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
                 info->fd = NULL;
             }
             xSemaphoreGive(dl->file_sem);
-            if (avail > 0 || !more_coming || waited >= PB_DL_WAIT_MAX_MS)
+            if (avail <= 0 && more_coming && waited >= PB_DL_WAIT_MAX_MS)
+            {
+                /* not the end: the download is still coming (e.g. resuming);
+                   the decoder calls again, a stop request is not held up */
+                return AEL_IO_TIMEOUT;
+            }
+            if (avail > 0 || !more_coming)
             {
                 break;
             }
@@ -1350,6 +1357,7 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
         {
         case CC_STATE_INIT:
         case CC_STATE_CONNECTING:
+        case CC_STATE_RESUMING:
             if (--connect_wait <= 0)
             {
                 ESP_LOGE(TAG, "Download did not start in time");
