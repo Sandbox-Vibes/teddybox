@@ -4,6 +4,7 @@ MAIN := ../../../teddybox/main
 
 test: sim
 	./sim
+	./sim plain
 
 # nfc.c is copied so that its includes resolve to the stubs, not to main/
 sim: sim.c $(MAIN)/nfc.c $(MAIN)/nfc.h

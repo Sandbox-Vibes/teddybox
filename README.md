@@ -425,8 +425,12 @@ often right after a long download.
   moments a tag is queried: every 250 ms without a tonie, every 500 ms with
   one. A tonie returns to privacy mode without field, so each check unlocks
   it again with the password that worked before. Simulated with a virtual
-  tonie (`tests/host/nfc_sim`): field on 3-4 % of the time instead of
+  tonie (`tests/host/nfc_sim`): field on about 4 % of the time instead of
   65-100 %, tonie removal noticed after about 0.7 s.
+- Tags of other makers without the NXP commands and without privacy mode
+  (self-made tonies) are found too: every second search also sends a plain
+  INVENTORY (`./sim plain` in the simulation). The original firmware needs a
+  patch for such tags (hackiebox_cfw_ng OFW patches).
 - Peripheral power and SD card power are held off during deep sleep
   (digital pads would lose their level otherwise).
 - On the charger the box sleeps with the ears as wake source and checks every
