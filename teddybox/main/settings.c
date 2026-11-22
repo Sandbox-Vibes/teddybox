@@ -122,11 +122,11 @@ int settings_save_ini(const char *path)
                      "speaker_eq = %s\n"
                      "# LED brightness: 0 (off) to 3 (full)\n"
                      "led_brightness = %u\n"
+                     "# both ears pressed and let go within 2 s: power off (as Hackiebox CFW), 1 on, 0 off\n"
+                     "ears_poweroff = %u\n"
                      "# slap on the side for the next/previous chapter: 0 (off), 1 (firm) to 5 (light), 3 like the original\n"
                      "slap = %u\n"
                      "slap_reverse = %u\n"
-                     "# both ears pressed and let go within 2 s: power off (as Hackiebox CFW), 1 on, 0 off\n"
-                     "ears_poweroff = %u\n"
                      "# tilt for chapter/seek: 0 (off), 1 (tilt far) to 5 (tilt a little), 3 = 30 degrees\n"
                      "tilt = %u\n"
                      "# memory lines in the serial log (diagnostics): 1 on, 0 off\n"
@@ -161,8 +161,8 @@ int settings_save_ini(const char *path)
                      s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_max_hdp, s->volume_default, (unsigned)s->idle_timeout_s,
-                     speaker_eq_name(s->speaker_eq), s->led_brightness,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->ears_poweroff ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0, s->rtnl ? 1 : 0) > 0;
+                     speaker_eq_name(s->speaker_eq), s->led_brightness, s->ears_poweroff ? 1 : 0,
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0, s->rtnl ? 1 : 0) > 0;
     ok = (fclose(f) == 0) && ok;
 
     if (!ok)

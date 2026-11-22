@@ -226,8 +226,8 @@ $('save').onclick=async()=>{
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
     lang_id:+$('lang').value,volume_max:+$('vmax').value||100,volume_max_hdp:+$('vmaxh').value||100,tc_box_settings:$('tcset').value==='1',idle_timeout:+$('idle').value||60,speaker_eq:$('speq').value,led_brightness:+$('led').value,slap:+$('slap').value,slap_reverse:$('slaprev').checked,tilt:+$('tilt').value,update_hour:+$('uphour').value,decoder:$('decoder').value,cpu_mhz:+$('cpumhz').value,download_playing:+$('dlplay').value,readahead:$('readahead').value==='1',rtnl:$('rtnl').value==='1',
     boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked};
-  body.ears_poweroff=$('earsoff').checked;
   setStatus($('status'),'Speichere …');
+  body.ears_poweroff=$('earsoff').checked;
   try{
     const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j=await r.json();
