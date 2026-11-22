@@ -24,6 +24,32 @@ bool wifi_is_connected(void) { return got_ip; }
 static int fails;
 static void check(const char *w, bool ok) { fails += !ok; ESP_LOGI(TAG, "%s %s", ok ? "OK  " : "FAIL", w); }
 
+/* stack the name lookup (SD card, two files) needs: run it in a task
+   with a painted stack and read the high water mark */
+static volatile int lookup_stack = -1;
+static void lookup_task(void *arg)
+{
+    char n[TONIE_NAME_LEN];
+    UBaseType_t before = uxTaskGetStackHighWaterMark(NULL);
+    tonie_name_lookup(0xE0040350D4C3B2A1ULL, n, sizeof(n));
+    tonie_name_lookup(0xE004035000112233ULL, n, sizeof(n));
+    lookup_stack = (int)(before - uxTaskGetStackHighWaterMark(NULL));
+    vTaskDelete(NULL);
+}
+
+static volatile int step_stack = -1;
+static void step_task(void *arg)
+{
+    UBaseType_t before = uxTaskGetStackHighWaterMark(NULL);
+    for (int i = 0; i < 100; i++)
+    {
+        tonie_names_tc_step();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    step_stack = (int)(before - uxTaskGetStackHighWaterMark(NULL));
+    vTaskDelete(NULL);
+}
+
 static void touch_file(const char *dir, const char *file)
 {
     char p[64];
@@ -71,12 +97,14 @@ void app_main(void)
         vTaskDelay(100);
     }
 
-    /* the cloud task calls it every 100 ms */
-    for (int i = 0; i < 100; i++)
+    /* the cloud task calls it every 100 ms; run it in its own task to see its stack use */
+    xTaskCreate(step_task, "steps", 8192, NULL, 5, NULL);
+    while (step_stack < 0)
     {
-        tonie_names_tc_step();
         vTaskDelay(pdMS_TO_TICKS(100));
     }
+    ESP_LOGI(TAG, "teddyCloud name fetch used %d bytes of stack", step_stack);
+    check("name fetch fits the cloud task stack (< 3000 bytes)", step_stack < 3000);
     char n[TONIE_NAME_LEN];
     bool a = tonie_name_lookup(0xE0040350D4C3B2A1ULL, n, sizeof(n));
     ESP_LOGI(TAG, "name: '%s'", n);
@@ -84,6 +112,13 @@ void app_main(void)
     check("no name where teddyCloud has none", !tonie_name_lookup(0xE004035000112233ULL, n, sizeof(n)));
     tonie_names_set(TONIE_ALIAS_FILE, 0xE0040350D4C3B2A1ULL, "Eigener Name");
     check("own name wins", tonie_name_lookup(0xE0040350D4C3B2A1ULL, n, sizeof(n)) && !strcmp(n, "Eigener Name"));
+    xTaskCreate(lookup_task, "lookup", 8192, NULL, 5, NULL);
+    while (lookup_stack < 0)
+    {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    ESP_LOGI(TAG, "name lookup used %d bytes of stack", lookup_stack);
+    check("name lookup fits the mqtt_ha task stack (< 2500 bytes)", lookup_stack < 2500);
     ESP_LOGI(TAG, "%s", fails ? "FAILED" : "ALL OK");
     while (1)
     {
