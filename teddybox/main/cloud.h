@@ -79,6 +79,9 @@ typedef struct
     /* automatic resume after a lost connection: number of the attempt, and
        bytes to drop when the server ignored the Range and sends from 0 */
     int resume_attempt;
+    /* teddyCloud stream (Content-Length no multiple of 4096): never resumed
+       with Range, the .tmp is deleted afterwards */
+    bool is_stream;
     uint32_t skip_left;
     SemaphoreHandle_t file_sem;
     FILE *handle;
