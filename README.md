@@ -464,16 +464,6 @@ often right after a long download.
   5 minutes whether it was taken off.
 - Idle power off after 60 s by default (`idle_timeout`).
 
-## Watchdog
-
-Besides the ESP-IDF watchdogs (interrupts, idle tasks) TeddyBox watches its
-own tasks: main loop and NFC must check in within 30 s, playback within
-90 s, the cloud task within 120 s (a download in progress checks in with
-every block). If one hangs, the box restarts instead of staying silent;
-Home Assistant shows "Grund des letzten Starts: crash: playback stuck for
-91 s" and so on. A connection that sends nothing for a minute is given up
-(the download is then resumed). QEMU test `tests/qemu/mkqtw.sh`.
-
 ## Network traffic
 
 Without `boxine_fallback` the box only talks to what is configured:
@@ -484,6 +474,16 @@ It shows up in the router as `teddybox-xxxx`. Inbound, nothing listens
 in normal mode. Checked with a packet capture in QEMU (Ethernet instead of
 WiFi). Note that teddyCloud itself contacts the Boxine cloud if its
 `cloud.enabled` is on.
+
+## Watchdog
+
+Besides the ESP-IDF watchdogs (interrupts, idle tasks) TeddyBox watches its
+own tasks: main loop and NFC must check in within 30 s, playback within
+90 s, the cloud task within 120 s (a download in progress checks in with
+every block). If one hangs, the box restarts instead of staying silent;
+Home Assistant shows "Grund des letzten Starts: crash: playback stuck for
+91 s" and so on. A connection that sends nothing for a minute is given up
+(the download is then resumed). QEMU test `tests/qemu/mkqtw.sh`.
 
 ## Flash layout
 
