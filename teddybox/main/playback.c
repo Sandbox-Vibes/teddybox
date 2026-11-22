@@ -22,6 +22,7 @@
 #include "raw_stream.h"
 
 #include "playback.h"
+#include "rtnl.h"
 #include "settings.h"
 
 #define PB_DL_CONNECT_TIMEOUT_MS 20000
@@ -1237,6 +1238,8 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
     if (!pb_default_content && pb_toniefile_info.taf)
     {
         TonieboxAudioFileHeader *taf = pb_toniefile_info.taf;
+        rtnl_audio_id(taf->audio_id);
+        rtnl_event(RTNL3_PLAYBACK_STARTING);
         taf_verify_set_playing(pb_toniefile_info.filename);
         /* a complete file: check its hash once per start in the background */
         if (!pb_dl_running(current_dl_req))
@@ -1623,6 +1626,10 @@ void pb_mainthread(void *arg)
                         if (msg.source == (void *)i2s_stream_writer)
                         {
                             pb_i2s_paused = false;
+                            if (!pb_default_content)
+                            {
+                                rtnl_event(RTNL3_PLAYBACK_STARTED);
+                            }
                         }
                         pb_playing = true;
                         dac3100_set_mute(false);
@@ -1638,6 +1645,10 @@ void pb_mainthread(void *arg)
                         pb_mempeak_release();
                         if (msg.source == (void *)i2s_stream_writer)
                         {
+                            if (!pb_default_content)
+                            {
+                                rtnl_event(RTNL3_PLAYBACK_STOPPED);
+                            }
                             dac3100_set_mute(true);
                             pb_led_download = false;
                             if (!pb_default_content)

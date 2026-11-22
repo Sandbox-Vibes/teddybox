@@ -10,6 +10,7 @@
 #include "trf7962a.h"
 
 #include "playback.h"
+#include "rtnl.h"
 #include "board.h"
 #include "nfc.h"
 
@@ -224,6 +225,8 @@ static void nfc_new_tag(trf7962a_t trf, const char *what)
 {
     memcpy(nfc_current_uid_rev, &received_data[2], 8);
     ESP_LOGI(TAG, "Tag %s: %llX", what, nfc_get_current_uid());
+    /* before the playback starts, teddyCloud expects the tag first */
+    rtnl_tag(nfc_get_current_uid(), true);
     nfc_play();
     /* field is still on and the tag unlocked; received_data is reused, the UID is copied */
     nfc_read_token(trf);
@@ -298,6 +301,7 @@ void nfc_mainthread(void *arg)
                 nfc_valid = false;
                 nfc_dump(dump_buf, nfc_current_uid_rev, 8);
                 ESP_LOGI(TAG, "Tag disappeared: %s", dump_buf);
+                rtnl_tag_removed(nfc_get_current_uid());
                 nfc_stop();
             }
 

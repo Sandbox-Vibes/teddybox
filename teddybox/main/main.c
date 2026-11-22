@@ -44,6 +44,7 @@
 #include "battery.h"
 #include "bootsel.h"
 #include "control.h"
+#include "rtnl.h"
 #include "mqtt_ha.h"
 #include "setup_portal.h"
 
@@ -419,6 +420,7 @@ void app_main(void)
     wifi_init();
     nfc_init();
     cloud_init();
+    rtnl_init();
     mqtt_ha_init();
     /* already too much memory consumption, do not enable by default */
     /* updates come through the setup page, see ota.h */
@@ -449,6 +451,7 @@ void app_main(void)
 
         if (ear_big && !ear_big_prev)
         {
+            rtnl_event(RTNL3_EAR_BIG);
             dac3100_set_mute(false);
             int vol_up = dac3100_volume_step(rtc_storage.volume, 1);
             if (vol_up >= 0 && vol_up <= ctrl_volume_max())
@@ -456,6 +459,7 @@ void app_main(void)
                 ESP_LOGI(TAG, "Volume up");
                 rtc_storage.volume = vol_up;
                 audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
+                rtnl_volume(rtc_storage.volume);
                 dac3100_beep(0, 0x140);
             }
             else
@@ -468,6 +472,7 @@ void app_main(void)
 
         if (ear_small && !ear_small_prev)
         {
+            rtnl_event(RTNL3_EAR_SMALL);
             dac3100_set_mute(false);
             int vol_down = dac3100_volume_step(rtc_storage.volume, -1);
             if (vol_down >= 0)
@@ -475,6 +480,7 @@ void app_main(void)
                 ESP_LOGI(TAG, "Volume down");
                 rtc_storage.volume = vol_down;
                 audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
+                rtnl_volume(rtc_storage.volume);
                 dac3100_beep(2, 0x140);
             }
             else
@@ -498,6 +504,7 @@ void app_main(void)
             ESP_LOGI(TAG, "Volume set to %d", vol_req);
             rtc_storage.volume = vol_req;
             audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
+            rtnl_volume(rtc_storage.volume);
             last_activity_time = cur_time;
         }
         int vmax_spk = ctrl_vmax_spk_request, vmax_hdp = ctrl_vmax_hdp_request;
