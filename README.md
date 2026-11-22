@@ -516,7 +516,9 @@ On a crash (exception, watchdog) the box writes a core dump to the
 `coredump` partition (0x7e0000, 128 KB, already in the original partition
 table) and restarts. At the next start the summary is logged
 (`CRASH: Last crash (this firmware …): task …, PC …, backtrace …`) and,
-once per crash, appended to `tb_crash.txt` on the SD card. Decode it with
+once per crash, appended to `tb_crash.txt` on the SD card. The setup page
+shows that file in the System tab (copy, delete), so the SD card can stay in
+the box. Decode it with
 the `.elf` of the same version (release files):
 
 ```sh

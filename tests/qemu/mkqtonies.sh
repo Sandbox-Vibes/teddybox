@@ -32,6 +32,10 @@ fail=0
 t() { if eval "$2"; then echo "OK   $1"; else echo "FAIL $1"; fail=1; fi; }
 up() { curl -s -m 120 -X POST --data-binary @"$D/$1" "$B/api/tonie/upload?uid=$2"; }
 list() { curl -s -m 30 "$B/api/tonies"; }
+C=$(curl -s -m 30 "$B/api/crashlog")
+t "crash log shown in the setup page" '[[ "$C" == *"task cloud, PC 0x42001234"* ]]'
+curl -s -m 30 -X POST "$B/api/crashlog/delete" > /dev/null; C=$(curl -s -m 30 "$B/api/crashlog")
+t "crash log deleted" '[[ -z "$C" ]]'
 L=$(list); echo "$L" | head -c 400; echo
 t "empty list, seen tonies listed" '[[ "$L" == *"\"tonies\":[]"* && "$L" == *"$U"* && "$L" == *E004035011223344* ]]'
 R=$(up good.taf $U); echo "$R"

@@ -13,6 +13,7 @@
 #include "esp_http_server.h"
 #include "nvs_flash.h"
 #include "tonies_portal.h"
+#include "crashlog.h"
 #include "tonie_seen.h"
 
 static const char *TAG = "TNTEST";
@@ -50,10 +51,17 @@ void app_main(void)
     }
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.stack_size = 8192;
-    hc.max_uri_handlers = 8;
+    hc.max_uri_handlers = 10;
     httpd_handle_t server;
     ESP_ERROR_CHECK(httpd_start(&server, &hc));
     ESP_ERROR_CHECK(tonies_portal_register(server, NULL));
+    ESP_ERROR_CHECK(crashlog_register(server, NULL));
+    FILE *cf = fopen("/sdcard/tb_crash.txt", "w");
+    if (cf)
+    {
+        fprintf(cf, "TeddyBox test (running now), crash in firmware ELF 12345678 (this one):\n  task cloud, PC 0x42001234\n");
+        fclose(cf);
+    }
     ESP_LOGI(TAG, "READY");
     while (1)
     {
