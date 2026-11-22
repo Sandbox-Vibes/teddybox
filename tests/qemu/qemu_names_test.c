@@ -16,6 +16,7 @@
 #include "settings.h"
 #include "tonie_names.h"
 #include "tonie_names_tc.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "NMTEST";
 static volatile bool got_ip;
@@ -97,6 +98,31 @@ void app_main(void)
         vTaskDelay(100);
     }
 
+    /* 0: little memory (as during download + playback): no request, the
+       tonie is not given up but asked again later */
+    {
+        static void *hog[96];
+        int hn = 0;
+        size_t big;
+        while (hn < 96 && (big = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)) >= 8 * 1024)
+        {
+            hog[hn++] = malloc(big - 2048 > 6000 ? big - 2048 : 6000);
+        }
+        ESP_LOGI(TAG, "memory held in %d blocks, largest free %u", hn,
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+        for (int i = 0; i < 30; i++)
+        {
+            tonie_names_tc_step();
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        char n0[TONIE_NAME_LEN];
+        check("low memory: no request, no name yet", !tonie_name_lookup(0xE0040350D4C3B2A1ULL, n0, sizeof(n0)));
+        for (int i = 0; i < hn; i++)
+        {
+            free(hog[i]);
+        }
+        vTaskDelay(pdMS_TO_TICKS(31000)); /* BUSY_GAP */
+    }
     /* the cloud task calls it every 100 ms; run it in its own task to see its stack use */
     xTaskCreate(step_task, "steps", 8192, NULL, 5, NULL);
     while (step_stack < 0)
