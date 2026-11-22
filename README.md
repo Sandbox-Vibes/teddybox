@@ -67,14 +67,41 @@ On the first boot (no `teddybox.ini` on the SD card yet), or when the big
 ear is held for 3 seconds while switching on, the box says the installation
 announcement, blinks blue/green and opens the WiFi hotspot `TeddyBox-XXXX`
 (no password, only while setup runs). Phones show the setup page
-automatically, otherwise open `http://192.168.4.1/`. It configures WiFi
-(with network scan), teddyCloud (address, port, CA upload as DER or PEM),
-Home Assistant (MQTT), volume, language, power off time, speaker sound, LED,
-slap and tilt, the nightly update hour and (section "Decoder und
-Prozessortakt") decoder, CPU clock, download speed while playing and the
-read-ahead. Saving writes `teddybox.ini`, stores the WiFi in the original
-firmware's format and restarts. Unused for 15 minutes, the box switches off.
-Cloud, MQTT and NFC do not run in setup mode.
+automatically, otherwise open `http://192.168.4.1/`. Four tabs:
+
+- **Verbindung**: WiFi (with network scan), teddyCloud (address, port, CA
+  upload as DER or PEM), Home Assistant (MQTT)
+- **Box**: volume, language, power off time, speaker sound, LED, slap and
+  tilt, gestures, nightly update, freshness check, and (sections) decoder,
+  CPU clock, download speed while playing, read-ahead, RTNL
+- **Tonies**: the tonie files on the SD card and uploading TAF files, see
+  below
+- **System**: backup, firmware update, start the original firmware
+
+Saving (tabs Verbindung and Box) writes `teddybox.ini`, stores the WiFi in
+the original firmware's format and restarts. Unused for 15 minutes, the box
+switches off. Cloud, MQTT and NFC do not run in setup mode.
+
+### Tonies (setup page)
+
+Lists every tonie on the SD card with its state (complete, incomplete
+download, damaged, new version waiting, stream), size, chapters and audio
+id, and whether the file came from teddyCloud or was uploaded. For each:
+
+- **Datei hochladen**: a finished TAF file (from teddyCloud, TonieToolbox,
+  teddy …) for this tonie. The box checks the header, that the length fits
+  and the SHA-1 of the audio data before it replaces anything; a damaged or
+  incomplete file is refused and the old one stays.
+- **Vor teddyCloud schützen / Schutz aufheben**: a protected file
+  (`<file>.own` next to it; every upload is protected) is not reported in
+  the freshness check and not touched by the nightly update, so teddyCloud
+  never replaces it.
+- **Löschen**: the file and its leftovers (`.tmp`, `.old`, `.bad`).
+
+A tonie that is not on the card yet: pick it from "zuletzt aufgelegt" (the
+last 8 tags placed on the box, kept in NVS) or type its UID. Only TAF files,
+no MP3 (convert with teddyCloud or TonieToolbox). A large tonie can take a
+few minutes over the hotspot. QEMU test `tests/qemu/mkqtonies.sh run`.
 
 ### Backup (setup page)
 

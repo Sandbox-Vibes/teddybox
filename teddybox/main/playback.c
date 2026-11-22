@@ -997,6 +997,14 @@ esp_err_t pb_play(const char *uri)
     return ESP_OK;
 }
 
+bool pb_file_is_own(const char *filename)
+{
+    char own[72];
+    snprintf(own, sizeof(own), "%s.own", filename);
+    struct stat st;
+    return stat(own, &st) == 0;
+}
+
 bool pb_file_is_stream(const char *filename)
 {
     FILE *fd = fopen(filename, "rb");
