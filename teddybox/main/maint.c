@@ -369,6 +369,15 @@ static int find_candidates(candidate_t *c, int max)
             }
             char path[48];
             snprintf(path, sizeof(path), "%s/%s", dir_path, name);
+            /* left-over stream (power lost while it played): nothing to complete */
+            char tmp_path[52];
+            snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+            if (pb_file_is_stream(tmp_path))
+            {
+                ESP_LOGI(TAG, "Deleting left-over stream '%s'", tmp_path);
+                unlink(tmp_path);
+                continue;
+            }
             /* complete but not renamed yet (power lost after the download) */
             pb_finish_tmp(path);
             struct stat st;
