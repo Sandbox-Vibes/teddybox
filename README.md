@@ -32,6 +32,7 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | System sounds | yes | the same sounds, read from the box's assets |
 | Firmware updates | from Boxine, automatically | uploaded on the setup page, A/B with rollback |
 | Back to the other firmware | — | both ears for 5 seconds |
+| Sleep timer | — (Toniebox 2 / app only) | small ear held 2 s (30 min) or Home Assistant; quieter at the end, then off |
 | Certificate / flash backup | — | on the setup page (needs a press on the box) |
 | MMA8451 accelerometer (some boxes) | yes | no, LIS3DH only |
 | Tonies app pairing | yes | no |
@@ -273,7 +274,7 @@ unfinished download, one after another.
 ## Home Assistant
 
 With `mqtt_host` set, the box registers itself via MQTT discovery as device
-"TeddyBox" (`<id>` = `teddybox_<mac>`, 31 entities):
+"TeddyBox" (`<id>` = `teddybox_<mac>`, 32 entities):
 
 | Entities | |
 |---|---|
@@ -285,6 +286,7 @@ With `mqtt_host` set, the box registers itself via MQTT discovery as device
 | Kopfhörer, WLAN-Signal | |
 | LED-Helligkeit, Klapsen, Klapsen umgekehrt, Kippen, Lautsprecher-Klang | settings, applied at once and saved to the INI |
 | Stopp, Nächstes/Vorheriges Kapitel, Ausschalten | buttons |
+| Schlaf-Timer | number in minutes (0 off, up to 240), shows the minutes left; see "Sleep timer" |
 | Diagnostics | free heap (now and minimum), start time, reason of the last start, firmware slot, last nightly update |
 
 Topics: `teddybox/<mac>/state` and `/diag` (JSON),
@@ -293,6 +295,17 @@ Topics: `teddybox/<mac>/state` and `/diag` (JSON),
 (stored on the broker) are ignored and deleted there: they would be repeated
 at every start and override the settings. The box powers off when idle
 (`idle_timeout`), Home Assistant then shows it as unavailable.
+
+## Sleep timer
+
+Hold the **small ear alone for 2 seconds**: the sleep timer starts with 30
+minutes (long high beep); the volume step of the press is taken back. The
+same again switches it off (long low beep). From Home Assistant the number
+"Schlaf-Timer" sets any time from 5 to 240 minutes (0 = off) and shows the
+minutes left. Over the last third of the time (1 to 10 minutes) the volume
+goes down to nothing, then the box stops and switches off. The volume
+itself stays as it was; the ears and Home Assistant still change it during
+the fade. The timer is not kept when the box switches off before.
 
 ## Audio
 

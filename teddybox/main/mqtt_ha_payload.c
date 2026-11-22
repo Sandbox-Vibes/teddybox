@@ -92,6 +92,9 @@ static const ha_entity_t entities[] = {
      "\"command_topic\":\"%s/cmd/prev\",\"icon\":\"mdi:skip-previous\""},
     {"button", "poweroff", "Ausschalten",
      "\"command_topic\":\"%s/cmd/poweroff\",\"icon\":\"mdi:power\""},
+    {"number", "sleep_timer", "Schlaf-Timer",
+     "\"value_template\":\"{{ value_json.sleep_timer }}\",\"command_topic\":\"%s/cmd/sleep_timer\",\"min\":0,\"max\":240,"
+     "\"step\":5,\"unit_of_measurement\":\"min\",\"icon\":\"mdi:sleep\""},
 };
 
 #define ENTITY_COUNT ((int)(sizeof(entities) / sizeof(entities[0])))
@@ -203,14 +206,15 @@ int ha_state_json(const ha_state_t *st, char *buf, size_t size)
                      "{\"status\":\"%s\",\"tonie\":\"%s\",\"chapter\":%d,\"chapters\":%d,\"volume\":%u,"
                      "\"battery_mv\":%u,\"battery\":%d,\"battery_state\":\"%s\",\"charging\":%s,"
                      "\"headphones\":%s,\"rssi\":%d,\"speaker_eq\":\"%s\",\"led\":%d,\"slap\":%d,\"tilt\":%d,\"slap_reverse\":%s,"
-                     "\"progress\":%s,\"chapter_progress\":%s,\"position\":%s,\"duration\":%s,\"download\":%s}",
+                     "\"progress\":%s,\"chapter_progress\":%s,\"position\":%s,\"duration\":%s,\"download\":%s,"
+                     "\"sleep_timer\":%d}",
                      st->playing ? "playing" : "idle", tonie, st->chapter, st->chapters, st->volume,
                      st->battery_mv, st->battery_percent, st->battery_state ? st->battery_state : "unknown",
                      st->charging ? "true" : "false", st->headphones ? "true" : "false", st->rssi,
                      ha_speaker_eq_label(st->speaker_eq), st->led, st->slap, st->tilt, st->slap_reverse ? "true" : "false",
                      ha_int_or_null(prog, sizeof(prog), st->progress), ha_int_or_null(chprog, sizeof(chprog), st->chapter_progress),
                      ha_minutes_or_null(pos, sizeof(pos), st->position_ds), ha_minutes_or_null(dur, sizeof(dur), st->duration_ds),
-                     ha_int_or_null(dl, sizeof(dl), st->download));
+                     ha_int_or_null(dl, sizeof(dl), st->download), st->sleep_timer);
     return (n < 0 || (size_t)n >= size) ? -1 : n;
 }
 
@@ -228,7 +232,7 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     int name_len = topic_len - (int)(name - topic);
 
 #define IS(s) (name_len == (int)strlen(s) && !strncmp(name, s, name_len))
-    if (IS("volume") || IS("led") || IS("slap") || IS("tilt"))
+    if (IS("volume") || IS("led") || IS("slap") || IS("tilt") || IS("sleep_timer"))
     {
         char num[12];
         if (data_len <= 0 || data_len >= (int)sizeof(num))
@@ -249,6 +253,10 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
         if (IS("led"))
         {
             return (*value >= 0 && *value <= 3) ? HA_CMD_LED : HA_CMD_NONE;
+        }
+        if (IS("sleep_timer"))
+        {
+            return (*value >= 0 && *value <= 240) ? HA_CMD_SLEEP_TIMER : HA_CMD_NONE;
         }
         if (IS("slap") || IS("tilt"))
         {
