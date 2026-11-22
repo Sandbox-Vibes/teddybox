@@ -30,6 +30,7 @@
 #include "playback.h"
 #include "settings.h"
 #include "freshness.h"
+#include "taskwatch.h"
 #include "bootsel.h"
 #include "sd_retry.h"
 
@@ -118,6 +119,10 @@ esp_tls_t *cloud_connect_teddycloud(void)
     mempeak_leave(peak);
     return tls;
 }
+
+/* the socket timeout is 10 s: 6 idle reads = 1 minute without any data */
+#define CLOUD_READ_IDLE_MAX 6
+static int cloud_taskwatch = -1;
 
 static esp_err_t cloud_request(cloud_req_t *req)
 {
@@ -225,6 +230,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
     }
 
     bool connected = true;
+    int idle = 0;
 
     ret = ESP_OK;
 
@@ -234,9 +240,23 @@ static esp_err_t cloud_request(cloud_req_t *req)
 
         if (len == ESP_TLS_ERR_SSL_WANT_WRITE || len == ESP_TLS_ERR_SSL_WANT_READ)
         {
+            /* the socket timeout (timeout_ms) passed without data; a server
+               that stays silent must not keep the cloud task forever */
+            if (++idle >= CLOUD_READ_IDLE_MAX)
+            {
+                ESP_LOGE(TAG, "No data for %d s, giving up the connection", idle * 10);
+                if (req->connection_closed_cbr)
+                {
+                    req->connection_closed_cbr(req->connection_closed_ctx);
+                }
+                ret = ESP_FAIL;
+                connected = false;
+                continue;
+            }
             ESP_LOGI(TAG, "TLS socket idle");
             continue;
         }
+        idle = 0;
 
         if (len < 0)
         {
@@ -593,6 +613,7 @@ static esp_err_t cloud_content_flush(cloud_content_req_t *req)
 
 esp_err_t cloud_content_cbr(void *ctx, uint8_t *data, size_t length)
 {
+    taskwatch_feed(cloud_taskwatch);
     cloud_content_req_t *req = (cloud_content_req_t *)ctx;
 
     if (req->content_length == 0 || !req->handle)
@@ -722,6 +743,7 @@ static void cloud_resume_lost(cloud_content_req_t *req)
         for (int t = 0; t < delay_s * 10 && !req->abort; t++)
         {
             vTaskDelay(pdMS_TO_TICKS(100));
+            taskwatch_feed(cloud_taskwatch);
         }
         if (req->abort)
         {
@@ -1153,9 +1175,11 @@ static void cloud_task(void *ctx)
     TickType_t fc_last = 0;
     bool fc_played = false;
     TickType_t backend_since = 0;
+    cloud_taskwatch = taskwatch_add("cloud", 120000);
     while (true)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
+        taskwatch_feed(cloud_taskwatch);
 
         /* on the fallback: try to get back to teddyCloud from time to time */
         if (cloud_available && active_backend != BACKEND_TEDDYCLOUD && backends[BACKEND_TEDDYCLOUD].host &&

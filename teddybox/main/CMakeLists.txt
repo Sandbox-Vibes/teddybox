@@ -1,6 +1,6 @@
 
 set(
-    COMPONENT_SRCS "ledman.c" "main.c" "cloud.c" "cloud_http.c" "memdiag.c" "mempeak.c" "tls_mfl.c" "ogg_pos.c" "nfc.c" "ota.c" "playback.c" "wifi.c" "accel.c" "settings.c" "sfx.c" "battery.c" "bootsel.c" "freshness.c" "ear_gestures.c" "sleep_timer.c" "tc_box_settings.c" "rtnl.c" "rtnl_encode.c" "proto/proto/toniebox.pb.freshness-check.fc-request.pb-c.c" "proto/proto/toniebox.pb.freshness-check.fc-response.pb-c.c" "mqtt_ha.c" "mqtt_ha_payload.c" "setup_portal.c" "backup.c" "backup_zip.c" "maint.c" "ogg_demux.c" "tb_opus_dec.c" "readahead.c" "taf_verify.c" "proto/protobuf-c.c" "proto/proto/toniebox.pb.taf-header.pb-c.c")
+    COMPONENT_SRCS "ledman.c" "main.c" "cloud.c" "cloud_http.c" "memdiag.c" "mempeak.c" "tls_mfl.c" "ogg_pos.c" "nfc.c" "ota.c" "playback.c" "wifi.c" "accel.c" "settings.c" "sfx.c" "battery.c" "bootsel.c" "freshness.c" "taskwatch.c" "ear_gestures.c" "sleep_timer.c" "tc_box_settings.c" "rtnl.c" "rtnl_encode.c" "proto/proto/toniebox.pb.freshness-check.fc-request.pb-c.c" "proto/proto/toniebox.pb.freshness-check.fc-response.pb-c.c" "mqtt_ha.c" "mqtt_ha_payload.c" "setup_portal.c" "backup.c" "backup_zip.c" "maint.c" "ogg_demux.c" "tb_opus_dec.c" "readahead.c" "taf_verify.c" "proto/protobuf-c.c" "proto/proto/toniebox.pb.taf-header.pb-c.c")
     
 set(COMPONENT_EMBED_TXTFILES "setup.html")
 set(COMPONENT_ADD_INCLUDEDIRS . "proto" "proto/proto")

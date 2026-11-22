@@ -11,6 +11,7 @@
 
 #include "playback.h"
 #include "rtnl.h"
+#include "taskwatch.h"
 #include "board.h"
 #include "nfc.h"
 
@@ -242,9 +243,11 @@ void nfc_mainthread(void *arg)
     trf7962a_t trf = (trf7962a_t)arg;
 
     nfc_field_off(trf);
+    int tw = taskwatch_add("NFC", 30000);
 
     while (true)
     {
+        taskwatch_feed(tw);
         vTaskDelay(10 / portTICK_PERIOD_MS);
 
         switch (state)

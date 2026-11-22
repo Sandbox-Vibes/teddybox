@@ -46,6 +46,7 @@
 #include "bootsel.h"
 #include "control.h"
 #include "rtnl.h"
+#include "taskwatch.h"
 #include "sleep_timer.h"
 #include "mqtt_ha.h"
 #include "setup_portal.h"
@@ -468,9 +469,11 @@ void app_main(void)
     const int64_t poweroff_timeout = (int64_t)settings_get()->idle_timeout_s * 1000000LL;
     int64_t memdiag_next = esp_timer_get_time() + MEMDIAG_INTERVAL_US;
 
+    int tw_main = taskwatch_add("main loop", 30000);
     while (1)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
+        taskwatch_feed(tw_main);
         int64_t cur_time = esp_timer_get_time();
 
         if (cur_time >= memdiag_next)
