@@ -30,6 +30,7 @@
 #include "playback.h"
 #include "wifi.h"
 #include "accel.h"
+#include "ear_gestures.h"
 #include "dac3100.h"
 #include "ota.h"
 #include "maint.h"
@@ -157,6 +158,13 @@ uint32_t ctrl_get_volume(void)
 void ctrl_request_poweroff(void)
 {
     ctrl_poweroff_request = true;
+}
+
+static volatile bool ctrl_boot_original_request = false;
+
+void ctrl_request_boot_original(void)
+{
+    ctrl_boot_original_request = true;
 }
 
 /* sleep timer, driven by the main loop */
@@ -444,9 +452,8 @@ void app_main(void)
 
     int64_t last_activity_time = esp_timer_get_time();
     int64_t remute_time = 0;
-    int64_t both_ears_since = 0;
-    /* original firmware chosen, waiting for the ears to be let go */
-    int64_t ofw_armed_since = 0;
+    ear_gesture_t ear_gesture = {0};
+    bool ears_poweroff = false;
     /* small ear held alone: sleep timer on/off */
     int64_t small_ear_since = 0;
     uint32_t small_ear_volume = 0;
@@ -695,53 +702,61 @@ void app_main(void)
             rtc_storage.play_position = pb_get_resume_position();
         }
 
-        /* box upside down, both ears held for 5 seconds: reboot into the
-           original firmware once the ears are let go. Upside down so that a
-           child pressing both ears does not switch by accident; let go first
-           so that the original firmware does not see the ears held upside
-           down (its restart / factory reset gesture). Without a working
-           accelerometer the box does not need to be upside down. */
-        bool ofw_pose = !accel_working() || accel_upside_down();
-        if (ear_big && ear_small && ofw_pose && !ofw_armed_since)
+        /* gestures with both ears as in the original firmware / Hackiebox CFW,
+           see ear_gestures.h; without a working accelerometer the long
+           gestures also work upright */
+        switch (ear_gesture_step(&ear_gesture, cur_time, ear_big, ear_small, !accel_working() || accel_upside_down()))
         {
-            if (!both_ears_since)
+        case EG_RESTART_ARMED:
+            ESP_LOGW(TAG, "Both ears held upside down 10 s: restart when let go (hold on to 20 s: original firmware)");
+            pb_stop();
+            dac3100_set_mute(false);
+            dac3100_beep(1, 0x400);
+            remute_time = cur_time + 1000000;
+            break;
+        case EG_OFW_ARMED:
+            ESP_LOGW(TAG, "Both ears held upside down 20 s: original firmware when let go");
+            ledman_change("fadeblink blue");
+            dac3100_set_mute(false);
+            dac3100_beep(1, 0x400);
+            remute_time = cur_time + 1000000;
+            break;
+        case EG_CANCELLED:
+            ESP_LOGW(TAG, "Both ears held too long or box turned: nothing");
+            ledman_change("idle");
+            break;
+        case EG_RESTART:
+            ESP_LOGW(TAG, "Restart (both ears upside down)");
+            rtc_checksum_update();
+            vTaskDelay(pdMS_TO_TICKS(200));
+            esp_restart();
+            break;
+        case EG_OFW:
+            ctrl_boot_original_request = true;
+            break;
+        case EG_POWEROFF:
+            if (settings_get()->ears_poweroff)
             {
-                both_ears_since = cur_time;
+                ESP_LOGI(TAG, "Both ears pressed briefly: power off");
+                ears_poweroff = true;
             }
-            else if (cur_time - both_ears_since > BOOT_OFW_HOLD_TIME)
-            {
-                ESP_LOGW(TAG, "Both ears held upside down: switching to the original firmware when they are let go");
-                ofw_armed_since = cur_time;
-                ledman_change("fadeblink blue");
-                pb_stop();
-                dac3100_set_mute(false);
-                dac3100_beep(1, 0x400);
-                remute_time = cur_time + 1000000;
-            }
+            break;
+        default:
+            break;
         }
-        else if (!(ear_big && ear_small))
+        if (ears_poweroff)
         {
-            both_ears_since = 0;
+            break;
         }
-        if (ofw_armed_since)
+        if (ctrl_boot_original_request)
         {
-            if (!ear_big && !ear_small)
-            {
-                ESP_LOGW(TAG, "Switching to the original firmware");
-                rtc_checksum_update();
-                bootsel_boot_original();
-                /* only returns on error */
-                ledman_change("failed");
-                ofw_armed_since = 0;
-                both_ears_since = 0;
-            }
-            else if (cur_time - ofw_armed_since > BOOT_OFW_RELEASE_TIME)
-            {
-                ESP_LOGW(TAG, "Ears not let go, staying in TeddyBox");
-                ledman_change("idle");
-                ofw_armed_since = 0;
-                both_ears_since = 0;
-            }
+            ctrl_boot_original_request = false;
+            ESP_LOGW(TAG, "Switching to the original firmware");
+            pb_stop();
+            rtc_checksum_update();
+            bootsel_boot_original();
+            /* only returns on error */
+            ledman_change("failed");
         }
 
         battery_state_t bat = battery_get_state();

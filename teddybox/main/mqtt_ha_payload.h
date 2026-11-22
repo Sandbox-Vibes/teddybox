@@ -11,7 +11,7 @@
  *   BASE/cmd/speaker_eq     one of the HA_SPEAKER_EQ_OPTIONS labels
  *   BASE/cmd/led            0..3
  *   BASE/cmd/sleep_timer    minutes 0..240 (0 = off)
- *   BASE/cmd/stop|next|prev|poweroff   any payload
+ *   BASE/cmd/stop|next|prev|poweroff|original   any payload
  *   <prefix>/<component>/<device id>/<object>/config   discovery (retained)
  */
 
@@ -69,6 +69,7 @@ typedef enum
     HA_CMD_TILT,
     HA_CMD_SLAP_REVERSE,
     HA_CMD_SLEEP_TIMER,
+    HA_CMD_BOOT_ORIGINAL,
 } ha_cmd_t;
 
 /* select labels, index = speaker_eq_t */

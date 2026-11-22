@@ -35,6 +35,7 @@ int main(int argc, char **argv)
         {"teddybox/aabbccddeeff/cmd/next", "PRESS", HA_CMD_NEXT, 0},
         {"teddybox/aabbccddeeff/cmd/prev", "PRESS", HA_CMD_PREV, 0},
         {"teddybox/aabbccddeeff/cmd/poweroff", "PRESS", HA_CMD_POWEROFF, 0},
+        {"teddybox/aabbccddeeff/cmd/original", "PRESS", HA_CMD_BOOT_ORIGINAL, 0},
         {"teddybox/aabbccddeeff/cmd/stopx", "PRESS", HA_CMD_NONE, 0},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Optimiert", HA_CMD_SPEAKER_EQ, 2},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Nur Tiefenfilter", HA_CMD_SPEAKER_EQ, 1},

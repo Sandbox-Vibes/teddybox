@@ -288,6 +288,14 @@ void accel_mainthread(void *arg)
             if (dir && esp_timer_get_time() - last_slap_us > ACCEL_SLAP_PAUSE_MS * 1000LL)
             {
                 last_slap_us = esp_timer_get_time();
+                if (upside_down)
+                {
+                    /* upside down, either side: start over (as Hackiebox CFW) */
+                    ESP_LOGI(TAG, "emit START OVER (slap upside down)");
+                    rtnl_event(RTNL3_KNOCK_BACKWARD);
+                    pb_set_chapter(0);
+                    continue;
+                }
                 if (s->slap_reverse)
                 {
                     dir = -dir;

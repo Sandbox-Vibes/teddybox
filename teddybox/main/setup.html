@@ -92,6 +92,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <div><label for="tilt">Kippen</label><select id="tilt"><option value="5">5 (20°)</option><option value="4">4 (25°)</option><option value="3">3 (30°)</option><option value="2">2 (35°)</option><option value="1">1 (40°)</option><option value="0">Aus</option></select></div>
 </div>
 <label><input id="slaprev" type="checkbox" style="width:auto"> Klaps-Richtung umkehren</label>
+<label><input id="earsoff" type="checkbox" style="width:auto"> Beide Ohren kurz drücken schaltet aus</label>
 <p class="hint">Klapsen auf die Seite: Kapitel vor/zurück. Kippen: Kapitel oder Spulen. 5 reagiert am leichtesten.</p>
 <label for="uphour">Nächtliche Aktualisierung</label><select id="uphour"><option value="-1">Aus</option><option value="0">00:00 Uhr</option><option value="1">01:00 Uhr</option><option value="2">02:00 Uhr</option><option value="3">03:00 Uhr</option><option value="4">04:00 Uhr</option><option value="5">05:00 Uhr</option><option value="6">06:00 Uhr</option><option value="7">07:00 Uhr</option><option value="8">08:00 Uhr</option><option value="9">09:00 Uhr</option><option value="10">10:00 Uhr</option><option value="11">11:00 Uhr</option><option value="12">12:00 Uhr</option><option value="13">13:00 Uhr</option><option value="14">14:00 Uhr</option><option value="15">15:00 Uhr</option><option value="16">16:00 Uhr</option><option value="17">17:00 Uhr</option><option value="18">18:00 Uhr</option><option value="19">19:00 Uhr</option><option value="20">20:00 Uhr</option><option value="21">21:00 Uhr</option><option value="22">22:00 Uhr</option><option value="23">23:00 Uhr</option></select>
 <p class="hint">Die Box wacht einmal täglich lautlos auf und lädt neue Versionen ihrer Tonies und abgebrochene Downloads (am Ladegerät immer, im Akkubetrieb ab 50 %). Ein Ohr drücken startet die Box normal.</p>
@@ -128,6 +129,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem
 <section>
 <h2>Firmware aktualisieren</h2>
 <p class="hint" id="fwinfo"></p>
+<button type="button" id="ofwbtn">Original-Firmware starten</button>
+<p class="hint">Startet die Original-Firmware. Zurück zur TeddyBox wie bei der Installation beschrieben. Ohne Einrichtungsseite: Box auf den Kopf, beide Ohren 20 Sekunden halten, bis die LED blau blinkt, dann loslassen.</p>
 <label for="fwfile">Neue TeddyBox-Firmware (teddybox.bin)</label>
 <input id="fwfile" type="file" accept=".bin">
 <div id="pdask" hidden>
@@ -181,6 +184,7 @@ async function load(){
     if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
     $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('vmaxh').value=cfg.volume_max_hdp||100;$('tcset').value=cfg.tc_box_settings===false?'0':'1';$('idle').value=cfg.idle_timeout||60;$('speq').value=cfg.speaker_eq||'full';$('led').value=String(cfg.led_brightness??3);$('slap').value=String(cfg.slap??3);$('slaprev').checked=!!cfg.slap_reverse;$('tilt').value=String(cfg.tilt??3);$('uphour').value=String(cfg.update_hour??3);$('decoder').value=cfg.decoder||'celt';$('cpumhz').value=String(cfg.cpu_mhz||160);$('dlplay').value=String(cfg.download_playing??0);$('readahead').value=cfg.readahead===false?'0':'1';$('rtnl').value=cfg.rtnl===false?'0':'1';
     $('fwinfo').textContent='Läuft: TeddyBox '+(cfg.fw_version||'?')+' aus Slot '+(cfg.fw_slot||'?');
+    $('earsoff').checked=cfg.ears_poweroff!==false;
     $('boxfb').checked=!!cfg.boxine_fallback;$('uaorig').checked=!!cfg.user_agent_original;
   }catch(e){setStatus($('status'),'Einstellungen konnten nicht geladen werden.','err');}
   scan();
@@ -210,6 +214,11 @@ $('fwbtn').onclick=()=>{
   setStatus($('fwstatus'),'Lade hoch …');
   x.send(f);
 };
+$('ofwbtn').onclick=async()=>{
+  if(!confirm('Original-Firmware jetzt starten?'))return;
+  try{await fetch('/api/original',{method:'POST'});setStatus($('status'),'Die Original-Firmware startet.','ok');}
+  catch(e){setStatus($('status'),'Hat nicht geklappt.','err');}
+};
 $('save').onclick=async()=>{
   if(!$('ssid').value.trim()&&!cfg.wifi_ssid){setStatus($('status'),'Bitte ein WLAN auswählen.','err');return;}
   const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
@@ -217,6 +226,7 @@ $('save').onclick=async()=>{
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
     lang_id:+$('lang').value,volume_max:+$('vmax').value||100,volume_max_hdp:+$('vmaxh').value||100,tc_box_settings:$('tcset').value==='1',idle_timeout:+$('idle').value||60,speaker_eq:$('speq').value,led_brightness:+$('led').value,slap:+$('slap').value,slap_reverse:$('slaprev').checked,tilt:+$('tilt').value,update_hour:+$('uphour').value,decoder:$('decoder').value,cpu_mhz:+$('cpumhz').value,download_playing:+$('dlplay').value,readahead:$('readahead').value==='1',rtnl:$('rtnl').value==='1',
     boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked};
+  body.ears_poweroff=$('earsoff').checked;
   setStatus($('status'),'Speichere …');
   try{
     const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

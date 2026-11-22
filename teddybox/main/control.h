@@ -26,6 +26,8 @@ void ctrl_request_motion(int slap, int tilt, int reverse);
 uint32_t ctrl_get_volume(void);
 
 void ctrl_request_poweroff(void);
+/* reboot into the original firmware (main loop) */
+void ctrl_request_boot_original(void);
 /* sleep timer: minutes 1..240 start it, 0 stops it; see sleep_timer.h */
 void ctrl_request_sleep_timer(int minutes);
 /* minutes left, 0 = off */

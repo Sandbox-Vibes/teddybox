@@ -4,7 +4,7 @@ Custom firmware for the ESP32-S3 based Toniebox, for use with
 [teddyCloud](https://github.com/toniebox-reverse-engineering/teddycloud).
 It runs in the OTA slots next to the original Boxine firmware (`toniebox-esp32-eu`),
 which is never touched and can be booted again at any time: box upside down,
-hold both ears for 5 seconds, let go.
+hold both ears for 20 seconds, let go (or a button on the setup page).
 
 Built with ESP-IDF 5.5 and ESP-ADF 2.8. Tested on one box (ESP32-S3, 8 MB
 flash, LIS3DH accelerometer) against teddyCloud.
@@ -31,7 +31,8 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original) |
 | System sounds | yes | the same sounds, read from the box's assets |
 | Firmware updates | from Boxine, automatically | uploaded on the setup page, A/B with rollback |
-| Back to the other firmware | — | upside down, both ears 5 s, let go |
+| Back to the other firmware | — | upside down, both ears 20 s, let go; setup page; Home Assistant |
+| Gestures | ears, slap, tilt; upside down both ears 10 s: restart | the same, plus as Hackiebox CFW: both ears briefly = off, upside-down slap = start over; see "Gestures" |
 | Sleep timer | — (Toniebox 2 / app only) | small ear held 2 s (30 min) or Home Assistant; quieter at the end, then off |
 | Certificate / flash backup | — | on the setup page (needs a press on the box) |
 | MMA8451 accelerometer (some boxes) | yes | no, LIS3DH only |
@@ -119,6 +120,7 @@ Written by the setup page; all keys are optional.
 | `cpu_mhz` | 160 | 160 or 240 (`decoder = adf` always uses 240) |
 | `download_playing` | 0 | KiB/s while a tonie plays, 0 = unlimited |
 | `readahead` | 1 | 0 only for diagnosis |
+| `ears_poweroff` | 1 | both ears pressed briefly switch the box off |
 | `rtnl` | 1 | box events to teddyCloud, see below |
 | `mem_log` | 1 | memory lines in the serial log |
 
@@ -271,7 +273,7 @@ unfinished download, one after another.
 ## Home Assistant
 
 With `mqtt_host` set, the box registers itself via MQTT discovery as device
-"TeddyBox" (`<id>` = `teddybox_<mac>`, 32 entities):
+"TeddyBox" (`<id>` = `teddybox_<mac>`, 33 entities):
 
 | Entities | |
 |---|---|
@@ -283,6 +285,7 @@ With `mqtt_host` set, the box registers itself via MQTT discovery as device
 | Kopfhörer, WLAN-Signal | |
 | LED-Helligkeit, Klapsen, Klapsen umgekehrt, Kippen, Lautsprecher-Klang | settings, applied at once and saved to the INI |
 | Stopp, Nächstes/Vorheriges Kapitel, Ausschalten | buttons |
+| Original-Firmware starten | button, disabled by default in Home Assistant |
 | Schlaf-Timer | number in minutes (0 off, up to 240), shows the minutes left; see "Sleep timer" |
 | Diagnostics | free heap (now and minimum), start time, reason of the last start, firmware slot, last nightly update |
 
@@ -292,6 +295,30 @@ Topics: `teddybox/<mac>/state` and `/diag` (JSON),
 (stored on the broker) are ignored and deleted there: they would be repeated
 at every start and override the settings. The box powers off when idle
 (`idle_timeout`), Home Assistant then shows it as unavailable.
+
+## Gestures
+
+Aligned with the original firmware and the Hackiebox CFW, so parents with
+several boxes use the same gestures:
+
+| Gesture | Effect | as |
+|---|---|---|
+| ear briefly | volume up / down | original |
+| slap on the side | next / previous chapter | original |
+| tilt | wind forward / back | original |
+| both ears pressed, let go within 2 s | power off (tonie position kept); `ears_poweroff = 0` or setup page switches it off | Hackiebox CFW |
+| slap upside down, either side | start the tonie over | Hackiebox CFW (original: one chapter) |
+| upside down, both ears 10 s, let go | restart (beep at 10 s) | original |
+| upside down, both ears 20 s, let go | original firmware (LED blinks blue, beep) | TeddyBox only |
+| small ear alone 2 s | sleep timer 30 min on / off | TeddyBox only |
+| big ear while switching on | setup page | TeddyBox only |
+
+The long gestures act when the ears are **let go**, not while held: the
+firmware that starts next must not see both ears held upside down (in the
+original that is restart, on the charger factory reset). Held 30 s, or the
+box turned upright while holding: nothing. Without a working accelerometer
+the long gestures also work upright. The original firmware's "both ears
+5 s" (WiFi setup / offline mode) does nothing in TeddyBox.
 
 ## Sleep timer
 
@@ -468,15 +495,10 @@ esptool.py -b 921600 write_flash 0x3a0000 teddybox/build/teddybox.bin 0x16f000 o
 Only the free slot and the 8 KiB boot selection are written. Bootloader,
 partition table, NVS, certificates and both original apps stay as they are.
 
-Back to the original firmware: turn the box **upside down** (ears down),
-hold both ears for 5 seconds until the LED blinks blue and it beeps, then
-**let go**; the original firmware starts. Upside down, so that a child
-pressing both ears on the upright box (in the original firmware that is
-the WiFi setup) does not switch by accident. Letting go first matters: the
-original firmware treats both ears held upside down as restart, and on the
-charger as factory reset. If the ears are not let go within 10 s, the box
-stays in TeddyBox. Without a working accelerometer the box does not need to
-be upside down. Or with esptool:
+Back to the original firmware: the button "Original-Firmware starten" on
+the setup page or in Home Assistant, or on the box: **upside down**, both
+ears held **20 s** (beep at 10 s, LED blinks blue and beep at 20 s), **let
+go** (see "Gestures"). Or with esptool:
 
 ```sh
 dd if=backup.bin of=otadata_original.bin bs=4096 skip=367 count=2

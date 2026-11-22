@@ -59,6 +59,8 @@ typedef struct
     uint8_t slap_level;
     /* swap the slap directions */
     bool slap_reverse;
+    /* both ears pressed and let go within 2 s: power off (as Hackiebox CFW) */
+    bool ears_poweroff;
     /* tilt = chapter / seek: 0 off, 1 (tilt furthest) .. 5, 3 = 30 degrees as before */
     uint8_t tilt_level;
     /* memory/stack lines in the serial log (every 30 s and at events) */
