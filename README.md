@@ -427,13 +427,20 @@ often right after a long download.
   is deleted when it ends, so streams do not fill the card and the nightly
   update does not try to complete them (it also deletes left-over stream
   files). Log: `[CDL] teddyCloud stream (up to <n> bytes): not resumed, not
-  kept`. QEMU test `tests/qemu/mkqstream.sh`.
+  kept`. A file that still arrives **completely** is no stream, even with
+  such a length (some real tonies end with a short page): it is kept like
+  any tonie (`[CDL] Complete file with a length that is no multiple of 4096:
+  kept, no stream`). QEMU test `tests/qemu/mkqstream.sh`.
 - A stream that **ends by itself** (teddyCloud closed the connection: a
   live channel was switched (teddycloud#617), teddyCloud restarted, or
   `stream_max_size` was reached) is requested again after 1 s while its
   tonie stays on the box, so endless streams keep playing. If it ends three
   times in a row before 64 KB arrived, the box gives up with the network
   error sound. Log: `Stream ended after <n> bytes, tonie still there`.
+  Not when the transfer had ended more than 20 s before the playback did:
+  teddyCloud encodes files and playlists faster than real time, a radio
+  only in real time, so this was finite content played to its end
+  (`Stream played to the end …: not requested again`).
 
 ### Diagnostics in the log
 

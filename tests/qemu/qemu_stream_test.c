@@ -46,10 +46,11 @@ static void check(const char *what, bool ok)
 }
 
 /* download; abort_at > 0: abort once that much arrived */
-static cloud_content_state_t run(uint32_t abort_at, uint32_t *received, bool *stream)
+static int64_t last_end_us;
+static cloud_content_state_t run_uid(uint64_t uid, uint32_t abort_at, uint32_t *received, bool *stream)
 {
     static const uint8_t token[32] = {1, 2, 3};
-    cloud_content_req_t *req = cloud_content_download(UID, token);
+    cloud_content_req_t *req = cloud_content_download(uid, token);
     cloud_content_state_t s;
     while ((s = cloud_content_get_state(req)) != CC_STATE_FINISHED && s != CC_STATE_ERROR && s != CC_STATE_ABORTED)
     {
@@ -66,8 +67,14 @@ static cloud_content_state_t run(uint32_t abort_at, uint32_t *received, bool *st
     s = cloud_content_get_state(req);
     *received = req->received;
     *stream = req->is_stream;
+    last_end_us = req->end_us;
     cloud_content_cleanup(req);
     return s;
+}
+
+static cloud_content_state_t run(uint32_t abort_at, uint32_t *received, bool *stream)
+{
+    return run_uid(UID, abort_at, received, stream);
 }
 
 static size_t varint(uint8_t *p, uint64_t v)
@@ -177,10 +184,25 @@ void app_main(void)
     check("1a stream recognised, downloaded from the start", stream && rx >= 45056 && rx <= 50000);
     check("1b connection end: no resume", st == CC_STATE_ERROR && ms < 1500);
     check("1c stream .tmp deleted", fsize(TMP) < 0 && fsize(FINAL) < 0);
+    /* the playback compares it with its own end (finite content vs. radio) */
+    check("1d end of the transfer recorded", last_end_us > t0 && last_end_us <= esp_timer_get_time());
 
     /* 2: aborted (tonie removed): deleted as well */
     st = run(20000, &rx, &stream);
     check("2 aborted stream: .tmp deleted", stream && fsize(TMP) < 0 && fsize(FINAL) < 0);
+
+    /* 3: complete TAF whose length is no multiple of 4096 (short last page,
+       seen with real tonies): looks like a stream at first, kept as a tonie */
+#define FINAL3 "/sdcard/CONTENT/44332211/500304E0"
+    mkdir("/sdcard/CONTENT/44332211", 0777);
+    unlink(FINAL3);
+    st = run_uid(0xE004035011223344ULL, 0, &rx, &stream);
+    ESP_LOGI(TAG, "state %d, received %u, final %ld", st, (unsigned)rx, fsize(FINAL3));
+    check("3a complete odd-length file: finished, kept", st == CC_STATE_FINISHED && !stream &&
+                                                            fsize(FINAL3) == 4096 + 3 * 4096 + 1234);
+    check("3b complete odd-length file is no stream", !pb_file_is_stream(FINAL3));
+    check("3c and a good file", pb_check_file(FINAL3) == PB_ERR_GOOD_FILE);
+    unlink(FINAL3);
 
     ESP_LOGI(TAG, "%s", fails ? "FAILED" : "ALL OK");
     while (1)

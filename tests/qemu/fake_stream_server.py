@@ -2,12 +2,14 @@
 """HTTPS server for qemu_stream_test.c: answers /v2/content/<uid> like a
 teddyCloud stream (Content-Length 251658239, no multiple of 4096, TAF header
 announcing that length), sends 50000 bytes and closes the connection.
+UID E004035011223344 gets a complete TAF with a short last page instead.
 /v1/time answers the time. A request with a Range header gets 416, the test fails then.
 Usage: fake_stream_server.py <port> <server cert.pem> <server key.pem>"""
 import socket, ssl, sys, threading
 
 STREAM_LEN = 1024 * 1024 * 40 * 6 - 1  # teddyCloud encode.stream_max_size default
 SEND = 50000
+SHORT_AUDIO = 3 * 4096 + 1234  # /v2/content/44332211...: complete, short last page
 
 def varint(v):
     out = b''
@@ -18,8 +20,8 @@ def varint(v):
         if not v:
             return out
 
-def taf_header(num_bytes, audio_id=0x12345678):
-    pb = b'\x0a\x14' + b'\0' * 20 + b'\x10' + varint(num_bytes) + b'\x18' + varint(audio_id)
+def taf_header(num_bytes, audio_id=0x12345678, sha=b'\0' * 20):
+    pb = b'\x0a\x14' + sha + b'\x10' + varint(num_bytes) + b'\x18' + varint(audio_id)
     # _fill (field 5) pads the protobuf to 4092 bytes
     for fill_len in range(4092, 0, -1):
         f = b'\x2a' + varint(fill_len) + b'\0' * fill_len
@@ -48,6 +50,16 @@ def handle(conn):
             return
         if has_range:
             conn.sendall(b'HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n')
+            return
+        if '/44332211' in line:
+            # a complete TAF whose last page is short: length no multiple of 4096
+            import hashlib
+            audio = bytes((i * 13) & 0xff for i in range(SHORT_AUDIO))
+            body = taf_header(SHORT_AUDIO, sha=hashlib.sha1(audio).digest()) + audio
+            conn.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n'
+                         b'Content-Length: %d\r\nConnection: close\r\n\r\n' % len(body))
+            for i in range(0, len(body), 2048):
+                conn.sendall(body[i:i + 2048])
             return
         conn.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n'
                      b'Content-Length: %d\r\nConnection: close\r\n\r\n' % STREAM_LEN)
