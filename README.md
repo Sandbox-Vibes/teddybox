@@ -321,7 +321,9 @@ firmware that starts next must not see both ears held upside down (in the
 original that is restart, on the charger factory reset). Held 30 s, or the
 box turned upright while holding: nothing. Without a working accelerometer
 the long gestures also work upright. The original firmware's "both ears
-5 s" (WiFi setup / offline mode) does nothing in TeddyBox.
+5 s" (WiFi setup / offline mode) does nothing in TeddyBox. The gestures with both
+ears run in their own small task, so restart and the switch to the original
+firmware also work when the main loop hangs.
 
 ## Sleep timer
 
