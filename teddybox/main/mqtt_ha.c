@@ -359,9 +359,12 @@ static void mqtt_publish_diag(void)
 
 static void mqtt_ha_task(void *arg)
 {
-    ha_state_t last = {.battery_state = ""};
-    ha_state_t now;
-    char json[768];
+    /* static: the task runs once, and the name lookup in mqtt_collect_state
+       reads the SD card, which needs ~1.5 KB of stack on its own */
+    static ha_state_t last = {.battery_state = ""};
+    static ha_state_t now;
+    static char json[768];
+    UBaseType_t stack_warned = 0;
     TickType_t last_sent = 0;
     TickType_t last_diag = 0;
 
@@ -397,6 +400,12 @@ static void mqtt_ha_task(void *arg)
         if (force || periodic || progress || state_differs(&now, &last))
         {
             int len = ha_state_json(&now, json, sizeof(json));
+            UBaseType_t left = uxTaskGetStackHighWaterMark(NULL);
+            if (left < 1024 && (!stack_warned || left < stack_warned))
+            {
+                ESP_LOGW(TAG, "Only %u bytes of stack left", (unsigned)left);
+                stack_warned = left;
+            }
             if (len > 0 && esp_mqtt_client_publish(client, state_topic, json, len, 0, 1) >= 0)
             {
                 last = now;
@@ -474,7 +483,7 @@ void mqtt_ha_init(void)
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
 
-    xTaskCreate(&mqtt_ha_task, "[TB] mqtt_ha", 4096, NULL, 4, NULL);
+    xTaskCreate(&mqtt_ha_task, "[TB] mqtt_ha", 6144, NULL, 4, NULL);
     ESP_LOGI(TAG, "Home Assistant integration started, topic %s", base_topic);
 }
 
