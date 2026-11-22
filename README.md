@@ -9,6 +9,9 @@ hold both ears for 20 seconds, let go (or a button on the setup page).
 Built with ESP-IDF 5.5 and ESP-ADF 2.8. Tested on one box (ESP32-S3, 8 MB
 flash, LIS3DH accelerometer) against teddyCloud.
 
+> **Unofficial project.** TeddyBox is not affiliated with, endorsed or
+> supported by tonies GmbH (formerly Boxine GmbH). See "Disclaimer" below.
+
 ## TeddyBox compared with the original firmware
 
 | | Original firmware (`toniebox-esp32-eu` v5.235) | TeddyBox |
@@ -680,6 +683,25 @@ QEMU tests (decoder, downloads, read-ahead, hash check): see
 `docs/original-firmware.md` collects what the flash dump of the original
 firmware shows (structure, cloud requests, NVS, SD layout) and what TeddyBox
 took over from it.
+
+## Disclaimer
+
+TeddyBox is an independent, unofficial hobby project. It is not affiliated
+with, endorsed, sponsored or supported by tonies GmbH (formerly Boxine
+GmbH). "Toniebox", "Tonie", "tonies" and related names and logos are
+trademarks of tonies GmbH; all rights to them, to the original firmware and
+to the tonie content remain with tonies GmbH and the respective rights
+holders. The names are used here only to describe what the firmware works
+with.
+
+This repository contains no original firmware, no audio content of tonies
+and no keys or certificates of any box. The system sounds and the
+certificates are read at runtime from the user's own box.
+
+Installing custom firmware is at your own risk: it may void the warranty
+and can make the box unusable until the original firmware is restored.
+Make the backup first (setup page or esptool). Only use content you are
+entitled to use.
 
 ## License
 
