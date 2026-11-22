@@ -23,6 +23,7 @@
 
 #include "playback.h"
 #include "rtnl.h"
+#include "nfc.h"
 #include "settings.h"
 
 #define PB_DL_CONNECT_TIMEOUT_MS 20000
@@ -50,6 +51,18 @@ static bool pb_playing = false;
 static pb_toniefile_t pb_toniefile_info;
 static volatile bool pb_headset = false;
 static cloud_content_req_t *current_dl_req = NULL;
+
+/* a teddyCloud stream that ended by itself (connection closed: live channel
+   switched, teddyCloud restarted, stream_max_size reached) is requested
+   again while its tonie stays on the box; streams that end too early in a
+   row are given up */
+#define PB_STREAM_RESTART_DELAY_MS 1000
+#define PB_STREAM_SHORT_BYTES (64 * 1024)
+#define PB_STREAM_SHORT_MAX 3
+static uint64_t pb_stream_restart_uid;
+static TickType_t pb_stream_restart_at;
+static int pb_stream_short;
+static uint64_t pb_stream_short_uid;
 /* the LED shows "playing download" while the download of the playing tonie runs */
 static bool pb_led_download = false;
 
@@ -1475,6 +1488,31 @@ static esp_err_t pb_req_handle_default(pb_req_default_t *req)
 /* main loop, calls functions above                     */
 /********************************************************/
 
+static void pb_stream_ended(uint32_t received)
+{
+    uint64_t uid = pb_get_current_uid();
+    if (uid != pb_stream_short_uid)
+    {
+        pb_stream_short_uid = uid;
+        pb_stream_short = 0;
+    }
+    pb_stream_short = received < PB_STREAM_SHORT_BYTES ? pb_stream_short + 1 : 0;
+    if (pb_stream_short >= PB_STREAM_SHORT_MAX)
+    {
+        ESP_LOGE(TAG, "Stream: ended %d times right after the start, giving up", pb_stream_short);
+        pb_stream_short = 0;
+        pb_play_default(CONTENT_DEFAULT_NETWORK_ERROR);
+        return;
+    }
+    if (uid && nfc_get_current_uid() == uid)
+    {
+        ESP_LOGI(TAG, "Stream ended after %u bytes, tonie still there: again in %d ms", (unsigned)received,
+                 PB_STREAM_RESTART_DELAY_MS);
+        pb_stream_restart_uid = uid;
+        pb_stream_restart_at = xTaskGetTickCount() + pdMS_TO_TICKS(PB_STREAM_RESTART_DELAY_MS);
+    }
+}
+
 void pb_mainthread(void *arg)
 {
     pb_playing = false;
@@ -1515,6 +1553,17 @@ void pb_mainthread(void *arg)
             ESP_LOGI(TAG, "Headset detected: %s", type ? "YES" : "NO");
             dac3100_set_output(pb_headset ? DAC3100_OUT_HEADPHONE : DAC3100_OUT_SPEAKER);
             dac3100_set_mute(!pb_is_playing());
+        }
+
+        if (pb_stream_restart_uid && (int32_t)(xTaskGetTickCount() - pb_stream_restart_at) >= 0)
+        {
+            uint64_t uid = pb_stream_restart_uid;
+            pb_stream_restart_uid = 0;
+            if (!pb_playing && nfc_get_current_uid() == uid)
+            {
+                ESP_LOGI(TAG, "Stream: requesting it again");
+                pb_play_content_token(uid, nfc_get_current_token());
+            }
         }
 
         pb_req_t *req = NULL;
@@ -1654,6 +1703,12 @@ void pb_mainthread(void *arg)
                             if (!pb_default_content)
                             {
                                 ledman_change("idle");
+                            }
+                            cloud_content_req_t *dl = current_dl_req;
+                            if (!pb_default_content && dl && dl->is_stream && !dl->abort && !pb_dl_running(dl) &&
+                                (int)msg.data == AEL_STATUS_STATE_FINISHED)
+                            {
+                                pb_stream_ended(dl->received);
                             }
                             pb_default_content = false;
                             pb_playing = false;

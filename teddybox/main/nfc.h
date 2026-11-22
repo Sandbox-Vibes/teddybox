@@ -16,3 +16,5 @@
 
 void nfc_init();
 uint64_t nfc_get_current_uid();
+/* token of the current tag (32 bytes), valid while it is on the box */
+uint8_t *nfc_get_current_token();
