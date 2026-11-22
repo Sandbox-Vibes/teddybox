@@ -30,6 +30,7 @@
 #include "playback.h"
 #include "settings.h"
 #include "freshness.h"
+#include "tonie_names_tc.h"
 #include "taskwatch.h"
 #include "bootsel.h"
 #include "sd_retry.h"
@@ -1223,6 +1224,11 @@ static void cloud_task(void *ctx)
         }
 
         teddycloud_up = cloud_available && active_backend == BACKEND_TEDDYCLOUD;
+        if (teddycloud_up)
+        {
+            /* names of the tonies from teddyCloud's web API (plain HTTP, short) */
+            tonie_names_tc_step();
+        }
 
         /* freshness check after boot, then every freshness_interval minutes
            and after a tonie was removed (at most every 15 minutes), between

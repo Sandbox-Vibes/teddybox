@@ -140,6 +140,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddStringToObject(j, "wifi_ssid", ssid);
     cJSON_AddStringToObject(j, "cloud_host", s->cloud_host);
     cJSON_AddNumberToObject(j, "cloud_port", s->cloud_port);
+    cJSON_AddNumberToObject(j, "tc_web_port", s->tc_web_port);
     cJSON_AddBoolToObject(j, "ca_custom", !strcmp(s->ca_path, CA_FILE) && stat(CA_FILE, &st) == 0);
     cJSON_AddStringToObject(j, "mqtt_host", s->mqtt_host);
     cJSON_AddNumberToObject(j, "mqtt_port", s->mqtt_port);
@@ -367,6 +368,10 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (get_int(o, "cloud_port", 1, 65535, &v))
     {
         s->cloud_port = v;
+    }
+    if (get_int(o, "tc_web_port", 0, 65535, &v))
+    {
+        s->tc_web_port = v;
     }
     s->cloud_enabled = s->cloud_host[0] != 0;
 

@@ -71,7 +71,9 @@ progress{width:100%;height:.6rem;accent-color:var(--accent)}
 <div class="row">
 <div><label for="chost">Adresse (IP oder Name)</label><input id="chost" autocapitalize="none" spellcheck="false" placeholder="192.168.178.20"></div>
 <div class="small"><label for="cport">Port</label><input id="cport" type="number" min="1" max="65535"></div>
+<div class="small"><label for="cwport">Web-Port</label><input id="cwport" type="number" min="0" max="65535"></div>
 </div>
+<p class="hint">Über den Web-Port (Weboberfläche von teddyCloud, meist 80) holt die Box die Namen der Tonies. 0 = nicht fragen.</p>
 <label for="cafile">CA-Zertifikat von teddyCloud (certs/server/ca.der)</label>
 <input id="cafile" type="file" accept=".der,.pem,.crt,.cer">
 <div class="status" id="castatus"></div>
@@ -228,7 +230,7 @@ async function load(){
     cfg=await (await fetch('/api/config')).json();
     $('ssid').value=cfg.wifi_ssid||'';
     if(cfg.wifi_ssid)$('wpass').placeholder='unverändert lassen';
-    $('chost').value=cfg.cloud_host||'';$('cport').value=cfg.cloud_port||443;
+    $('chost').value=cfg.cloud_host||'';$('cport').value=cfg.cloud_port||443;$('cwport').value=cfg.tc_web_port??80;
     if(cfg.ca_custom)setStatus($('castatus'),'Eigenes CA-Zertifikat ist gespeichert.','ok');
     $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
     if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
@@ -273,7 +275,7 @@ $('ofwbtn').onclick=async()=>{
 $('save').onclick=async()=>{
   if(!$('ssid').value.trim()&&!cfg.wifi_ssid){setStatus($('status'),'Bitte ein WLAN auswählen.','err');return;}
   const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
-    cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,
+    cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,tc_web_port:$('cwport').value===''?80:+$('cwport').value,
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
     lang_id:+$('lang').value,volume_max:+$('vmax').value||100,volume_max_hdp:+$('vmaxh').value||100,tc_box_settings:$('tcset').value==='1',idle_timeout:+$('idle').value||60,speaker_eq:$('speq').value,led_brightness:+$('led').value,slap:+$('slap').value,slap_reverse:$('slaprev').checked,tilt:+$('tilt').value,update_hour:+$('uphour').value,decoder:$('decoder').value,cpu_mhz:+$('cpumhz').value,download_playing:+$('dlplay').value,readahead:$('readahead').value==='1',rtnl:$('rtnl').value==='1',
     boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked};
@@ -313,6 +315,7 @@ function tnState(t){
   if(t.bad)b.push('<span class="badge warn">beschädigte Datei</span>');
   if(t.stream)b.push('<span class="badge">Stream</span>');
   b.push(t.own?'<span class="badge own">eigene Datei (geschützt)</span>':'<span class="badge">von teddyCloud</span>');
+  if(!t.alias&&t.tc_name)b.push('<span class="badge">Name aus teddyCloud</span>');
   return b.join('');
 }
 async function tnLoad(){
@@ -321,16 +324,17 @@ async function tnLoad(){
     const j=await (await fetch('/api/tonies')).json();
     $('tnspace').textContent=j.tonies.length+' Tonie(s), '+j.free_mb+' MB von '+j.total_mb+' MB frei';
     tnHave={};const list=$('tnlist');list.innerHTML='';
-    j.tonies.sort((a,b)=>(!a.alias-!b.alias)||(a.alias||a.uid).localeCompare(b.alias||b.uid,'de')).forEach(t=>{
+    j.tonies.sort((a,b)=>{const x=a.alias||a.tc_name,y=b.alias||b.tc_name;return (!x-!y)||(x||a.uid).localeCompare(y||b.uid,'de');}).forEach(t=>{
       tnHave[t.uid]=t;
       const d=document.createElement('div');d.className='tonie';
-      d.innerHTML=(t.alias?'<div class="name">'+esc(t.alias)+'</div>':'')+'<div class="uid">'+esc(t.uid)+'</div><div>'+tnState(t)+'</div><div class="meta">'+
+      const shown=t.alias||t.tc_name;
+      d.innerHTML=(shown?'<div class="name">'+esc(shown)+'</div>':'')+'<div class="uid">'+esc(t.uid)+'</div><div>'+tnState(t)+'</div><div class="meta">'+
         (t.size>=0?mb(t.size)+(t.chapters?', '+t.chapters+' Kapitel':'')+(t.audio_id?', Audio-ID '+t.audio_id.toString(16).toUpperCase():''):'keine abspielbare Datei')+'</div>';
       const a=document.createElement('div');a.className='acts';
       const rep=document.createElement('button');rep.className='link';rep.type='button';rep.textContent='Datei hochladen';
       rep.onclick=()=>{$('tnuid').value=t.uid;$('tnseen').value='';$('tnfile').click();};
-      const nm=document.createElement('button');nm.className='link';nm.type='button';nm.textContent=t.alias?'Name ändern':'Name geben';
-      nm.onclick=()=>tnAlias(t.uid,t.alias);
+      const nm=document.createElement('button');nm.className='link';nm.type='button';nm.textContent=shown?'Name ändern':'Name geben';
+      nm.onclick=()=>tnAlias(t.uid,t.alias||t.tc_name,t.tc_name);
       a.append(rep,nm);
       if(t.size>=0){
         const own=document.createElement('button');own.className='link';own.type='button';
@@ -349,8 +353,8 @@ async function tnLoad(){
       o.textContent=(s.alias?s.alias+' – ':'')+s.uid+(tnHave[s.uid]?' (auf der Karte)':' (neu)')+(when?', '+when:'');sel.append(o);});
   }catch(e){setStatus($('tnspace'),'Liste konnte nicht geladen werden.','err');}
 }
-async function tnAlias(uid,old){
-  const n=prompt('Name für '+uid+' (nur für diese Übersicht, leer = keiner):',old||'');
+async function tnAlias(uid,old,tc){
+  const n=prompt('Name für '+uid+(tc?' (leer = Name aus teddyCloud: '+tc+')':' (leer = keiner)'),old||'');
   if(n===null)return;
   try{const j=await (await fetch('/api/tonie/alias?uid='+uid,{method:'POST',body:n.trim().slice(0,40)})).json();
     if(!j.ok)alert('Fehler: '+j.error);}catch(e){alert('Keine Verbindung zur Box.');}

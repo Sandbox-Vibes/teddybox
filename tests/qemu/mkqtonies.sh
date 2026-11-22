@@ -37,7 +37,7 @@ t "empty list, seen tonies listed" '[[ "$L" == *"\"tonies\":[]"* && "$L" == *"$U
 R=$(up good.taf $U); echo "$R"
 t "good upload accepted, 3 chapters" '[[ "$R" == *"\"ok\":true"* && "$R" == *"\"chapters\":3"* ]]'
 L=$(list)
-t "listed complete and own" '[[ "$L" == *"\"uid\":\"$U\",\"alias\":\"\",\"state\":\"ok\""* && "$L" == *"\"own\":true"* && "$L" == *"\"audio_id\":1694498817"* ]]'
+t "listed complete and own" '[[ "$L" == *"\"uid\":\"$U\",\"alias\":\"\",\"tc_name\":\"\",\"state\":\"ok\""* && "$L" == *"\"own\":true"* && "$L" == *"\"audio_id\":1694498817"* ]]'
 R=$(up bad.taf $U); echo "$R"
 t "damaged file refused (SHA-1)" '[[ "$R" == *"\"ok\":false"* && "$R" == *SHA-1* ]]'
 R=$(up short.taf $U); echo "$R"

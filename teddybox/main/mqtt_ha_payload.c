@@ -19,6 +19,9 @@ static const ha_entity_t entities[] = {
      "\"value_template\":\"{{ value_json.status }}\",\"icon\":\"mdi:play-pause\""},
     {"sensor", "tonie", "Tonie",
      "\"value_template\":\"{{ value_json.tonie if value_json.tonie else 'kein Tonie' }}\",\"icon\":\"mdi:nfc-variant\""},
+    {"sensor", "tonie_name", "Tonie-Name",
+     "\"value_template\":\"{{ value_json.tonie_name if value_json.tonie_name else (value_json.tonie if value_json.tonie else 'kein Tonie') }}\","
+     "\"icon\":\"mdi:account-music\""},
     {"sensor", "chapter", "Kapitel",
      "\"value_template\":\"{{ value_json.chapter if value_json.chapters else 0 }}\",\"icon\":\"mdi:book-open-page-variant\""},
     {"sensor", "chapters", "Kapitel gesamt",
@@ -196,9 +199,31 @@ static const char *ha_minutes_or_null(char *buf, size_t size, int ds)
     return buf;
 }
 
+/* JSON string content: quotes and backslashes escaped, control characters dropped */
+static void ha_json_escape(char *out, size_t len, const char *s)
+{
+    size_t o = 0;
+    for (; s && *s && o + 3 < len; s++)
+    {
+        unsigned char c = (unsigned char)*s;
+        if (c < 0x20)
+        {
+            continue;
+        }
+        if (c == '"' || c == '\\')
+        {
+            out[o++] = '\\';
+        }
+        out[o++] = c;
+    }
+    out[o] = 0;
+}
+
 int ha_state_json(const ha_state_t *st, char *buf, size_t size)
 {
     char prog[12], chprog[12], pos[16], dur[16], dl[12];
+    char name[200];
+    ha_json_escape(name, sizeof(name), st->tonie_name);
     char tonie[20] = "";
     if (st->uid)
     {
@@ -206,12 +231,12 @@ int ha_state_json(const ha_state_t *st, char *buf, size_t size)
     }
 
     int n = snprintf(buf, size,
-                     "{\"status\":\"%s\",\"tonie\":\"%s\",\"chapter\":%d,\"chapters\":%d,\"volume\":%u,"
+                     "{\"status\":\"%s\",\"tonie\":\"%s\",\"tonie_name\":\"%s\",\"chapter\":%d,\"chapters\":%d,\"volume\":%u,"
                      "\"battery_mv\":%u,\"battery\":%d,\"battery_state\":\"%s\",\"charging\":%s,"
                      "\"headphones\":%s,\"rssi\":%d,\"speaker_eq\":\"%s\",\"led\":%d,\"slap\":%d,\"tilt\":%d,\"slap_reverse\":%s,"
                      "\"progress\":%s,\"chapter_progress\":%s,\"position\":%s,\"duration\":%s,\"download\":%s,"
                      "\"sleep_timer\":%d}",
-                     st->playing ? "playing" : "idle", tonie, st->chapter, st->chapters, st->volume,
+                     st->playing ? "playing" : "idle", tonie, name, st->chapter, st->chapters, st->volume,
                      st->battery_mv, st->battery_percent, st->battery_state ? st->battery_state : "unknown",
                      st->charging ? "true" : "false", st->headphones ? "true" : "false", st->rssi,
                      ha_speaker_eq_label(st->speaker_eq), st->led, st->slap, st->tilt, st->slap_reverse ? "true" : "false",

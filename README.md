@@ -97,10 +97,21 @@ id, and whether the file came from teddyCloud or was uploaded. For each:
   the freshness check and not touched by the nightly update, so teddyCloud
   never replaces it.
 - **Löschen**: the file and its leftovers (`.tmp`, `.old`, `.bad`).
-- **Name geben / ändern**: a name shown instead of the UID in this
-  overview only (named tonies first, sorted by name). Kept in
-  `tb_alias.txt` on the SD card (`UID=name` per line), also after deleting
-  the file.
+- **Name geben / ändern**: an own name shown instead of the UID (named
+  tonies first, sorted by name). Kept in `tb_alias.txt` on the SD card
+  (`UID=name` per line), also after deleting the file. Without an own name
+  the name from teddyCloud is shown (badge "Name aus teddyCloud").
+
+Names from teddyCloud: while teddyCloud is the backend in use, the box asks
+its web interface (`http://<cloud_host>:<tc_web_port>/api/getTagInfo`,
+plain HTTP, port 80 by default, field "Web-Port" on the setup page) for
+series and episode of each tonie from teddyCloud's `tonies.json` (or
+`tonies.custom.json`): the tonie on the box first, then the others on the
+card one every 2 s, each once per start. They are kept in `tb_names.txt`
+and also go to Home Assistant as "Tonie-Name". If teddyCloud's web
+interface needs a login, no names are fetched (log line once). Only the
+default content folder of teddyCloud is asked (no per-box overlay). QEMU
+test `tests/qemu/mkqnames.sh run`.
 
 A tonie that is not on the card yet: pick it from "zuletzt aufgelegt" (the
 last 8 tags placed on the box, kept in NVS) or type its UID. Only TAF files,
@@ -129,6 +140,7 @@ Written by the setup page; all keys are optional.
 | Key | Default | |
 |---|---|---|
 | `cloud_host`, `cloud_port` | empty, 443 | teddyCloud; the cloud stays off while `cloud_host` is empty |
+| `tc_web_port` | 80 | teddyCloud's web interface (plain HTTP) for the tonie names, 0 = do not ask |
 | `ca_path` | `/spiflash/cert/ca.der` | CA of teddyCloud (`certs/server/ca.der`); the CA in flash only works if it was replaced by the teddyCloud patch, otherwise put it on the SD card |
 | `cloud_enabled` | on with a host | `0` forces the cloud off |
 | `boxine_fallback`, `boxine_host` | 0, `prod.de.tbs.toys` | see below |
@@ -307,11 +319,12 @@ unfinished download, one after another.
 ## Home Assistant
 
 With `mqtt_host` set, the box registers itself via MQTT discovery as device
-"TeddyBox" (`<id>` = `teddybox_<mac>`, 33 entities):
+"TeddyBox" (`<id>` = `teddybox_<mac>`, 34 entities):
 
 | Entities | |
 |---|---|
 | Status, Tonie, Kapitel, Kapitel gesamt | playing / idle, UID of the current tonie, chapter |
+| Tonie-Name | name of the current tonie: own name from the setup page, else teddyCloud's ("series – episode"), else the UID |
 | Fortschritt, Kapitel-Fortschritt, Gespielt, Gesamtdauer | progress in % and minutes (from the Ogg granule positions), at most every 10 s |
 | Download | % of a running download |
 | Lautstärke | number, limited by `volume_max` |
