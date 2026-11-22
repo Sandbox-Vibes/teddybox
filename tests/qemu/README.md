@@ -10,9 +10,9 @@ media), builds it, patches out the ADC calibration QEMU does not have
 | script | test | needs |
 |---|---|---|
 | `mkqcodec.sh` | CELT and ESP-ADF decoder, seek; CELT bit exact against `celt_host_reference.c` (host libopus build with `OPUS_FAST_INT64=0`) | |
-| `mkqtcset.sh` | box settings from teddyCloud: baseline, change taken over, box change stays (`run` drives teddyCloud's web API) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
 | `mkqdl.sh` | downloads: abort, resume, `.tmp` handling, migration | a local teddyCloud with cloud access off, client certificate in the assets FAT under `CERT/` |
 | `mkqra.sh` | read-ahead: SD hangs, seek, growing file, ending during a hang | |
+| `mkqtcset.sh` | box settings from teddyCloud: baseline, change taken over, box change stays (`run` drives teddyCloud's web API) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
 | `mkqv.sh` | SHA-1 check of TAF files, rename to `.bad` | `TAF=` a small tonie file (< 300 KB) |
 
 Environment:
