@@ -17,7 +17,8 @@ int main(int argc, char **argv)
         ha_state_t a = {.playing = 1, .uid = 0xE004035000112233ULL, .chapter = 3, .chapters = 12, .volume = 60,
                         .battery_mv = 3950, .battery_percent = ha_battery_percent(3950, 3600), .battery_state = "ok",
                         .charging = 0, .headphones = 1, .rssi = -61, .led = 2, .slap = 3, .tilt = 0, .slap_reverse = 1,
-                        .progress = 37, .chapter_progress = 80, .position_ds = 7385, .duration_ds = 19980, .download = -1};
+                        .progress = 37, .chapter_progress = 80, .position_ds = 7385, .duration_ds = 19980, .download = -1,
+                        .sleep_timer = 25};
         ha_state_t b = {.battery_state = "unknown", .battery_percent = -1, .progress = -1, .chapter_progress = -1,
                         .position_ds = -1, .duration_ds = -1, .download = 55};
         char buf[512];
@@ -51,6 +52,9 @@ int main(int argc, char **argv)
         {"teddybox/aabbccddeeff/cmd/slap_reverse", "ON", HA_CMD_SLAP_REVERSE, 1},
         {"teddybox/aabbccddeeff/cmd/slap_reverse", "OFF", HA_CMD_SLAP_REVERSE, 0},
         {"teddybox/aabbccddeeff/cmd/slap_reverse", "on", HA_CMD_NONE, 0},
+        {"teddybox/aabbccddeeff/cmd/sleep_timer", "30.0", HA_CMD_SLEEP_TIMER, 30},
+        {"teddybox/aabbccddeeff/cmd/sleep_timer", "0", HA_CMD_SLEEP_TIMER, 0},
+        {"teddybox/aabbccddeeff/cmd/sleep_timer", "241", HA_CMD_NONE, 0},
         {"teddybox/other/cmd/stop", "PRESS", HA_CMD_NONE, 0},
         {"teddybox/aabbccddeeff/cmd/", "", HA_CMD_NONE, 0},
     };
@@ -58,7 +62,7 @@ int main(int argc, char **argv)
     for (unsigned i = 0; i < sizeof c / sizeof c[0]; i++) {
         int v = 0;
         ha_cmd_t got = ha_parse_command(&ctx, c[i].t, strlen(c[i].t), c[i].d, strlen(c[i].d), &v);
-        int ok = got == c[i].want && ((got != HA_CMD_VOLUME && got != HA_CMD_SPEAKER_EQ && got != HA_CMD_LED) || v == c[i].val);
+        int ok = got == c[i].want && ((got != HA_CMD_VOLUME && got != HA_CMD_SPEAKER_EQ && got != HA_CMD_LED && got != HA_CMD_SLEEP_TIMER) || v == c[i].val);
         fails += !ok;
         printf("%s %-40s %-6s -> %d %d\n", ok ? "ok  " : "FAIL", c[i].t, c[i].d, got, v);
     }

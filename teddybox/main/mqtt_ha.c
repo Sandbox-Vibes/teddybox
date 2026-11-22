@@ -117,6 +117,7 @@ static void mqtt_collect_state(ha_state_t *st)
     st->slap = settings_get()->slap_level;
     st->tilt = settings_get()->tilt_level;
     st->slap_reverse = settings_get()->slap_reverse;
+    st->sleep_timer = ctrl_get_sleep_timer();
 
     pb_progress_t p;
     pb_get_progress(&p);
@@ -135,7 +136,7 @@ static bool state_differs(const ha_state_t *a, const ha_state_t *b)
 {
     return a->playing != b->playing || a->uid != b->uid || a->chapter != b->chapter || a->chapters != b->chapters ||
            a->volume != b->volume || a->charging != b->charging || a->headphones != b->headphones || a->speaker_eq != b->speaker_eq || a->led != b->led ||
-           a->slap != b->slap || a->tilt != b->tilt || a->slap_reverse != b->slap_reverse ||
+           a->slap != b->slap || a->tilt != b->tilt || a->slap_reverse != b->slap_reverse || a->sleep_timer != b->sleep_timer ||
            /* a value appearing or disappearing (download starts/ends, duration known) goes out at once */
            (a->download < 0) != (b->download < 0) || (a->duration_ds < 0) != (b->duration_ds < 0) ||
            (a->download == 100) != (b->download == 100) ||
@@ -182,6 +183,10 @@ static void mqtt_handle_command(const char *topic, int topic_len, const char *da
     case HA_CMD_SLAP_REVERSE:
         ESP_LOGI(TAG, "Command: slap reverse %d", value);
         ctrl_request_motion(-1, -1, value);
+        break;
+    case HA_CMD_SLEEP_TIMER:
+        ESP_LOGI(TAG, "Command: sleep timer %d min", value);
+        ctrl_request_sleep_timer(value);
         break;
     case HA_CMD_POWEROFF:
         ESP_LOGI(TAG, "Command: power off");

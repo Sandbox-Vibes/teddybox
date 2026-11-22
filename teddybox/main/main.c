@@ -45,6 +45,7 @@
 #include "bootsel.h"
 #include "control.h"
 #include "rtnl.h"
+#include "sleep_timer.h"
 #include "mqtt_ha.h"
 #include "setup_portal.h"
 
@@ -156,6 +157,22 @@ uint32_t ctrl_get_volume(void)
 void ctrl_request_poweroff(void)
 {
     ctrl_poweroff_request = true;
+}
+
+/* sleep timer, driven by the main loop */
+#define SLEEP_TIMER_GESTURE_MIN 30
+#define SLEEP_TIMER_HOLD_US (2 * 1000000LL)
+static sleep_timer_t sleep_timer;
+static volatile int ctrl_sleep_request = -1;
+
+void ctrl_request_sleep_timer(int minutes)
+{
+    ctrl_sleep_request = minutes < 0 ? 0 : minutes;
+}
+
+int ctrl_get_sleep_timer(void)
+{
+    return sleep_timer_remaining_min(&sleep_timer, esp_timer_get_time());
 }
 
 void dir_list(const char *path)
@@ -430,6 +447,13 @@ void app_main(void)
     int64_t both_ears_since = 0;
     /* original firmware chosen, waiting for the ears to be let go */
     int64_t ofw_armed_since = 0;
+    /* small ear held alone: sleep timer on/off */
+    int64_t small_ear_since = 0;
+    uint32_t small_ear_volume = 0;
+    bool small_ear_used = false;
+    /* volume applied while the sleep timer fades, -1 = none */
+    int sleep_fade_volume = -1;
+    uint32_t sleep_fade_base = 0;
     /* a new firmware runs on probation until it confirms itself, see ota.h */
     const int64_t confirm_time = esp_timer_get_time() + OTA_CONFIRM_AFTER_US;
     bool confirmed = false;
@@ -474,6 +498,9 @@ void app_main(void)
 
         if (ear_small && !ear_small_prev)
         {
+            small_ear_since = cur_time;
+            small_ear_volume = rtc_storage.volume;
+            small_ear_used = false;
             rtnl_event(RTNL3_EAR_SMALL);
             dac3100_set_mute(false);
             int vol_down = dac3100_volume_step(rtc_storage.volume, -1);
@@ -491,6 +518,68 @@ void app_main(void)
                 dac3100_beep(3, 0x140);
             }
             remute_time = cur_time + 800;
+        }
+
+        /* hold the small ear alone for 2 s: sleep timer on (30 min) or off;
+           the volume step of the press is taken back */
+        if (ear_small && !ear_big && !small_ear_used && small_ear_since &&
+            cur_time - small_ear_since >= SLEEP_TIMER_HOLD_US)
+        {
+            small_ear_used = true;
+            rtc_storage.volume = small_ear_volume;
+            audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
+            ctrl_request_sleep_timer(sleep_timer_active(&sleep_timer) ? 0 : SLEEP_TIMER_GESTURE_MIN);
+        }
+        if (!ear_small || ear_big)
+        {
+            small_ear_since = 0;
+        }
+
+        int sleep_req = ctrl_sleep_request;
+        if (sleep_req >= 0)
+        {
+            ctrl_sleep_request = -1;
+            bool was_active = sleep_timer_active(&sleep_timer);
+            sleep_timer_set(&sleep_timer, cur_time, sleep_req);
+            dac3100_set_mute(false);
+            if (sleep_req)
+            {
+                ESP_LOGI(TAG, "Sleep timer: %d min", sleep_timer_remaining_min(&sleep_timer, cur_time));
+                dac3100_beep(1, 0x400);
+            }
+            else if (was_active)
+            {
+                ESP_LOGI(TAG, "Sleep timer off");
+                dac3100_beep(3, 0x400);
+            }
+            remute_time = cur_time + 1000000;
+            if (sleep_fade_volume >= 0)
+            {
+                /* fade stopped (timer off or restarted): full volume again */
+                sleep_fade_volume = -1;
+                audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
+            }
+        }
+        if (sleep_timer_active(&sleep_timer))
+        {
+            int level = sleep_timer_level(&sleep_timer, cur_time);
+            if (level < 0)
+            {
+                ESP_LOGI(TAG, "Sleep timer: time is up, switching off");
+                pb_stop();
+                break;
+            }
+            if (level < 1000)
+            {
+                int vol = (int)(rtc_storage.volume * level / 1000);
+                /* also when the volume was changed meanwhile (ears, Home Assistant) */
+                if (vol != sleep_fade_volume || rtc_storage.volume != sleep_fade_base)
+                {
+                    sleep_fade_volume = vol;
+                    sleep_fade_base = rtc_storage.volume;
+                    audio_hal_set_volume(audio_board_get_hal(), vol);
+                }
+            }
         }
 
         if (!confirmed && cur_time > confirm_time)

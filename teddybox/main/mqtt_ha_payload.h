@@ -10,6 +10,7 @@
  *   BASE/cmd/volume         0..volume_max
  *   BASE/cmd/speaker_eq     one of the HA_SPEAKER_EQ_OPTIONS labels
  *   BASE/cmd/led            0..3
+ *   BASE/cmd/sleep_timer    minutes 0..240 (0 = off)
  *   BASE/cmd/stop|next|prev|poweroff   any payload
  *   <prefix>/<component>/<device id>/<object>/config   discovery (retained)
  */
@@ -51,6 +52,7 @@ typedef struct
     int position_ds;         /* played, 1/10 s */
     int duration_ds;         /* total, 1/10 s */
     int download;            /* % of a running download */
+    int sleep_timer;         /* minutes left, 0 = off */
 } ha_state_t;
 
 typedef enum
@@ -66,6 +68,7 @@ typedef enum
     HA_CMD_SLAP,
     HA_CMD_TILT,
     HA_CMD_SLAP_REVERSE,
+    HA_CMD_SLEEP_TIMER,
 } ha_cmd_t;
 
 /* select labels, index = speaker_eq_t */
