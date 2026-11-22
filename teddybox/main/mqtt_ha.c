@@ -1,4 +1,5 @@
 #include <time.h>
+#include "tonie_names.h"
 #include "taskwatch.h"
 #include "esp_ota_ops.h"
 #include "esp_heap_caps.h"
@@ -102,6 +103,21 @@ static void mqtt_collect_state(ha_state_t *st)
     memset(st, 0, sizeof(*st));
     st->playing = pb_is_playing();
     st->uid = st->playing ? pb_get_current_uid() : 0;
+    /* name looked up from the SD card only when the tonie or the names change */
+    static uint64_t name_uid;
+    static uint32_t name_version;
+    static char name[sizeof(st->tonie_name)];
+    if (st->uid != name_uid || tonie_names_version() != name_version)
+    {
+        name_uid = st->uid;
+        name_version = tonie_names_version();
+        name[0] = 0;
+        if (st->uid)
+        {
+            tonie_name_lookup(st->uid, name, sizeof(name));
+        }
+    }
+    strlcpy(st->tonie_name, name, sizeof(st->tonie_name));
     st->chapters = st->playing ? pb_get_chapter_count() : 0;
     st->chapter = st->chapters ? pb_get_chapter() + 1 : 0;
     st->volume = ctrl_get_volume();
@@ -138,6 +154,7 @@ static bool state_differs(const ha_state_t *a, const ha_state_t *b)
     return a->playing != b->playing || a->uid != b->uid || a->chapter != b->chapter || a->chapters != b->chapters ||
            a->volume != b->volume || a->charging != b->charging || a->headphones != b->headphones || a->speaker_eq != b->speaker_eq || a->led != b->led ||
            a->slap != b->slap || a->tilt != b->tilt || a->slap_reverse != b->slap_reverse || a->sleep_timer != b->sleep_timer ||
+           strcmp(a->tonie_name, b->tonie_name) ||
            /* a value appearing or disappearing (download starts/ends, duration known) goes out at once */
            (a->download < 0) != (b->download < 0) || (a->duration_ds < 0) != (b->duration_ds < 0) ||
            (a->download == 100) != (b->download == 100) ||
@@ -344,7 +361,7 @@ static void mqtt_ha_task(void *arg)
 {
     ha_state_t last = {.battery_state = ""};
     ha_state_t now;
-    char json[512];
+    char json[768];
     TickType_t last_sent = 0;
     TickType_t last_diag = 0;
 

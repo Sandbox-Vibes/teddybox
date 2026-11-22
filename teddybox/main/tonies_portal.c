@@ -13,6 +13,7 @@
 #include "playback.h"
 #include "freshness.h"
 #include "tonie_seen.h"
+#include "tonie_names.h"
 #include "proto/toniebox.pb.taf-header.pb-c.h"
 
 static const char *TAG = "Tonies";
@@ -68,61 +69,8 @@ static void variant(char *out, size_t len, const char *base, const char *suffix)
 
 /* ------------------------------------------------------------- aliases */
 
-/* names for the overview only, one "UID=name" per line in ALIAS_FILE */
-#define ALIAS_FILE "/sdcard/tb_alias.txt"
-#define ALIAS_NEW "/sdcard/tb_alias.new"
-#define ALIAS_LEN 96
-#define ALIAS_MAX 300
-
-typedef struct
-{
-    uint64_t uid;
-    char name[ALIAS_LEN];
-} alias_t;
-
-static int alias_load(alias_t *a, int max)
-{
-    FILE *f = fopen(ALIAS_FILE, "r");
-    if (!f)
-    {
-        return 0;
-    }
-    int n = 0;
-    char line[ALIAS_LEN + 24];
-    while (n < max && fgets(line, sizeof(line), f))
-    {
-        line[strcspn(line, "\r\n")] = 0;
-        char *eq = strchr(line, '=');
-        if (!eq || eq - line != 16)
-        {
-            continue;
-        }
-        *eq = 0;
-        char *end;
-        uint64_t uid = strtoull(line, &end, 16);
-        if (*end || !uid || !eq[1])
-        {
-            continue;
-        }
-        a[n].uid = uid;
-        strlcpy(a[n].name, eq + 1, sizeof(a[n].name));
-        n++;
-    }
-    fclose(f);
-    return n;
-}
-
-static const char *alias_find(const alias_t *a, int n, uint64_t uid)
-{
-    for (int i = 0; i < n; i++)
-    {
-        if (a[i].uid == uid)
-        {
-            return a[i].name;
-        }
-    }
-    return NULL;
-}
+/* names: tonie_names.h (own names here, teddyCloud's from tonie_names_tc.c) */
+#define ALIAS_LEN TONIE_NAME_LEN
 
 /* JSON string content, control characters dropped */
 static void json_escape(char *out, size_t len, const char *s)
@@ -165,69 +113,9 @@ static esp_err_t alias_handler(httpd_req_t *req)
         }
         got += r;
     }
-    /* do not end inside a UTF-8 sequence when it was cut */
-    if (got > 0 && (size_t)got < req->content_len)
-    {
-        int lead = got - 1;
-        while (lead > 0 && ((unsigned char)name[lead] & 0xC0) == 0x80)
-        {
-            lead--;
-        }
-        unsigned char c = (unsigned char)name[lead];
-        int need = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
-        if (lead + need > got)
-        {
-            got = lead;
-        }
-    }
     name[got] = 0;
-    for (char *p = name; *p; p++)
-    {
-        if ((unsigned char)*p < 0x20)
-        {
-            *p = ' '; /* no line breaks in the file */
-        }
-    }
-    alias_t *a = calloc(ALIAS_MAX + 1, sizeof(alias_t));
-    if (!a)
-    {
-        return send_msg(req, false, "Kein Speicher frei", NULL);
-    }
-    int n = alias_load(a, ALIAS_MAX);
-    int i = 0;
-    while (i < n && a[i].uid != uid)
-    {
-        i++;
-    }
-    if (name[0])
-    {
-        a[i].uid = uid;
-        strlcpy(a[i].name, name, sizeof(a[i].name));
-        if (i == n)
-        {
-            n++;
-        }
-    }
-    else if (i < n)
-    {
-        a[i] = a[--n];
-    }
-    FILE *f = fopen(ALIAS_NEW, "w");
-    bool ok = f != NULL;
-    for (int k = 0; f && k < n; k++)
-    {
-        ok = fprintf(f, "%016llX=%s\n", (unsigned long long)a[k].uid, a[k].name) > 0 && ok;
-    }
-    if (f)
-    {
-        ok = fclose(f) == 0 && ok;
-    }
-    free(a);
-    if (ok)
-    {
-        unlink(ALIAS_FILE);
-        ok = rename(ALIAS_NEW, ALIAS_FILE) == 0;
-    }
+    tonie_names_clean(name, sizeof(name));
+    bool ok = tonie_names_set(TONIE_ALIAS_FILE, uid, name);
     return send_msg(req, ok, ok ? NULL : "Konnte nicht gespeichert werden", NULL);
 }
 
@@ -281,7 +169,7 @@ static int collect_uids(uint64_t *uids, int max)
     return n;
 }
 
-static void entry_json(char *out, size_t len, uint64_t uid, const char *alias)
+static void entry_json(char *out, size_t len, uint64_t uid, const char *alias, const char *tc_name)
 {
     char *file = pb_build_filename(uid);
     char p[72];
@@ -318,15 +206,19 @@ static void entry_json(char *out, size_t len, uint64_t uid, const char *alias)
     free(file);
 
     const char *state = complete ? (old ? "ok_old" : "ok") : tmp >= 0 || size >= 0 ? "partial" : bad ? "bad" : old ? "old" : "none";
-    char name[ALIAS_LEN * 2] = "";
+    char name[ALIAS_LEN * 2] = "", tcn[ALIAS_LEN * 2] = "";
     if (alias)
     {
         json_escape(name, sizeof(name), alias);
     }
+    if (tc_name)
+    {
+        json_escape(tcn, sizeof(tcn), tc_name);
+    }
     snprintf(out, len,
-             "{\"uid\":\"%016llX\",\"alias\":\"%s\",\"state\":\"%s\",\"size\":%ld,\"tmp\":%ld,\"audio_id\":%lu,\"chapters\":%d,"
+             "{\"uid\":\"%016llX\",\"alias\":\"%s\",\"tc_name\":\"%s\",\"state\":\"%s\",\"size\":%ld,\"tmp\":%ld,\"audio_id\":%lu,\"chapters\":%d,"
              "\"own\":%s,\"bad\":%s,\"stream\":%s}",
-             (unsigned long long)uid, name, state, size, tmp, (unsigned long)audio_id, chapters, own ? "true" : "false",
+             (unsigned long long)uid, name, tcn, state, size, tmp, (unsigned long)audio_id, chapters, own ? "true" : "false",
              bad ? "true" : "false", stream ? "true" : "false");
 }
 
@@ -339,10 +231,12 @@ static esp_err_t list_handler(httpd_req_t *req)
         return send_msg(req, false, "Kein Speicher frei", NULL);
     }
     int n = collect_uids(uids, LIST_MAX);
-    alias_t *al = calloc(ALIAS_MAX, sizeof(alias_t));
-    int an = al ? alias_load(al, ALIAS_MAX) : 0;
+    tonie_name_t *al = calloc(TONIE_NAMES_MAX, sizeof(tonie_name_t));
+    int an = al ? tonie_names_load(TONIE_ALIAS_FILE, al, TONIE_NAMES_MAX) : 0;
+    tonie_name_t *tn = calloc(TONIE_NAMES_MAX, sizeof(tonie_name_t));
+    int tnn = tn ? tonie_names_load(TONIE_TCNAME_FILE, tn, TONIE_NAMES_MAX) : 0;
     httpd_resp_set_type(req, "application/json");
-    char buf[480];
+    char buf[720];
     uint64_t total = 0, free_b = 0;
     esp_vfs_fat_info("/sdcard", &total, &free_b);
     snprintf(buf, sizeof(buf), "{\"total_mb\":%llu,\"free_mb\":%llu,\"tonies\":[", (unsigned long long)(total >> 20),
@@ -354,7 +248,7 @@ static esp_err_t list_handler(httpd_req_t *req)
         {
             httpd_resp_send_chunk(req, ",", 1);
         }
-        entry_json(buf, sizeof(buf), uids[i], alias_find(al, an, uids[i]));
+        entry_json(buf, sizeof(buf), uids[i], tonie_names_find(al, an, uids[i]), tonie_names_find(tn, tnn, uids[i]));
         httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
     }
     free(uids);
@@ -364,7 +258,11 @@ static esp_err_t list_handler(httpd_req_t *req)
     for (int i = 0; i < s; i++)
     {
         char name[ALIAS_LEN * 2] = "";
-        const char *alias = alias_find(al, an, seen[i].uid);
+        const char *alias = tonie_names_find(al, an, seen[i].uid);
+        if (!alias)
+        {
+            alias = tonie_names_find(tn, tnn, seen[i].uid);
+        }
         if (alias)
         {
             json_escape(name, sizeof(name), alias);
@@ -374,6 +272,7 @@ static esp_err_t list_handler(httpd_req_t *req)
         httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
     }
     free(al);
+    free(tn);
     httpd_resp_send_chunk(req, "]}", HTTPD_RESP_USE_STRLEN);
     return httpd_resp_send_chunk(req, NULL, 0);
 }

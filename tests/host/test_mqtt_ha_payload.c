@@ -18,7 +18,7 @@ int main(int argc, char **argv)
                         .battery_mv = 3950, .battery_percent = ha_battery_percent(3950, 3600), .battery_state = "ok",
                         .charging = 0, .headphones = 1, .rssi = -61, .led = 2, .slap = 3, .tilt = 0, .slap_reverse = 1,
                         .progress = 37, .chapter_progress = 80, .position_ds = 7385, .duration_ds = 19980, .download = -1,
-                        .sleep_timer = 25};
+                        .sleep_timer = 25, .tonie_name = "Bibi \"Blocksberg\" – Hexen"};
         ha_state_t b = {.battery_state = "unknown", .battery_percent = -1, .progress = -1, .chapter_progress = -1,
                         .position_ds = -1, .duration_ds = -1, .download = 55};
         char buf[512];

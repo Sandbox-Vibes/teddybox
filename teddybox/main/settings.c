@@ -24,6 +24,7 @@ static settings_t settings = {
     .cloud_enabled = false,
     .cloud_host = "",
     .cloud_port = 443,
+    .tc_web_port = 80,
     .ca_path = "/spiflash/cert/ca.der",
     .boxine_fallback = false,
     .boxine_host = "prod.de.tbs.toys",
@@ -95,6 +96,8 @@ int settings_save_ini(const char *path)
                      "# teddyCloud, cloud is off while cloud_host is empty\n"
                      "cloud_host = %s\n"
                      "cloud_port = %u\n"
+                     "# teddyCloud's web interface (HTTP) for the names of the tonies, 0 = do not ask\n"
+                     "tc_web_port = %u\n"
                      "ca_path = %s\n"
                      "%s"
                      "\n"
@@ -153,7 +156,7 @@ int settings_save_ini(const char *path)
                      "# send box events (tonie, playback, volume, ears, slap, tilt, charger) to teddyCloud like the original\n"
                      "# firmware (RTNL; only to teddyCloud, never to Boxine): 1 on, 0 off\n"
                      "rtnl = %u\n",
-                     s->cloud_host, s->cloud_port, s->ca_path,
+                     s->cloud_host, s->cloud_port, s->tc_web_port, s->ca_path,
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
                      s->boxine_host[0] ? s->boxine_host : "prod.de.tbs.toys",
@@ -296,6 +299,10 @@ void settings_load_ini(void)
         else if (!strcmp(key, "cloud_host"))
         {
             copy_str(settings.cloud_host, sizeof(settings.cloud_host), val);
+        }
+        else if (!strcmp(key, "tc_web_port") && num >= 0 && num < 65536)
+        {
+            settings.tc_web_port = num;
         }
         else if (!strcmp(key, "cloud_port") && num > 0 && num < 65536)
         {

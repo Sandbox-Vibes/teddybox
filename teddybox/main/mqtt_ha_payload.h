@@ -32,6 +32,7 @@ typedef struct
 {
     bool playing;
     uint64_t uid;            /* 0 = no tonie */
+    char tonie_name[96];     /* own name or teddyCloud's, "" if none */
     int chapter;             /* 1-based for display, 0 = none */
     int chapters;
     unsigned volume;

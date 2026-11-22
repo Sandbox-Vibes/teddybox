@@ -33,6 +33,8 @@ typedef struct
     bool cloud_enabled;
     char cloud_host[64];
     uint16_t cloud_port;
+    /* teddyCloud's web interface (plain HTTP) for tonie names, 0 = off */
+    uint16_t tc_web_port;
     char ca_path[64];
 
     /* Boxine cloud: used directly when teddyCloud is not configured or not
