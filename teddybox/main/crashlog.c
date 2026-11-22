@@ -5,11 +5,13 @@
 #include "esp_core_dump.h"
 #include "esp_app_desc.h"
 #include "nvs.h"
+#include "esp_http_server.h"
 #include "crashlog.h"
 
 static const char *TAG = "CRASH";
 #define CRASHLOG_FILE "/sdcard/tb_crash.txt"
 #define CRASHLOG_NVS "TB_CRASH"
+#define CRASHLOG_VIEW_MAX 8192
 
 void crashlog_check(void)
 {
@@ -76,4 +78,82 @@ void crashlog_check(void)
         nvs_close(h);
     }
     free(s);
+}
+
+/* setup page, tab System: show and delete tb_crash.txt */
+static void (*crash_touch)(void);
+
+static esp_err_t crashlog_get_handler(httpd_req_t *req)
+{
+    if (crash_touch)
+    {
+        crash_touch();
+    }
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    FILE *f = fopen(CRASHLOG_FILE, "r");
+    if (!f)
+    {
+        return httpd_resp_send(req, NULL, 0);
+    }
+    /* only the last 8 KB, newest crashes are at the end */
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    if (size > CRASHLOG_VIEW_MAX)
+    {
+        fseek(f, size - CRASHLOG_VIEW_MAX, SEEK_SET);
+    }
+    else
+    {
+        fseek(f, 0, SEEK_SET);
+    }
+    char *buf = malloc(1024);
+    if (!buf)
+    {
+        fclose(f);
+        return httpd_resp_send_500(req);
+    }
+    size_t n;
+    esp_err_t err = ESP_OK;
+    while (err == ESP_OK && (n = fread(buf, 1, 1024, f)) > 0)
+    {
+        err = httpd_resp_send_chunk(req, buf, n);
+    }
+    free(buf);
+    fclose(f);
+    if (err == ESP_OK)
+    {
+        err = httpd_resp_send_chunk(req, NULL, 0);
+    }
+    return err;
+}
+
+static esp_err_t crashlog_delete_handler(httpd_req_t *req)
+{
+    if (crash_touch)
+    {
+        crash_touch();
+    }
+    bool ok = remove(CRASHLOG_FILE) == 0;
+    ESP_LOGI(TAG, "%s deleted from the setup page", CRASHLOG_FILE);
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+}
+
+esp_err_t crashlog_register(httpd_handle_t server, void (*touch)(void))
+{
+    static const httpd_uri_t uris[] = {
+        {.uri = "/api/crashlog", .method = HTTP_GET, .handler = crashlog_get_handler},
+        {.uri = "/api/crashlog/delete", .method = HTTP_POST, .handler = crashlog_delete_handler},
+    };
+    crash_touch = touch;
+    for (int i = 0; i < sizeof(uris) / sizeof(uris[0]); i++)
+    {
+        esp_err_t err = httpd_register_uri_handler(server, &uris[i]);
+        if (err != ESP_OK)
+        {
+            return err;
+        }
+    }
+    return ESP_OK;
 }

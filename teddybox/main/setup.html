@@ -176,6 +176,15 @@ progress{width:100%;height:.6rem;accent-color:var(--accent)}
 </section>
 
 <section>
+<h2>Absturzprotokoll</h2>
+<p class="hint">Stürzt die Firmware ab, startet die Box neu und schreibt beim nächsten Start eine Zeile nach <code>tb_crash.txt</code> auf der SD-Karte: Version, betroffener Task und die Absturzstelle als Adressen. Es stehen keine Zugangsdaten darin, du kannst den Text also zur Fehlersuche weitergeben.</p>
+<pre id="crlog" style="white-space:pre-wrap;word-break:break-all;font-size:12px;max-height:240px;overflow:auto;background:rgba(127,127,127,.12);padding:8px;border-radius:6px">…</pre>
+<div class="status" id="crstatus"></div>
+<button type="button" id="crcopy">Kopieren</button>
+<button class="link" type="button" id="crdel">Protokoll löschen</button>
+</section>
+
+<section>
 <h2>Firmware aktualisieren</h2>
 <p class="hint" id="fwinfo"></p>
 <button type="button" id="ofwbtn">Original-Firmware starten</button>
@@ -301,6 +310,7 @@ function showTab(name){
   document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));
   $('savebar').hidden=!(name==='net'||name==='box');
   if(name==='tonies'&&!tnLoaded)tnLoad();
+  if(name==='sys')crLoad();
   try{history.replaceState(null,'','#'+name);}catch(e){}
 }
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
@@ -381,6 +391,19 @@ $('tnbtn').onclick=()=>{
   x.onerror=()=>{$('tnbtn').disabled=false;$('tnprog').hidden=true;setStatus($('tnstatus'),'Upload abgebrochen.','err');};
   setStatus($('tnstatus'),'Lade hoch …');x.send(f);
 };
+async function crLoad(){
+  try{const t=await (await fetch('/api/crashlog')).text();
+    $('crlog').textContent=t.trim()||'Keine Abstürze aufgezeichnet.';
+    $('crcopy').hidden=$('crdel').hidden=!t.trim();setStatus($('crstatus'),'');}
+  catch(e){$('crlog').textContent='';setStatus($('crstatus'),'Keine Antwort der Box.','err');}
+}
+$('crcopy').onclick=async()=>{
+  const t=$('crlog').textContent;
+  try{await navigator.clipboard.writeText(t);setStatus($('crstatus'),'Kopiert.','ok');}
+  catch(e){const r=document.createRange();r.selectNodeContents($('crlog'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);setStatus($('crstatus'),'Text markiert, jetzt kopieren.','ok');}
+};
+$('crdel').onclick=async()=>{if(!confirm('Absturzprotokoll löschen?'))return;
+  try{await fetch('/api/crashlog/delete',{method:'POST'});}catch(e){}crLoad();};
 showTab(location.hash.slice(1));
 load();
 </script>

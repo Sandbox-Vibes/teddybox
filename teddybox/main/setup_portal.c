@@ -21,6 +21,7 @@
 #include "bootsel.h"
 #include "tonies_portal.h"
 #include "backup.h"
+#include "crashlog.h"
 #include "speaker_eq.h"
 #include "settings.h"
 #include "wifi.h"
@@ -645,6 +646,10 @@ esp_err_t setup_portal_register(httpd_handle_t server)
     {
         err = tonies_portal_register(server, touch);
     }
+    if (err == ESP_OK)
+    {
+        err = crashlog_register(server, touch);
+    }
     if (err != ESP_OK)
     {
         return err;
@@ -754,7 +759,7 @@ void setup_portal_run(void)
     hc.stack_size = 8192;          /* cJSON and certificate parsing */
     hc.max_open_sockets = 5;       /* phones open many connections */
     hc.lru_purge_enable = true;
-    hc.max_uri_handlers = 24;      /* setup + backup + tonies */
+    hc.max_uri_handlers = 24;      /* setup + backup + tonies + crash log */
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &hc) != ESP_OK || setup_portal_register(server) != ESP_OK)
     {
