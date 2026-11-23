@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>TeddyBox</title>
+    <style>
+      :root {
+        --tc-bg: #fff; --tc-fg: #1f2328; --tc-muted: #667085; --tc-border: #d0d7de;
+        --tc-primary: #1677ff; --tc-bg-soft: #f6f8fa; --tc-radius: 10px;
+        --ok: #15803d; --warn: #b45309; --err: #b91c1c;
+      }
+      :root[data-tc-theme="dark"] {
+        --tc-bg: #0f1419; --tc-fg: #e6e7ea; --tc-muted: #9aa0a6; --tc-border: #2b3138;
+        --tc-primary: #3b82f6; --tc-bg-soft: #141b22; --ok: #4ade80; --warn: #fbbf24; --err: #f87171;
+      }
+      html, body { background: var(--tc-bg); color: var(--tc-fg); font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; }
+      body { margin: 16px; max-width: 1050px; }
+      h1 { margin: 0 0 4px; font-size: 24px; }
+      h2 { margin: 0 0 8px; font-size: 18px; }
+      .muted { color: var(--tc-muted); }
+      .small { font-size: 13px; }
+      .card { background: var(--tc-bg); border: 1px solid var(--tc-border); border-radius: var(--tc-radius); padding: 16px; margin-bottom: 16px; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+      label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+      input[type="text"], select { font: inherit; font-weight: 400; color: inherit; background: var(--tc-bg-soft); border: 1px solid var(--tc-border); border-radius: 8px; padding: 8px 10px; }
+      input[type="file"] { font: inherit; font-weight: 400; }
+      .btn { font: inherit; border: 1px solid var(--tc-border); border-radius: 8px; padding: 8px 12px; background: transparent; color: inherit; cursor: pointer; }
+      .btn[disabled] { opacity: .6; cursor: not-allowed; }
+      .btn.primary { background: var(--tc-primary); color: #fff; border-color: transparent; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--tc-border); vertical-align: top; }
+      th { font-size: 12px; color: var(--tc-muted); font-weight: 600; }
+      .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+      .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--tc-border); background: var(--tc-bg-soft); white-space: nowrap; }
+      .tag.ok { color: var(--ok); border-color: currentColor; }
+      .tag.warn { color: var(--warn); border-color: currentColor; }
+      .status { margin: 6px 0 0; font-size: 13px; min-height: 1.2em; }
+      .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+      ol.files { margin: 6px 0; padding-left: 22px; font-size: 13px; }
+      progress { width: 100%; }
+      #events { max-height: 300px; overflow: auto; background: var(--tc-bg-soft); border: 1px solid var(--tc-border); border-radius: 8px; padding: 8px 10px; margin: 0; white-space: pre-wrap; }
+      a { color: var(--tc-primary); }
+      :focus-visible { outline: 2px solid var(--tc-primary); outline-offset: 2px; }
+    </style>
+    <!-- THEME ADAPTER -->
+    <script>
+      (function () {
+        const root = document.documentElement;
+        const setVars = (bg, fg, fontFamily, fontSize) => {
+          if (!bg || !fg) return;
+          root.style.setProperty("--tc-bg", String(bg).trim());
+          root.style.setProperty("--tc-fg", String(fg).trim());
+          root.style.setProperty(
+            "--tc-border",
+            "color-mix(in srgb, " + fg + " 20%, transparent)"
+          );
+          root.style.setProperty(
+            "--tc-bg-soft",
+            "color-mix(in srgb, " + bg + " 92%, " + fg + " 8%)"
+          );
+          if (!root.style.getPropertyValue("--tc-primary"))
+            root.style.setProperty("--tc-primary", "#1677ff");
+          if (fontFamily) {
+            document.documentElement.style.fontFamily = fontFamily;
+            document.body.style.fontFamily = fontFamily;
+          }
+          if (fontSize) {
+            document.documentElement.style.fontSize = fontSize;
+            document.body.style.fontSize = fontSize;
+          }
+        };
+        const rgbToL = (rgb) => {
+          const m = rgb && rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+          if (!m) return null;
+          const [r, g, b] = [+m[1], +m[2], +m[3]];
+          return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        };
+        const applyThemeFlag = (bg) => {
+          const L = rgbToL(bg);
+          if (L != null)
+            root.setAttribute("data-tc-theme", L < 0.5 ? "dark" : "light");
+        };
+        const applyExplicit = (t) => {
+          if (t === "dark" || t === "light") {
+            root.setAttribute("data-tc-theme", t);
+            return true;
+          }
+          return false;
+        };
+        const urlTheme = (
+          new URLSearchParams(location.search).get("tcTheme") || ""
+        ).toLowerCase();
+        const sysQuery =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)");
+        const followSystem = () =>
+          applyExplicit(sysQuery.matches ? "dark" : "light");
+        const readFromParent = () => {
+          try {
+            const pdoc = window.parent && window.parent.document;
+            if (!pdoc) return false;
+            const hostEl =
+              pdoc.querySelector(".ant-layout-content") ||
+              pdoc.querySelector("main.ant-layout-content") ||
+              pdoc.body;
+            if (!hostEl) return false;
+            const cs = window.parent.getComputedStyle(hostEl);
+            const bg =
+              cs.backgroundColor || cs.background || "rgb(255,255,255)";
+            const fg = cs.color || "rgb(31,35,40)";
+            const font =
+              cs.fontFamily ||
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            const fontSize = cs.fontSize || "14px";
+            setVars(bg, fg, font, fontSize);
+            if (!root.hasAttribute("data-tc-theme")) applyThemeFlag(bg);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        };
+        if (urlTheme && urlTheme !== "auto") applyExplicit(urlTheme);
+        readFromParent();
+        if (!root.hasAttribute("data-tc-theme") || urlTheme === "auto") {
+          if (sysQuery) {
+            followSystem();
+            try {
+              sysQuery.addEventListener("change", followSystem);
+            } catch (_) {
+              sysQuery.addListener && sysQuery.addListener(followSystem);
+            }
+          }
+        }
+        window.addEventListener(
+          "message",
+          (ev) => {
+            const d = ev && ev.data;
+            if (
+              d &&
+              d.type === "tc-theme" &&
+              (d.theme === "dark" || d.theme === "light")
+            )
+              applyExplicit(d.theme);
+            if (d && d.type === "tc-theme-vars" && d.bg && d.fg) {
+              setVars(d.bg, d.fg);
+              applyThemeFlag(d.bg);
+            }
+          },
+          false
+        );
+        (function () {
+          try {
+            const pdoc = window.parent && window.parent.document;
+            if (!pdoc) return;
+            const hostEl =
+              pdoc.querySelector(".ant-layout-content") ||
+              pdoc.querySelector("main.ant-layout-content") ||
+              pdoc.body;
+            const update = () => {
+              readFromParent();
+            };
+            const mo = new MutationObserver(update);
+            mo.observe(pdoc.documentElement, {
+              attributes: true,
+              attributeFilter: ["class", "data-theme"],
+            });
+            mo.observe(pdoc.body, {
+              attributes: true,
+              attributeFilter: ["class", "data-theme", "style"],
+            });
+            if (hostEl && hostEl !== pdoc.body)
+              mo.observe(hostEl, {
+                attributes: true,
+                attributeFilter: ["class", "data-theme", "style"],
+              });
+            window.parent.addEventListener &&
+              window.parent.addEventListener("transitionend", update, true);
+            window.parent.addEventListener &&
+              window.parent.addEventListener("resize", update);
+            let i = 0;
+            const t = setInterval(() => {
+              update();
+              if (++i > 5) clearInterval(t);
+            }, 2000);
+          } catch (_) {}
+        })();
+      })();
+    </script>
+  </head>
+  <body>
+    <header>
+      <h1>TeddyBox <span id="pluginVersion" class="muted small"></span></h1>
+      <p class="muted small" data-t="intro">Custom firmware for the ESP32 Toniebox. This page shows which boxes run it and helps to put audio on a tonie.</p>
+    </header>
+
+    <section class="card" aria-labelledby="h-boxes">
+      <div class="row" style="justify-content:space-between;margin-top:0">
+        <h2 id="h-boxes" data-t="Boxes">Boxes</h2>
+        <button class="btn" id="reload" type="button" data-t="Reload">Reload</button>
+      </div>
+      <p class="muted small" id="latest"></p>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th data-t="Box">Box</th><th data-t="Firmware">Firmware</th><th data-t="Last connection">Last connection</th><th data-t="Setup page">Setup page</th></tr></thead>
+        <tbody id="boxes"><tr><td colspan="4" class="muted" data-t="Loading …">Loading …</td></tr></tbody>
+      </table></div>
+      <p class="muted small" data-t="setupHint">The setup page only answers while the box is in setup mode: Home Assistant button "Start setup", or hold the big ear while switching on.</p>
+    </section>
+
+    <section class="card" aria-labelledby="h-audio">
+      <h2 id="h-audio" data-t="Audio to tonie">Audio to tonie</h2>
+      <p class="muted small" data-t="audioHint">Audio files are uploaded to teddyCloud's library, encoded there into one TAF file (one chapter per file, in name order) and set as the content of the tonie. The box downloads it the next time the tonie is placed or at the next check.</p>
+      <div class="grid">
+        <label><span data-t="Box">Box</span><select id="abox"></select></label>
+        <label><span data-t="Tonie">Tonie</span><select id="atonie"></select></label>
+        <label><span data-t="Title">Title</span><input type="text" id="atitle" maxlength="60" autocomplete="off" /></label>
+        <label><span data-t="Audio files">Audio files</span><input type="file" id="afiles" multiple accept="audio/*,.mp3,.m4a,.ogg,.opus,.wav,.flac" /></label>
+      </div>
+      <ol class="files" id="alist"></ol>
+      <div class="row"><button class="btn primary" id="ago" type="button" data-t="Convert and assign">Convert and assign</button></div>
+      <progress id="aprog" max="100" value="0" hidden></progress>
+      <p class="status" id="astatus" role="status"></p>
+      <p class="muted small" data-t="ownHint">On TeddyBox, a tonie whose file was uploaded on the setup page is protected and keeps it; switch the protection off there first.</p>
+    </section>
+
+    <section class="card" aria-labelledby="h-events">
+      <div class="row" style="justify-content:space-between;margin-top:0">
+        <h2 id="h-events" data-t="Live events">Live events</h2>
+        <button class="btn" id="evtoggle" type="button" data-t="Start">Start</button>
+      </div>
+      <p class="muted small" data-t="eventsHint">What the boxes report to teddyCloud right now: tonie placed, ears, volume, playback. teddyCloud does not say which box sent an event.</p>
+      <pre id="events" class="mono" aria-live="polite"></pre>
+    </section>
+
+    <p class="muted small"><a href="https://github.com/Sandbox-Vibes/teddybox" target="_blank" rel="noopener">GitHub</a> · <a href="https://github.com/Sandbox-Vibes/teddybox/releases" target="_blank" rel="noopener" data-t="Releases">Releases</a> · <span data-t="disclaimer">Unofficial project, not affiliated with tonies GmbH.</span></p>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

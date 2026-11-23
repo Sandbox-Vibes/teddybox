@@ -342,6 +342,14 @@ unfinished download, one after another.
   sending the result), a guard notes "hing bei: <step>" and switches the box
   off, silently, as after a normal run.
 
+## teddyCloud plugin
+
+`teddycloud-plugin/teddybox/` is a page for teddyCloud's web interface: which
+boxes run TeddyBox and in which version (with a hint when a newer release
+exists), the link to each box's setup page, audio files to a tonie in one
+step (encoded by teddyCloud), and live box events. Copy the folder into
+teddyCloud's `plugins` folder; details in its README.
+
 ## Home Assistant
 
 With `mqtt_host` set, the box registers itself via MQTT discovery as device
