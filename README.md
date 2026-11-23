@@ -83,8 +83,9 @@ automatically, otherwise open `http://192.168.4.1/`. Four tabs:
   start the original firmware
 
 The page is in German when the browser prefers German, otherwise in
-English. Messages that come from the box itself (errors of an upload, for
-example) stay German.
+English. Texts that come from the box itself (error messages, Home
+Assistant names, the nightly update result) follow `text_language`
+(English by default, see "Configuration").
 
 Saving (tabs Verbindung and Box) writes `teddybox.ini`, stores the WiFi in
 the original firmware's format and restarts. Unused for 15 minutes, the box
