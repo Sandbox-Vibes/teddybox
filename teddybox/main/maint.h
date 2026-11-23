@@ -25,6 +25,14 @@ void maint_schedule_next(void);
 uint64_t maint_sleep_us(void);
 /* the update itself; WiFi, cloud and battery must be started */
 void maint_run(void);
+/* extra time after MAINT_MAX_RUN_S before the guard switches the box off */
+#define MAINT_GUARD_EXTRA_S (5 * 60)
+/* update mode: switch off (and note the step) if the run hangs */
+void maint_guard_start(void);
+/* steps after maint_run, for the report of a run that hangs there */
+void maint_stage(const char *what);
+/* the run ended normally (right before switching off) */
+void maint_run_end(void);
 /* log line at start: last run with result, next planned run */
 void maint_log_status(void);
 

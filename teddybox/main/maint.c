@@ -39,8 +39,12 @@ typedef struct
     time_t next;
     time_t last;
     char result[64];
+    /* the run in progress: start time (0 = none) and its current step, so a
+       run that never finished is reported at the next start */
+    time_t run_start;
+    char stage[48];
 } maint_rtc_t;
-#define MAINT_MAGIC 0x4D41494Eu /* "MAIN" */
+#define MAINT_MAGIC 0x4D41494Fu /* "MAIO": layout with run_start/stage */
 static RTC_NOINIT_ATTR maint_rtc_t rtc;
 
 static void rtc_check(void)
@@ -51,6 +55,40 @@ static void rtc_check(void)
         rtc.magic = MAINT_MAGIC;
     }
     rtc.result[sizeof(rtc.result) - 1] = 0;
+    rtc.stage[sizeof(rtc.stage) - 1] = 0;
+}
+
+static void nvs_store(void);
+
+static void stage_set(const char *fmt, unsigned long long a, int b, int c)
+{
+    snprintf(rtc.stage, sizeof(rtc.stage), fmt, a, b, c);
+    ESP_LOGI(TAG, "Step: %s", rtc.stage);
+}
+
+/* a run that started but never reached maint_run_end(): hung, crashed or
+   lost power. Reported as its result, with the step it was in. */
+static void check_unfinished(void)
+{
+    if (!rtc.run_start)
+    {
+        return;
+    }
+    char prev[64];
+    snprintf(prev, sizeof(prev), "%s", rtc.result);
+    if (rtc.last >= rtc.run_start && prev[0])
+    {
+        /* the result was there, it hung or crashed afterwards */
+        snprintf(rtc.result, sizeof(rtc.result), "%.30s, danach: %.23s", prev, rtc.stage);
+    }
+    else
+    {
+        snprintf(rtc.result, sizeof(rtc.result), "unterbrochen bei: %.45s", rtc.stage);
+        rtc.last = rtc.run_start;
+    }
+    ESP_LOGW(TAG, "Last nightly update did not end normally (step: %s)", rtc.stage);
+    rtc.run_start = 0;
+    nvs_store();
 }
 
 bool maint_due(void)
@@ -155,6 +193,7 @@ void maint_log_status(void)
     esp_log_level_set(TAG, ESP_LOG_INFO);
     rtc_check();
     nvs_restore();
+    check_unfinished();
     char last[24] = "none yet", next[24] = "none";
     struct tm tm;
     if (rtc.last > CLOCK_VALID)
@@ -248,6 +287,8 @@ static void check_ears(void)
         ESP_LOGI(TAG, "Ear pressed, stopping the update and starting normally");
         snprintf(rtc.result, sizeof(rtc.result), "abgebrochen (Ohr gedrückt)");
         rtc.last = time(NULL);
+        rtc.run_start = 0;
+        nvs_store();
         esp_restart();
     }
 }
@@ -302,8 +343,14 @@ static bool download(uint64_t uid, const uint8_t token[32], int64_t deadline_us)
             break;
         }
     }
-    while (!req->done)
+    /* the cloud task ends the request; never wait for it forever */
+    for (int i = 0; !req->done; i++)
     {
+        if (i == 600)
+        {
+            ESP_LOGE(TAG, "Download of %016llX does not end after the abort (60 s)", (unsigned long long)uid);
+            stage_set("Download %016llX endet nicht", uid, 0, 0);
+        }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     if (req->handle)
@@ -425,6 +472,8 @@ void maint_run(void)
     const int64_t start = esp_timer_get_time();
     const int64_t deadline = start + MAINT_MAX_RUN_S * 1000000LL;
     rtc.next = 0; /* planned again when going to sleep */
+    rtc.run_start = time(NULL);
+    stage_set("Start", 0, 0, 0);
 
     if (!settings_get()->cloud_enabled)
     {
@@ -441,6 +490,7 @@ void maint_run(void)
     ESP_LOGI(TAG, "Update started (%s)", percent < 0 ? "on the charger" : "on battery");
 
     /* the cloud task runs the freshness check once it is connected */
+    stage_set("warte auf teddyCloud", 0, 0, 0);
     int runs = freshness_runs();
     while (freshness_runs() == runs)
     {
@@ -455,6 +505,7 @@ void maint_run(void)
     }
 
     static candidate_t cand[MAX_CANDIDATES];
+    stage_set("SD-Karte durchsuchen", 0, 0, 0);
     int n = find_candidates(cand, MAX_CANDIDATES);
     int done = 0, failed = 0, no_token = 0;
     for (int i = 0; i < n; i++)
@@ -473,6 +524,7 @@ void maint_run(void)
             break;
         }
         ESP_LOGI(TAG, "  %016llX: downloading", (unsigned long long)cand[i].uid);
+        stage_set("Download %016llX (%d/%d)", (unsigned long long)cand[i].uid, i + 1, n);
         if (download(cand[i].uid, token, deadline))
         {
             char old[56];
@@ -498,4 +550,47 @@ void maint_run(void)
     {
         finish("%d aktualisiert, %d nicht fertig (später weiter)", done, failed);
     }
+}
+
+void maint_stage(const char *what)
+{
+    snprintf(rtc.stage, sizeof(rtc.stage), "%s", what);
+    ESP_LOGI(TAG, "Step: %s", rtc.stage);
+}
+
+void maint_run_end(void)
+{
+    rtc.run_start = 0;
+}
+
+/* in update mode nobody watches the main task: if the whole run (including
+   sending the result) takes far longer than allowed, note the step it hangs
+   in and switch off, silently, as at the end of a normal run */
+static void guard_task(void *arg)
+{
+    vTaskDelay(pdMS_TO_TICKS((MAINT_MAX_RUN_S + MAINT_GUARD_EXTRA_S) * 1000ULL));
+    char prev[64];
+    snprintf(prev, sizeof(prev), "%s", rtc.result);
+    if (rtc.last >= rtc.run_start && prev[0])
+    {
+        snprintf(rtc.result, sizeof(rtc.result), "%.30s, hing bei: %.21s", prev, rtc.stage);
+    }
+    else
+    {
+        snprintf(rtc.result, sizeof(rtc.result), "hing bei: %.53s", rtc.stage);
+        rtc.last = rtc.run_start ? rtc.run_start : time(NULL);
+    }
+    ESP_LOGE(TAG, "Nightly update still running after %d min (step: %s): switching off", (MAINT_MAX_RUN_S + MAINT_GUARD_EXTRA_S) / 60, rtc.stage);
+    rtc.run_start = 0;
+    nvs_store();
+    maint_schedule_next();
+    audio_board_set_timer_wakeup(maint_sleep_us());
+    vTaskDelay(pdMS_TO_TICKS(200));
+    audio_board_poweroff();
+    vTaskDelete(NULL);
+}
+
+void maint_guard_start(void)
+{
+    xTaskCreate(guard_task, "[TB] maint guard", 3072, NULL, 10, NULL);
 }
