@@ -379,32 +379,131 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 </div>
 <script>
 const $=id=>document.getElementById(id);
+/* language: German if the browser prefers German, else English */
+const DE=/^de\b/i.test((navigator.languages&&navigator.languages[0])||navigator.language||'');
+const EN={
+'TeddyBox einrichten':'Set up TeddyBox','Hotspot der Box':'Hotspot of the box','Bereiche':'Sections',
+'Verbindung':'Connection','Box':'Box','Tonies':'Tonies','System':'System',
+'WLAN':'WiFi','Erneut suchen':'Scan again','Netz auswählen oder Namen eingeben. Netze aus der Tonies-App werden automatisch übernommen.':'Pick a network or enter its name. Networks from the Tonies app are used automatically.',
+'Suche Netze …':'Searching for networks …','Gefundene Netze':'Networks found','Netzname (SSID)':'Network name (SSID)','Passwort':'Password','Passwort anzeigen':'Show password','Passwort verbergen':'Hide password',
+'Leer lassen, wenn die Box nur Inhalte von der SD-Karte spielen soll.':'Leave empty if the box should only play content from the SD card.',
+'Adresse (IP oder Name)':'Address (IP or name)','Port':'Port','Web-Port':'Web port',
+'Über den Web-Port (Weboberfläche von teddyCloud, meist 80) holt die Box die Namen der Tonies. 0 = nicht fragen.':'The box gets the names of the tonies over the web port (teddyCloud\'s web interface, usually 80). 0 = don\'t ask.',
+'CA-Zertifikat von teddyCloud':'teddyCloud CA certificate','Datei wählen':'Choose file','certs/server/ca.der · DER oder PEM':'certs/server/ca.der · DER or PEM',
+'MQTT-Broker, z. B. das Mosquitto-Add-on. Leer lassen, um es abzuschalten.':'MQTT broker, e.g. the Mosquitto add-on. Leave empty to switch it off.',
+'Broker-Adresse':'Broker address','Benutzer':'User',
+'Ton':'Sound','Sprache der Ansagen':'Language of the announcements','Deutsch':'German','Englisch (UK)':'English (UK)','Englisch (USA)':'English (US)','Französisch':'French',
+'Max. Lautstärke Lautsprecher':'Max. volume speaker','Max. Lautstärke Kopfhörer':'Max. volume headphones','Klang':'Sound profile','Optimiert':'Optimized','Tiefenfilter':'Bass cut','Wie Original':'Like original',
+'„Optimiert“ ist am Lautsprecher der Box eingemessen.':'"Optimized" is tuned to the speaker of the box.',
+'Licht und Gesten':'Light and gestures','LED-Helligkeit':'LED brightness','Aus':'Off','Gedimmt':'Dimmed','Mittel':'Medium','Hell':'Bright',
+'Klapsen':'Slap','Kippen':'Tilt','fest':'firm','leicht':'light',
+'Klaps auf die Seite: Kapitel vor/zurück. Kippen: Kapitel oder Spulen. Weiter rechts reagiert die Box leichter.':'Slap on the side: chapter forward/back. Tilt: chapter or wind. Further right, the box reacts more easily.',
+'Klaps-Richtung umkehren':'Reverse slap direction','Beide Ohren kurz drücken schaltet aus':'Pressing both ears briefly switches off',
+'Inhalte und teddyCloud':'Content and teddyCloud','Nächtliche Aktualisierung':'Nightly update',
+'Die Box wacht einmal täglich lautlos auf und lädt neue Versionen ihrer Tonies und abgebrochene Downloads – am Ladegerät immer, im Akkubetrieb ab 50 %. Ein Ohr drücken startet die Box normal.':'Once a day the box wakes up silently and downloads new versions of its tonies and unfinished downloads – always on the charger, on battery from 50 %. Pressing an ear starts the box normally.',
+'Abgleich mit teddyCloud':'Check with teddyCloud','alle 15 Minuten':'every 15 minutes','alle 30 Minuten':'every 30 minutes','stündlich (Standard)':'hourly (default)','alle 3 Stunden':'every 3 hours','alle 6 Stunden':'every 6 hours',
+'Fragt nach neuen Tonie-Versionen und geänderten Box-Einstellungen – nur wenn nichts spielt, außerdem nach dem Abnehmen eines Tonies.':'Asks for new tonie versions and changed box settings – only while nothing plays, and after a tonie is taken off.',
+'Einstellungen aus teddyCloud übernehmen':'Take settings from teddyCloud','Lautstärke, LED und Klapsen, wenn sie dort geändert werden.':'Volume, LED and slap, when they are changed there.',
+'Strom':'Power','Ausschalten nach':'Switch off after','Sekunden ohne Tonie':'seconds without a tonie',
+'Decoder und Prozessortakt':'Decoder and CPU clock','Decoder':'Decoder','CELT (Standard, wie Original)':'CELT (default, like original)','ESP-ADF (Ausweichlösung)':'ESP-ADF (fallback)',
+'Prozessortakt':'CPU clock','160 MHz (Standard)':'160 MHz (default)','Download beim Abspielen':'Download while playing','unbegrenzt (Standard)':'unlimited (default)',
+'Ereignisse an teddyCloud (RTNL)':'Events to teddyCloud (RTNL)','senden (Standard)':'send (default)','nicht senden':'don\'t send',
+'Vorauslesen von der SD-Karte':'Read ahead from the SD card','an (Standard)':'on (default)','aus (nur zur Fehlersuche)':'off (debugging only)',
+'CELT braucht deutlich weniger Arbeitsspeicher. Mit 160 MHz hält der Akku etwas länger, mit ESP-ADF stockten bei 160 MHz aber manche Tonies. Im Log zeigt „Decoder … % CPU“ die Auslastung. Der Download-Takt gilt nur, solange ein Tonie läuft.':'CELT needs much less memory. At 160 MHz the battery lasts a little longer, but with ESP-ADF some tonies stuttered at 160 MHz. "Decoder … % CPU" in the log shows the load. The download limit only applies while a tonie plays.',
+'Erweitert':'Advanced','Tonies-Cloud als Ausweg, User-Agent':'Tonies cloud as fallback, user agent',
+'Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist':'Go to the Tonies cloud directly when teddyCloud is unreachable','Als Original-Firmware ausgeben (User-Agent)':'Identify as the original firmware (user agent)',
+'Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.':'Both are off by default. Boxine can still recognize TeddyBox by how it connects and behaves. If the box certificate is blocked, the Tonies cloud stops working for the original firmware and through teddyCloud too.',
+'Auf der SD-Karte':'On the SD card','Lade Liste …':'Loading list …','Liste neu laden':'Reload list',
+'Tonie bespielen':'Put content on a tonie',
+'Eine fertige TAF-Datei (z. B. aus teddyCloud oder TonieToolbox) hochladen. Die Box prüft Header, Länge und Prüfsumme. Hochgeladene Dateien sind geschützt: teddyCloud und die nächtliche Aktualisierung ersetzen sie nicht.':'Upload a finished TAF file (e.g. from teddyCloud or TonieToolbox). The box checks header, length and checksum. Uploaded files are protected: teddyCloud and the nightly update do not replace them.',
+'Tonie':'Tonie','– zuletzt aufgelegt –':'– recently placed –','Oder UID eingeben':'Or enter the UID','oder UID eingeben, z. B. E00403500EEA5646':'or enter the UID, e.g. E00403500EEA5646',
+'Ein neuer Tonie erscheint hier, sobald er einmal auf der Box lag (auch ohne Inhalt).':'A new tonie shows up here once it has been on the box (even without content).',
+'TAF-Datei':'TAF file','.taf aus teddyCloud oder TonieToolbox':'.taf from teddyCloud or TonieToolbox','Upload-Fortschritt':'Upload progress','Hochladen':'Upload',
+'Sicherung':'Backup',
+'Die Zertifikate sind für jede Box einzigartig – ohne sie kommt die Box weder zu teddyCloud noch zur Tonies-Cloud. Das Flash-Abbild enthält zusätzlich die Original-Firmware und die WLAN-Daten und stellt die Box mit esptool komplett wieder her.':'The certificates are unique to each box – without them it reaches neither teddyCloud nor the Tonies cloud. The flash image also contains the original firmware and the WiFi data and restores the box completely with esptool.',
+'Enthält den privaten Schlüssel der Box.':'Contains the private key of the box.','Sicher aufbewahren und nicht weitergeben.':'Keep it safe and do not share it.',
+'Sicherung freigeben':'Release backup','Jetzt das kleine Ohr drücken':'Press the small ear now',
+'So bestätigst du an der Box, dass du die Sicherung laden darfst. Die LED blinkt blau.':'This confirms at the box that you may download the backup. The LED blinks blue.',
+'Zertifikate (für teddyCloud)':'Certificates (for teddyCloud)','Komplettes Flash-Abbild':'Complete flash image','Beides auf die SD-Karte sichern':'Save both to the SD card',
+'Absturzprotokoll':'Crash log','leer':'empty',
+'Enthält Version, betroffenen Task und Adressen, keine Zugangsdaten – du kannst den Text zur Fehlersuche weitergeben.':'Contains version, affected task and addresses, no credentials – you can share the text for troubleshooting.',
+'Kopieren':'Copy','Protokoll löschen':'Delete log',
+'Firmware':'Firmware','Neue TeddyBox-Firmware':'New TeddyBox firmware','teddybox.bin wählen':'Choose teddybox.bin','Startet auf Probe, sonst zurück zur bisherigen':'Boots on probation, otherwise back to the previous one',
+'Für das erste Update wird der Slot der Notfall-App (PD) gebraucht. Die normale Original-Firmware bleibt erhalten, die PD-App ist in deinem Flash-Dump gesichert.':'The first update needs the slot of the emergency app (PD). The regular original firmware stays, the PD app is saved in your flash dump.',
+'Notfall-App (PD) dafür überschreiben':'Overwrite the emergency app (PD) for it','Firmware hochladen':'Upload firmware',
+'Original-Firmware':'Original firmware',
+'Startet die Original-Firmware, die unverändert daneben liegt. Sie bleibt dann aktiv, auch nach jedem Neustart.':'Starts the original firmware, which is kept unchanged next to TeddyBox. It then stays active, also after every restart.',
+'Zurück zur TeddyBox geht nur am PC':'Back to TeddyBox only works on a PC','mit esptool, wie bei der Installation (Boot-Auswahl neu schreiben).':'with esptool, as during installation (write the boot selection again).',
+'Ohne diese Seite kommst du aus der TeddyBox so zur Original-Firmware: Box auf den Kopf, beide Ohren 20 Sekunden halten, bis die LED blau blinkt, dann loslassen. In der Original-Firmware bedeutet dieselbe Geste dagegen Neustart, auf dem Ladegerät sogar Zurücksetzen auf Werkszustand.':'Without this page you get from TeddyBox to the original firmware like this: box upside down, hold both ears for 20 seconds until the LED blinks blue, then let go. In the original firmware the same gesture means restart, on the charger even factory reset.',
+'Original-Firmware starten':'Start original firmware','Speichern und neu starten':'Save and restart',
+'Ohne Eingabe schaltet sich die Box nach 15 Minuten aus.':'Without input the box switches off after 15 minutes.','Schreibt teddybox.ini auf die SD-Karte.':'Writes teddybox.ini to the SD card.',
+/* script texts */
+'eingerichtet':'set up','fehlt':'missing','ohne Zertifikat':'no certificate','an':'on','aus':'off',
+'Keine Netze gefunden.':'No networks found.','Suche fehlgeschlagen.':'Scan failed.','schwach':'weak','mittel':'fair','gut':'good','sehr gut':'very good',
+'1 · fest':'1 · firm','3 · wie Original':'3 · like original','5 · leicht':'5 · light','unbegrenzt':'unlimited',
+'Einstellungen konnten nicht geladen werden.':'Could not load the settings.','Eigenes CA-Zertifikat gespeichert':'Own CA certificate stored',
+'Lade hoch …':'Uploading …','Zertifikat gespeichert: {s}':'Certificate stored: {s}','Fehler: {s}':'Error: {s}','Upload fehlgeschlagen.':'Upload failed.','unbekannt':'unknown',
+'Bitte eine Datei auswählen.':'Please choose a file.','Lade hoch … {p} %':'Uploading … {p} %','Installiert. Die Box startet mit der neuen Version neu.':'Installed. The box restarts with the new version.',
+'Original-Firmware jetzt starten?\n\nZurück zur TeddyBox geht danach nur am PC mit esptool.':'Start the original firmware now?\n\nBack to TeddyBox then only works on a PC with esptool.',
+'Die Original-Firmware startet.':'The original firmware is starting.','Hat nicht geklappt.':'That did not work.',
+'Bitte ein WLAN auswählen.':'Please choose a WiFi network.','Speichere …':'Saving …',
+'Gespeichert. Die Box startet neu und verbindet sich mit „{s}“. Du kannst diese Seite schließen.':'Saved. The box restarts and connects to "{s}". You can close this page.',
+'Speichern fehlgeschlagen.':'Saving failed.','Keine Antwort der Box.':'No answer from the box.','Keine Verbindung zur Box.':'No connection to the box.',
+'Freigegeben für 10 Minuten. Das Flash-Abbild ({n} MB) dauert 1–3 Minuten.':'Released for 10 minutes. The flash image ({n} MB) takes 1–3 minutes.',
+'Kein Ohr gedrückt. Bitte noch einmal versuchen.':'No ear pressed. Please try again.','Schreibe auf die SD-Karte … (1–2 Minuten)':'Writing to the SD card … (1–2 minutes)',
+'Gesichert in {s} auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.':'Saved in {s} on the SD card. Whoever has the card has the key of the box.',
+'Sichern auf die SD-Karte fehlgeschlagen.':'Saving to the SD card failed.',
+'Vollständig':'Complete','Download unvollständig':'Download incomplete','Neue Version wartet':'New version waiting','Beschädigte Datei':'Damaged file','Stream':'Stream',
+'Geschützt':'Protected','von teddyCloud':'from teddyCloud','Name aus teddyCloud':'Name from teddyCloud','noch ohne Namen':'no name yet',
+'{n} Tonie':'{n} tonie','{n} Tonies':'{n} tonies','{f} frei von {t}':'{f} free of {t}',
+'{s} geladen · ':'{s} loaded · ','Wird beim nächsten Abgleich weitergeladen.':'Continues at the next check.','Keine abspielbare Datei':'No playable file','{n} Kapitel':'{n} chapters','1 Kapitel':'1 chapter',
+'Datei ersetzen':'Replace file','Datei hochladen':'Upload file','Schutz aufheben':'Remove protection','Vor teddyCloud schützen':'Protect from teddyCloud',
+'Namen ändern':'Rename','Namen geben':'Give a name','Löschen':'Delete','Alle Dateien von {s} löschen?':'Delete all files of {s}?',
+'Noch keine Tonies auf der Karte.':'No tonies on the card yet.','auf der Karte':'on the card','neu':'new','Liste konnte nicht geladen werden.':'Could not load the list.',
+'Name für {u} (leer = Name aus teddyCloud: {t})':'Name for {u} (empty = name from teddyCloud: {t})','Name für {u} (leer = keiner)':'Name for {u} (empty = none)',
+'Bitte einen Tonie wählen oder die 16-stellige UID eingeben.':'Please choose a tonie or enter the 16-digit UID.','Bitte eine TAF-Datei auswählen.':'Please choose a TAF file.',
+'Die vorhandene Datei von {u} wird ersetzt. Weiter?':'The existing file of {u} will be replaced. Continue?','Wird hochgeladen …':'Uploading …',
+'Bei großen Tonies dauert das über den Hotspot einige Minuten.':'For big tonies this takes a few minutes over the hotspot.',
+'Gespeichert: {n} Kapitel, Prüfsumme stimmt.':'Stored: {n} chapters, checksum correct.','Upload abgebrochen.':'Upload aborted.','für':'for',
+'tb_crash.txt: keine Abstürze aufgezeichnet.':'tb_crash.txt: no crashes recorded.','1 Absturz':'1 crash','{n} Abstürze':'{n} crashes',
+'Kopiert.':'Copied.','unverändert lassen':'leave unchanged','Text markiert, jetzt kopieren.':'Text selected, copy it now.','Absturzprotokoll löschen?':'Delete the crash log?'
+};
+function T(s,v){let r=DE?s:(EN[s]??s);if(v)for(const k in v)r=r.split('{'+k+'}').join(v[k]);return r;}
+function num(x){return DE?String(x).replace('.',','):String(x);}
+/* translate the static page once */
+function trPage(){
+  document.documentElement.lang=DE?'de':'en';document.title=T('TeddyBox einrichten');
+  const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+  while((n=w.nextNode())){const t=n.nodeValue.trim();if(t&&EN[t]!==undefined&&n.parentNode.nodeName!=='SCRIPT')n.nodeValue=n.nodeValue.replace(t,EN[t]);}
+  document.querySelectorAll('[placeholder],[aria-label],[title]').forEach(e=>['placeholder','aria-label','title'].forEach(a=>{const v=e.getAttribute(a);if(v&&EN[v]!==undefined)e.setAttribute(a,EN[v]);}));
+}
+if(!DE)trPage();
 let cfg={};
 function setStatus(el,msg,cls){el.textContent=msg;el.className='status '+(cls||'');}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function ic(n,s){return '<svg class="ic'+(s?' s':'')+'"><use href="#i-'+n+'"/></svg>';}
-function chip(el,txt,cls){el.textContent=txt;el.className=cls||'';}
+function chip(el,txt,cls){el.textContent=T(txt);el.className=cls||'';}
 function level(rssi){return rssi>-55?4:rssi>-67?3:rssi>-78?2:1;}
 function pickNet(b){document.querySelectorAll('.net').forEach(x=>x.setAttribute('aria-checked',x===b));}
 async function scan(){
-  $('nets').innerHTML='';$('netsinfo').hidden=false;$('netsinfo').textContent='Suche Netze …';
+  $('nets').innerHTML='';$('netsinfo').hidden=false;$('netsinfo').textContent=T('Suche Netze …');
   try{
     const list=await (await fetch('/api/scan')).json();
-    if(!list.length){$('netsinfo').textContent='Keine Netze gefunden.';return;}
+    if(!list.length){$('netsinfo').textContent=T('Keine Netze gefunden.');return;}
     $('netsinfo').hidden=true;
     list.forEach(n=>{
       const b=document.createElement('button');b.type='button';b.className='net';b.setAttribute('role','radio');
       b.setAttribute('aria-checked',n.ssid===$('ssid').value);
       const l=level(n.rssi);
       b.innerHTML='<span class="rad"></span><span class="nm">'+esc(n.ssid)+'</span>'+(n.secure?ic('lock',1):'')+
-        '<span class="bars" role="img" aria-label="Signal '+['','schwach','mittel','gut','sehr gut'][l]+'">'+[1,2,3,4].map(i=>'<i'+(i<=l?' class="on"':'')+'></i>').join('')+'</span>';
+        '<span class="bars" role="img" aria-label="Signal '+T(['','schwach','mittel','gut','sehr gut'][l])+'">'+[1,2,3,4].map(i=>'<i'+(i<=l?' class="on"':'')+'></i>').join('')+'</span>';
       b.onclick=()=>{$('ssid').value=n.ssid;pickNet(b);$('wpass').focus();};
       $('nets').append(b);
     });
-  }catch(e){$('netsinfo').textContent='Suche fehlgeschlagen.';}
+  }catch(e){$('netsinfo').textContent=T('Suche fehlgeschlagen.');}
 }
 $('ssid').oninput=()=>document.querySelectorAll('.net').forEach(x=>x.setAttribute('aria-checked',x.querySelector('.nm').textContent===$('ssid').value));
-$('wpshow').onclick=()=>{const v=$('wpass').type==='password';$('wpass').type=v?'text':'password';$('wpshow').setAttribute('aria-pressed',v);$('wpshow').setAttribute('aria-label',v?'Passwort verbergen':'Passwort anzeigen');};
+$('wpshow').onclick=()=>{const v=$('wpass').type==='password';$('wpass').type=v?'text':'password';$('wpshow').setAttribute('aria-pressed',v);$('wpshow').setAttribute('aria-label',T(v?'Passwort verbergen':'Passwort anzeigen'));};
 /* segmented controls write a hidden input */
 function segSet(id,v){const g=document.querySelector('.segs[data-for="'+id+'"]');$(id).value=v;
   g.querySelectorAll('.seg').forEach(b=>b.setAttribute('aria-checked',b.dataset.v===String(v)));}
@@ -412,11 +511,11 @@ document.querySelectorAll('.segs').forEach(g=>g.querySelectorAll('.seg').forEach
 /* sliders with their value */
 const slapTxt=['Aus','1 · fest','2','3 · wie Original','4','5 · leicht'],tiltTxt=['Aus','1 · 40°','2 · 35°','3 · 30°','4 · 25°','5 · 20°'];
 function rngShow(){$('vmax-v').textContent=$('vmax').value+' %';$('vmaxh-v').textContent=$('vmaxh').value+' %';
-  $('slap-v').textContent=slapTxt[+$('slap').value];$('tilt-v').textContent=tiltTxt[+$('tilt').value];}
+  $('slap-v').textContent=T(slapTxt[+$('slap').value]);$('tilt-v').textContent=T(tiltTxt[+$('tilt').value]);}
 ['vmax','vmaxh','slap','tilt'].forEach(id=>$(id).oninput=rngShow);
-function advSum(){$('advsum').textContent=($('decoder').value==='celt'?'CELT':'ESP-ADF')+' · '+$('cpumhz').value+' MHz · Download '+($('dlplay').value==='0'?'unbegrenzt':$('dlplay').value+' KiB/s')+' · RTNL '+($('rtnl').value==='1'?'an':'aus');}
+function advSum(){$('advsum').textContent=($('decoder').value==='celt'?'CELT':'ESP-ADF')+' · '+$('cpumhz').value+' MHz · Download '+($('dlplay').value==='0'?T('unbegrenzt'):$('dlplay').value+' KiB/s')+' · RTNL '+T($('rtnl').value==='1'?'an':'aus');}
 ['decoder','cpumhz','dlplay','rtnl'].forEach(id=>$(id).onchange=advSum);
-(function(){const s=$('uphour');s.add(new Option('Aus','-1'));for(let h=0;h<24;h++)s.add(new Option(String(h).padStart(2,'0')+':00 Uhr',String(h)));})();
+(function(){const s=$('uphour');s.add(new Option(T('Aus'),'-1'));for(let h=0;h<24;h++)s.add(new Option(String(h).padStart(2,'0')+(DE?':00 Uhr':':00'),String(h)));})();
 function chips(){
   chip($('stwifi'),cfg.wifi_ssid?'eingerichtet':'fehlt',cfg.wifi_ssid?'on':'miss');
   chip($('sttc'),cfg.cloud_host?(cfg.ca_custom?'eingerichtet':'ohne Zertifikat'):'fehlt',cfg.cloud_host&&cfg.ca_custom?'on':'miss');
@@ -427,11 +526,11 @@ async function load(){
     cfg=await (await fetch('/api/config')).json();
     $('apinfo').textContent='Hotspot '+(cfg.ap_ssid||'TeddyBox')+' · '+location.hostname;
     $('ssid').value=cfg.wifi_ssid||'';
-    if(cfg.wifi_ssid)$('wpass').placeholder='unverändert lassen';
+    if(cfg.wifi_ssid)$('wpass').placeholder=T('unverändert lassen');
     $('chost').value=cfg.cloud_host||'';$('cport').value=cfg.cloud_port||443;$('cwport').value=cfg.tc_web_port??80;
-    if(cfg.ca_custom){$('caname').textContent='Eigenes CA-Zertifikat gespeichert';}
+    if(cfg.ca_custom){$('caname').textContent=T('Eigenes CA-Zertifikat gespeichert');}
     $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
-    if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
+    if(cfg.mqtt_pass_set)$('mpass').placeholder=T('unverändert lassen');
     $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('vmaxh').value=cfg.volume_max_hdp||100;
     $('tcset').checked=cfg.tc_box_settings!==false;$('idle').value=cfg.idle_timeout||60;
     segSet('speq',cfg.speaker_eq||'full');segSet('led',String(cfg.led_brightness??3));
@@ -444,43 +543,43 @@ async function load(){
     $('boxfb').checked=!!cfg.boxine_fallback;$('uaorig').checked=!!cfg.user_agent_original;
     if(cfg.box_id){$('bkcname').textContent='toniebox-'+cfg.box_id+'-certs.zip';$('bksize').textContent='toniebox-'+cfg.box_id+'-flash.bin';}
     chips();
-  }catch(e){setStatus($('status'),'Einstellungen konnten nicht geladen werden.','err');}
+  }catch(e){setStatus($('status'),T('Einstellungen konnten nicht geladen werden.'),'err');}
   rngShow();advSum();scan();
 }
 $('rescan').onclick=scan;
 $('cafile').onchange=async()=>{
   const f=$('cafile').files[0];if(!f)return;
-  $('caname').textContent=f.name;setStatus($('castatus'),'Lade hoch …');
+  $('caname').textContent=f.name;setStatus($('castatus'),T('Lade hoch …'));
   try{
     const j=await (await fetch('/api/ca',{method:'POST',body:await f.arrayBuffer()})).json();
-    setStatus($('castatus'),j.ok?'Zertifikat gespeichert: '+j.subject:'Fehler: '+j.error,j.ok?'ok':'err');
+    setStatus($('castatus'),j.ok?T('Zertifikat gespeichert: {s}',{s:j.subject}):T('Fehler: {s}',{s:j.error}),j.ok?'ok':'err');
     if(j.ok){cfg.ca_custom=true;chips();}
-  }catch(e){setStatus($('castatus'),'Upload fehlgeschlagen.','err');}
+  }catch(e){setStatus($('castatus'),T('Upload fehlgeschlagen.'),'err');}
 };
-$('fwfile').onchange=()=>{const f=$('fwfile').files[0];$('fwname').textContent=f?f.name:'teddybox.bin wählen';};
+$('fwfile').onchange=()=>{const f=$('fwfile').files[0];$('fwname').textContent=f?f.name:T('teddybox.bin wählen');};
 $('fwbtn').onclick=()=>{
   const f=$('fwfile').files[0];
-  if(!f){setStatus($('fwstatus'),'Bitte eine Datei auswählen.','err');return;}
+  if(!f){setStatus($('fwstatus'),T('Bitte eine Datei auswählen.'),'err');return;}
   const x=new XMLHttpRequest();
   x.open('POST','/api/firmware'+($('pdok').checked?'?pd=1':''));
-  x.upload.onprogress=e=>{if(e.lengthComputable)setStatus($('fwstatus'),'Lade hoch … '+Math.round(e.loaded*100/e.total)+' %');};
+  x.upload.onprogress=e=>{if(e.lengthComputable)setStatus($('fwstatus'),T('Lade hoch … {p} %',{p:Math.round(e.loaded*100/e.total)}));};
   x.onload=()=>{
     let j={};try{j=JSON.parse(x.responseText);}catch(e){}
     $('fwbtn').disabled=false;
-    if(j.ok){setStatus($('fwstatus'),'Installiert. Die Box startet mit der neuen Version neu.','ok');$('fwbtn').disabled=true;$('save').disabled=true;}
-    else{setStatus($('fwstatus'),'Fehler: '+(j.error||'unbekannt'),'err');if(j.needs_pd)$('pdask').hidden=false;}
+    if(j.ok){setStatus($('fwstatus'),T('Installiert. Die Box startet mit der neuen Version neu.'),'ok');$('fwbtn').disabled=true;$('save').disabled=true;}
+    else{setStatus($('fwstatus'),T('Fehler: {s}',{s:j.error||T('unbekannt')}),'err');if(j.needs_pd)$('pdask').hidden=false;}
   };
-  x.onerror=()=>{$('fwbtn').disabled=false;setStatus($('fwstatus'),'Upload fehlgeschlagen.','err');};
-  $('fwbtn').disabled=true;setStatus($('fwstatus'),'Lade hoch …');
+  x.onerror=()=>{$('fwbtn').disabled=false;setStatus($('fwstatus'),T('Upload fehlgeschlagen.'),'err');};
+  $('fwbtn').disabled=true;setStatus($('fwstatus'),T('Lade hoch …'));
   x.send(f);
 };
 $('ofwbtn').onclick=async()=>{
-  if(!confirm('Original-Firmware jetzt starten?\n\nZurück zur TeddyBox geht danach nur am PC mit esptool.'))return;
-  try{await fetch('/api/original',{method:'POST'});alert('Die Original-Firmware startet.');}
-  catch(e){alert('Hat nicht geklappt.');}
+  if(!confirm(T('Original-Firmware jetzt starten?\n\nZurück zur TeddyBox geht danach nur am PC mit esptool.')))return;
+  try{await fetch('/api/original',{method:'POST'});alert(T('Die Original-Firmware startet.'));}
+  catch(e){alert(T('Hat nicht geklappt.'));}
 };
 $('save').onclick=async()=>{
-  if(!$('ssid').value.trim()&&!cfg.wifi_ssid){showTab('net');setStatus($('status'),'Bitte ein WLAN auswählen.','err');return;}
+  if(!$('ssid').value.trim()&&!cfg.wifi_ssid){showTab('net');setStatus($('status'),T('Bitte ein WLAN auswählen.'),'err');return;}
   const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
     cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,tc_web_port:$('cwport').value===''?80:+$('cwport').value,
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
@@ -489,36 +588,36 @@ $('save').onclick=async()=>{
     update_hour:+$('uphour').value,decoder:$('decoder').value,cpu_mhz:+$('cpumhz').value,download_playing:+$('dlplay').value,
     readahead:$('readahead').value==='1',rtnl:$('rtnl').value==='1',boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked,
     freshness_interval:+$('fcint').value||60,ears_poweroff:$('earsoff').checked};
-  setStatus($('status'),'Speichere …');
+  setStatus($('status'),T('Speichere …'));
   try{
     const j=await (await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
-    if(j.ok){setStatus($('status'),'Gespeichert. Die Box startet neu und verbindet sich mit „'+(body.wifi_ssid||cfg.wifi_ssid)+'“. Du kannst diese Seite schließen.','ok');$('save').disabled=true;}
-    else setStatus($('status'),'Fehler: '+j.error,'err');
-  }catch(e){setStatus($('status'),'Speichern fehlgeschlagen.','err');}
+    if(j.ok){setStatus($('status'),T('Gespeichert. Die Box startet neu und verbindet sich mit „{s}“. Du kannst diese Seite schließen.',{s:body.wifi_ssid||cfg.wifi_ssid}),'ok');$('save').disabled=true;}
+    else setStatus($('status'),T('Fehler: {s}',{s:j.error}),'err');
+  }catch(e){setStatus($('status'),T('Speichern fehlgeschlagen.'),'err');}
 };
 /* backup: the small ear releases the downloads */
 let bkUntil=0;
 async function bkPoll(){
-  let s;try{s=await (await fetch('/api/backup/status')).json();}catch(e){setStatus($('bkstatus'),'Keine Antwort der Box.','err');$('bkunlock').disabled=false;$('bkwait').hidden=true;return;}
+  let s;try{s=await (await fetch('/api/backup/status')).json();}catch(e){setStatus($('bkstatus'),T('Keine Antwort der Box.'),'err');$('bkunlock').disabled=false;$('bkwait').hidden=true;return;}
   if(s.unlocked){$('bkwait').hidden=true;$('bkunlock').hidden=true;$('bkfiles').classList.remove('locked');
-    setStatus($('bkstatus'),'Freigegeben für 10 Minuten. Das Flash-Abbild ('+Math.round(s.flash_size/1048576)+' MB) dauert 1–3 Minuten.','ok');
+    setStatus($('bkstatus'),T('Freigegeben für 10 Minuten. Das Flash-Abbild ({n} MB) dauert 1–3 Minuten.',{n:Math.round(s.flash_size/1048576)}),'ok');
     $('bksize').textContent=(cfg.box_id?'toniebox-'+cfg.box_id+'-flash.bin · ':'')+Math.round(s.flash_size/1048576)+' MB';return;}
   if(s.waiting){$('bkwait').hidden=false;$('bkcount').textContent=Math.max(0,Math.ceil((bkUntil-Date.now())/1000))+' s';setTimeout(bkPoll,1000);return;}
-  $('bkwait').hidden=true;setStatus($('bkstatus'),'Kein Ohr gedrückt. Bitte noch einmal versuchen.','err');$('bkunlock').disabled=false;
+  $('bkwait').hidden=true;setStatus($('bkstatus'),T('Kein Ohr gedrückt. Bitte noch einmal versuchen.'),'err');$('bkunlock').disabled=false;
 }
 $('bkunlock').onclick=async()=>{$('bkunlock').disabled=true;setStatus($('bkstatus'),'');bkUntil=Date.now()+60000;
-  try{await fetch('/api/backup/unlock',{method:'POST'});bkPoll();}catch(e){setStatus($('bkstatus'),'Keine Verbindung zur Box.','err');$('bkunlock').disabled=false;}};
-$('bksd').onclick=async()=>{$('bksd').disabled=true;setStatus($('bkstatus'),'Schreibe auf die SD-Karte … (1–2 Minuten)');
+  try{await fetch('/api/backup/unlock',{method:'POST'});bkPoll();}catch(e){setStatus($('bkstatus'),T('Keine Verbindung zur Box.'),'err');$('bkunlock').disabled=false;}};
+$('bksd').onclick=async()=>{$('bksd').disabled=true;setStatus($('bkstatus'),T('Schreibe auf die SD-Karte … (1–2 Minuten)'));
   try{const j=await (await fetch('/api/backup/sd',{method:'POST'})).json();
-    setStatus($('bkstatus'),j.ok?'Gesichert in '+j.dir+' auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.':'Sichern auf die SD-Karte fehlgeschlagen.',j.ok?'ok':'err');}
-  catch(e){setStatus($('bkstatus'),'Keine Antwort der Box.','err');}
+    setStatus($('bkstatus'),j.ok?T('Gesichert in {s} auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.',{s:j.dir}):T('Sichern auf die SD-Karte fehlgeschlagen.'),j.ok?'ok':'err');}
+  catch(e){setStatus($('bkstatus'),T('Keine Antwort der Box.'),'err');}
   $('bksd').disabled=false;};
 function showTab(name){
   if(!$('tab-'+name))name='net';
   document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!=='tab-'+name);
   document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));
   $('savebar').hidden=!(name==='net'||name==='box');
-  $('footnote').textContent=name==='box'?'Schreibt teddybox.ini auf die SD-Karte.':'Ohne Eingabe schaltet sich die Box nach 15 Minuten aus.';
+  $('footnote').textContent=T(name==='box'?'Schreibt teddybox.ini auf die SD-Karte.':'Ohne Eingabe schaltet sich die Box nach 15 Minuten aus.');
   if(name==='tonies'&&!tnLoaded)tnLoad();
   if(name==='sys')crLoad();
   try{history.replaceState(null,'','#'+name);}catch(e){}
@@ -526,97 +625,98 @@ function showTab(name){
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 /* tonies */
 let tnLoaded=false,tnHave={};
-function mb(b){return b<0?'–':(b/1048576).toFixed(b<10485760?1:0).replace('.',',')+' MB';}
-function gb(m){return m>=1024?(m/1024).toFixed(1).replace('.',',')+' GB':m+' MB';}
+function mb(b){return b<0?'–':num((b/1048576).toFixed(b<10485760?1:0))+' MB';}
+function gb(m){return m>=1024?num((m/1024).toFixed(1))+' GB':m+' MB';}
 function uidFmt(u){return u.match(/../g).join(':');}
 function hash(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h%4;}
+function badge(cls,txt,pre){return '<span class="badge'+(cls?' '+cls:'')+'">'+(pre||'')+esc(T(txt))+'</span>';}
 function tnBadges(t){
   const b=[];
-  if(t.state==='ok'||t.state==='ok_old')b.push('<span class="badge good">Vollständig</span>');
-  if(t.state==='partial')b.push('<span class="badge warn">Download unvollständig</span>');
-  if(t.state==='ok_old'||t.state==='old')b.push('<span class="badge">Neue Version wartet</span>');
-  if(t.bad)b.push('<span class="badge warn">Beschädigte Datei</span>');
-  if(t.stream)b.push('<span class="badge">Stream</span>');
-  b.push(t.own?'<span class="badge own">'+ic('lock',1)+'Geschützt</span>':'<span class="badge">von teddyCloud</span>');
-  if(!t.alias&&t.tc_name)b.push('<span class="badge">Name aus teddyCloud</span>');
+  if(t.state==='ok'||t.state==='ok_old')b.push(badge('good','Vollständig'));
+  if(t.state==='partial')b.push(badge('warn','Download unvollständig'));
+  if(t.state==='ok_old'||t.state==='old')b.push(badge('','Neue Version wartet'));
+  if(t.bad)b.push(badge('warn','Beschädigte Datei'));
+  if(t.stream)b.push(badge('','Stream'));
+  b.push(t.own?badge('own','Geschützt',ic('lock',1)):badge('','von teddyCloud'));
+  if(!t.alias&&t.tc_name)b.push(badge('','Name aus teddyCloud'));
   return b.join('');
 }
-function btn(cls,html,label,fn){const b=document.createElement('button');b.type='button';b.className=cls;b.innerHTML=html;if(label)b.setAttribute('aria-label',label);b.onclick=fn;return b;}
+function btn(cls,html,label,fn){const b=document.createElement('button');b.type='button';b.className=cls;b.innerHTML=html;if(label){b.setAttribute('aria-label',label);b.title=label;}b.onclick=fn;return b;}
 async function tnLoad(){
-  tnLoaded=true;setStatus($('tnspace'),'Lade Liste …');$('tnspace').className='hint';
+  tnLoaded=true;$('tnspace').textContent=T('Lade Liste …');$('tnspace').className='hint';
   try{
     const j=await (await fetch('/api/tonies')).json();
-    $('tnspace').textContent=j.tonies.length+(j.tonies.length===1?' Tonie':' Tonies')+' · '+gb(j.free_mb)+' frei von '+gb(j.total_mb);
+    $('tnspace').textContent=T(j.tonies.length===1?'{n} Tonie':'{n} Tonies',{n:j.tonies.length})+' · '+T('{f} frei von {t}',{f:gb(j.free_mb),t:gb(j.total_mb)});
     tnHave={};const list=$('tnlist');list.innerHTML='';
-    j.tonies.sort((a,b)=>{const x=a.alias||a.tc_name,y=b.alias||b.tc_name;return (!x-!y)||(x||a.uid).localeCompare(y||b.uid,'de');}).forEach(t=>{
+    j.tonies.sort((a,b)=>{const x=a.alias||a.tc_name,y=b.alias||b.tc_name;return (!x-!y)||(x||a.uid).localeCompare(y||b.uid,DE?'de':'en');}).forEach(t=>{
       tnHave[t.uid]=t;
       const shown=t.alias||t.tc_name,c=hash(t.uid);
       const d=document.createElement('article');d.className='card tonie';
       const av=shown?'<div class="av rd" aria-hidden="true" style="background:var(--a'+c+');color:var(--a'+c+'t)">'+esc([...shown.trim()][0].toUpperCase())+'</div>':'<div class="av" aria-hidden="true">'+ic('tag')+'</div>';
-      d.innerHTML='<div class="trow">'+av+'<div class="tinfo">'+(shown?'<h3>'+esc(shown)+'</h3><span class="uid mono">'+uidFmt(t.uid)+'</span>':'<h3 class="mono">'+uidFmt(t.uid)+'</h3><span class="uid">noch ohne Namen</span>')+
-        '<div class="badges">'+tnBadges(t)+'</div></div></div><p class="meta">'+
-        (t.state==='partial'?(t.tmp>=0?mb(t.tmp)+' geladen · ':'')+'Wird beim nächsten Abgleich weitergeladen.':
-         t.size>=0?mb(t.size)+(t.chapters?' · '+t.chapters+' Kapitel':'')+(t.audio_id?' · Audio-ID '+t.audio_id.toString(16).toUpperCase():''):'Keine abspielbare Datei')+'</p>';
+      d.innerHTML='<div class="trow">'+av+'<div class="tinfo">'+(shown?'<h3>'+esc(shown)+'</h3><span class="uid mono">'+uidFmt(t.uid)+'</span>':'<h3 class="mono">'+uidFmt(t.uid)+'</h3><span class="uid">'+esc(T('noch ohne Namen'))+'</span>')+
+        '<div class="badges">'+tnBadges(t)+'</div></div></div><p class="meta">'+esc(
+        t.state==='partial'?(t.tmp>=0?T('{s} geladen · ',{s:mb(t.tmp)}):'')+T('Wird beim nächsten Abgleich weitergeladen.'):
+        t.size>=0?mb(t.size)+(t.chapters?' · '+T(t.chapters===1?'1 Kapitel':'{n} Kapitel',{n:t.chapters}):'')+(t.audio_id?' · Audio-ID '+t.audio_id.toString(16).toUpperCase():''):T('Keine abspielbare Datei'))+'</p>';
       const a=document.createElement('div');a.className='acts';
-      a.append(btn('act',ic('up',1)+(t.size>=0?'Datei ersetzen':'Datei hochladen'),'',()=>{$('tnuid').value=t.uid;$('tnseen').value='';$('tnfile').click();}));
-      if(t.size>=0){const p=btn('ico'+(t.own?' on':''),ic('shield'),t.own?'Schutz aufheben':'Vor teddyCloud schützen',async()=>{await fetch('/api/tonie/own?uid='+t.uid+'&on='+(t.own?0:1),{method:'POST'});tnLoad();});p.title=p.getAttribute('aria-label');a.append(p);}
-      const n=btn('ico',ic('pen'),shown?'Namen ändern':'Namen geben',()=>tnAlias(t.uid,t.alias||t.tc_name,t.tc_name));n.title=n.getAttribute('aria-label');
-      const x=btn('ico',ic('trash'),'Löschen',async()=>{if(!confirm('Alle Dateien von '+(shown||t.uid)+' löschen?'))return;await fetch('/api/tonie/delete?uid='+t.uid,{method:'POST'});tnLoad();});x.title='Löschen';
-      a.append(n,x);d.append(a);list.append(d);
+      a.append(btn('act',ic('up',1)+esc(T(t.size>=0?'Datei ersetzen':'Datei hochladen')),'',()=>{$('tnuid').value=t.uid;$('tnseen').value='';$('tnfile').click();}));
+      if(t.size>=0)a.append(btn('ico'+(t.own?' on':''),ic('shield'),T(t.own?'Schutz aufheben':'Vor teddyCloud schützen'),async()=>{await fetch('/api/tonie/own?uid='+t.uid+'&on='+(t.own?0:1),{method:'POST'});tnLoad();}));
+      a.append(btn('ico',ic('pen'),T(shown?'Namen ändern':'Namen geben'),()=>tnAlias(t.uid,t.alias||t.tc_name,t.tc_name)),
+        btn('ico',ic('trash'),T('Löschen'),async()=>{if(!confirm(T('Alle Dateien von {s} löschen?',{s:shown||uidFmt(t.uid)})))return;await fetch('/api/tonie/delete?uid='+t.uid,{method:'POST'});tnLoad();}));
+      d.append(a);list.append(d);
     });
-    if(!j.tonies.length)list.innerHTML='<p class="hint" style="padding:0 4px">Noch keine Tonies auf der Karte.</p>';
-    const sel=$('tnseen');sel.innerHTML='<option value="">– zuletzt aufgelegt –</option>';
-    j.seen.forEach(s=>{const o=document.createElement('option');o.value=s.uid;
-      const when=s.time?new Date(s.time*1000).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):'';
-      o.textContent=(s.alias?s.alias+' – ':'')+uidFmt(s.uid)+(tnHave[s.uid]?' (auf der Karte)':' (neu)')+(when?', '+when:'');sel.append(o);});
-  }catch(e){setStatus($('tnspace'),'Liste konnte nicht geladen werden.','err');}
+    if(!j.tonies.length)list.innerHTML='<p class="hint" style="padding:0 4px">'+esc(T('Noch keine Tonies auf der Karte.'))+'</p>';
+    const sel=$('tnseen');sel.innerHTML='';sel.add(new Option(T('– zuletzt aufgelegt –'),''));
+    j.seen.forEach(s=>{
+      const when=s.time?new Date(s.time*1000).toLocaleString(DE?'de-DE':'en-GB',{dateStyle:'short',timeStyle:'short'}):'';
+      sel.add(new Option((s.alias?s.alias+' – ':'')+uidFmt(s.uid)+' ('+T(tnHave[s.uid]?'auf der Karte':'neu')+')'+(when?', '+when:''),s.uid));});
+  }catch(e){setStatus($('tnspace'),T('Liste konnte nicht geladen werden.'),'err');}
 }
 async function tnAlias(uid,old,tc){
-  const n=prompt('Name für '+uidFmt(uid)+(tc?' (leer = Name aus teddyCloud: '+tc+')':' (leer = keiner)'),old||'');
+  const n=prompt(tc?T('Name für {u} (leer = Name aus teddyCloud: {t})',{u:uidFmt(uid),t:tc}):T('Name für {u} (leer = keiner)',{u:uidFmt(uid)}),old||'');
   if(n===null)return;
   try{const j=await (await fetch('/api/tonie/alias?uid='+uid,{method:'POST',body:n.trim().slice(0,40)})).json();
-    if(!j.ok)alert('Fehler: '+j.error);}catch(e){alert('Keine Verbindung zur Box.');}
+    if(!j.ok)alert(T('Fehler: {s}',{s:j.error}));}catch(e){alert(T('Keine Verbindung zur Box.'));}
   tnLoad();
 }
 $('tnreload').onclick=tnLoad;
 $('tnseen').onchange=()=>{if($('tnseen').value)$('tnuid').value=$('tnseen').value;};
-$('tnfile').onchange=()=>{const f=$('tnfile').files[0];$('tnname').textContent=f?f.name:'Datei wählen';$('tnpct').textContent='';
-  $('tnsub').textContent=f?(f.size/1048576).toFixed(1).replace('.',',')+' MB'+($('tnuid').value?' für '+$('tnuid').value.toUpperCase():''):'.taf aus teddyCloud oder TonieToolbox';setStatus($('tnstatus'),'');};
+$('tnfile').onchange=()=>{const f=$('tnfile').files[0];$('tnname').textContent=f?f.name:T('Datei wählen');$('tnpct').textContent='';
+  $('tnsub').textContent=f?num((f.size/1048576).toFixed(1))+' MB'+($('tnuid').value?' '+T('für')+' '+$('tnuid').value.toUpperCase():''):T('.taf aus teddyCloud oder TonieToolbox');setStatus($('tnstatus'),'');};
 $('tnbtn').onclick=()=>{
   const uid=$('tnuid').value.trim().toUpperCase().replace(/[^0-9A-F]/g,'');
   const f=$('tnfile').files[0];
-  if(uid.length!==16){setStatus($('tnstatus'),'Bitte einen Tonie wählen oder die 16-stellige UID eingeben.','err');return;}
-  if(!f){setStatus($('tnstatus'),'Bitte eine TAF-Datei auswählen.','err');return;}
-  if(tnHave[uid]&&tnHave[uid].size>=0&&!confirm('Die vorhandene Datei von '+uidFmt(uid)+' wird ersetzt. Weiter?'))return;
+  if(uid.length!==16){setStatus($('tnstatus'),T('Bitte einen Tonie wählen oder die 16-stellige UID eingeben.'),'err');return;}
+  if(!f){setStatus($('tnstatus'),T('Bitte eine TAF-Datei auswählen.'),'err');return;}
+  if(tnHave[uid]&&tnHave[uid].size>=0&&!confirm(T('Die vorhandene Datei von {u} wird ersetzt. Weiter?',{u:uidFmt(uid)})))return;
   const x=new XMLHttpRequest();x.open('POST','/api/tonie/upload?uid='+uid);
-  $('tnprog').hidden=false;$('tnprog').value=0;$('tnbtn').disabled=true;$('tnbtn').textContent='Wird hochgeladen …';
-  $('tnsub').textContent='Bei großen Tonies dauert das über den Hotspot einige Minuten.';
-  const done=()=>{$('tnbtn').disabled=false;$('tnbtn').textContent='Hochladen';$('tnprog').hidden=true;$('tnpct').textContent='';};
+  $('tnprog').hidden=false;$('tnprog').value=0;$('tnbtn').disabled=true;$('tnbtn').textContent=T('Wird hochgeladen …');
+  $('tnsub').textContent=T('Bei großen Tonies dauert das über den Hotspot einige Minuten.');
+  const done=()=>{$('tnbtn').disabled=false;$('tnbtn').textContent=T('Hochladen');$('tnprog').hidden=true;$('tnpct').textContent='';};
   x.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded*100/e.total);$('tnprog').value=p;$('tnpct').textContent=p+' %';}};
   x.onload=()=>{
     let j={};try{j=JSON.parse(x.responseText);}catch(e){}
     done();
-    if(j.ok){setStatus($('tnstatus'),'Gespeichert: '+j.chapters+' Kapitel, Prüfsumme stimmt.','ok');$('tnfile').value='';$('tnname').textContent='Datei wählen';$('tnsub').textContent='.taf aus teddyCloud oder TonieToolbox';tnLoad();}
-    else setStatus($('tnstatus'),'Fehler: '+(j.error||'unbekannt'),'err');
+    if(j.ok){setStatus($('tnstatus'),T('Gespeichert: {n} Kapitel, Prüfsumme stimmt.',{n:j.chapters}),'ok');$('tnfile').value='';$('tnname').textContent=T('Datei wählen');$('tnsub').textContent=T('.taf aus teddyCloud oder TonieToolbox');tnLoad();}
+    else setStatus($('tnstatus'),T('Fehler: {s}',{s:j.error||T('unbekannt')}),'err');
   };
-  x.onerror=()=>{done();setStatus($('tnstatus'),'Upload abgebrochen.','err');};
+  x.onerror=()=>{done();setStatus($('tnstatus'),T('Upload abgebrochen.'),'err');};
   setStatus($('tnstatus'),'');x.send(f);
 };
 /* crash log */
 async function crLoad(){
   try{const t=(await (await fetch('/api/crashlog')).text()).trim();
-    $('crlog').textContent=t||'tb_crash.txt: keine Abstürze aufgezeichnet.';
+    $('crlog').textContent=t||T('tb_crash.txt: keine Abstürze aufgezeichnet.');
     const n=(t.match(/^TeddyBox /gm)||[]).length;
-    $('crbadge').textContent=t?(n>1?n+' Abstürze':'1 Absturz'):'leer';$('crbadge').className='badge '+(t?'warn':'good');
+    $('crbadge').textContent=t?(n>1?T('{n} Abstürze',{n}):T('1 Absturz')):T('leer');$('crbadge').className='badge '+(t?'warn':'good');
     $('crcopy').disabled=$('crdel').disabled=!t;setStatus($('crstatus'),'');}
-  catch(e){$('crlog').textContent='';setStatus($('crstatus'),'Keine Antwort der Box.','err');}
+  catch(e){$('crlog').textContent='';setStatus($('crstatus'),T('Keine Antwort der Box.'),'err');}
 }
 $('crcopy').onclick=async()=>{
   const t=$('crlog').textContent;
-  try{await navigator.clipboard.writeText(t);setStatus($('crstatus'),'Kopiert.','ok');}
-  catch(e){const r=document.createRange();r.selectNodeContents($('crlog'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);setStatus($('crstatus'),'Text markiert, jetzt kopieren.','ok');}
+  try{await navigator.clipboard.writeText(t);setStatus($('crstatus'),T('Kopiert.'),'ok');}
+  catch(e){const r=document.createRange();r.selectNodeContents($('crlog'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);setStatus($('crstatus'),T('Text markiert, jetzt kopieren.'),'ok');}
 };
-$('crdel').onclick=async()=>{if(!confirm('Absturzprotokoll löschen?'))return;
+$('crdel').onclick=async()=>{if(!confirm(T('Absturzprotokoll löschen?')))return;
   try{await fetch('/api/crashlog/delete',{method:'POST'});}catch(e){}crLoad();};
 showTab(location.hash.slice(1));
 window.addEventListener("hashchange",()=>showTab(location.hash.slice(1)));
