@@ -10,14 +10,14 @@ media), builds it, patches out the ADC calibration QEMU does not have
 | script | test | needs |
 |---|---|---|
 | `mkqcodec.sh` | CELT and ESP-ADF decoder, seek; CELT bit exact against `celt_host_reference.c` (host libopus build with `OPUS_FAST_INT64=0`) | |
-| `mkqstream.sh` | teddyCloud streams: detection, no `Range` for a left-over stream, no resume, `.tmp` deleted | `fake_stream_server.py 4444 <server cert> <server key>` running (the local teddyCloud's server certificate, so the box trusts it) |
+| `mkqstream.sh` | teddyCloud streams: detection, no `Range` for a left-over stream, no resume, `.tmp` deleted, transfer end recorded; a complete file with an odd length is kept as a tonie | `fake_stream_server.py 4444 <server cert> <server key>` running (the local teddyCloud's server certificate, so the box trusts it) |
 | `mkqresume.sh` | automatic resume after lost connections, abort while waiting | as `mkqdl.sh`, plus `cut_proxy.py 4443 127.0.0.1 443 50000` running (cuts every connection after 50 KB) |
 | `mkqdl.sh` | downloads: abort, resume, `.tmp` handling, migration | a local teddyCloud with cloud access off, client certificate in the assets FAT under `CERT/` |
 | `mkqra.sh` | read-ahead: SD hangs, seek, growing file, ending during a hang | |
 | `mkqtcset.sh` | box settings from teddyCloud: baseline, change taken over, box change stays (`run` drives teddyCloud's web API) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
 | `mkqtonies.sh` | Tonies tab: list, upload (good, damaged, too short), protection, delete; crash log view/delete (`run` drives it with curl through a port forward) | |
 | `mkqmaint.sh` | nightly update report: a run that did not end normally is reported with its step, a normal end keeps its result (`run` starts QEMU) | — |
-| `mkqnames.sh` | tonie names from teddyCloud's web API, no name where it has none, own name wins (`run` adds a custom tonie to the local teddyCloud and restores it) | teddyCloud web API on 127.0.0.1:80 (`TC_DIR`, default `/tmp/tc`) |
+| `mkqnames.sh` | tonie names from teddyCloud's web API, no name where it has none, own name wins, waits while memory is short, stack use of lookup and fetch (`run` adds a custom tonie to the local teddyCloud and restores it) | teddyCloud web API on 127.0.0.1:80 (`TC_DIR`, default `/tmp/tc`) |
 | `mkqcrash.sh` | crash dump: crash on purpose, restart, summary logged and written once to `tb_crash.txt` | |
 | `mkqv.sh` | SHA-1 check of TAF files, rename to `.bad` | `TAF=` a small tonie file (< 300 KB) |
 | `mkqrtnl.sh` | RTNL events reach teddyCloud (`run` reads teddyCloud's `/api/sse`) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |

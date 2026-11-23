@@ -35,6 +35,9 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Gestures | ears, slap, tilt; upside down both ears 10 s: restart | the same, plus as Hackiebox CFW: both ears briefly = off, upside-down slap = start over; see "Gestures" |
 | Sleep timer | — (Toniebox 2 / app only) | small ear held 2 s (30 min) or Home Assistant; quieter at the end, then off |
 | Certificate / flash backup | — | on the setup page (needs a press on the box) |
+| Own content without a server | — | TAF upload per tonie on the setup page, protected from updates |
+| Tonie names | in the app | from teddyCloud or own names: setup page and Home Assistant |
+| Crash diagnostics | crash logs to Boxine | `tb_crash.txt` on the SD card, shown on the setup page; task watchdog |
 | MMA8451 accelerometer (some boxes) | yes | no, LIS3DH only |
 | Tonies app pairing | yes | no |
 
@@ -76,7 +79,8 @@ automatically, otherwise open `http://192.168.4.1/`. Four tabs:
   CPU clock, download speed while playing, read-ahead, RTNL
 - **Tonies**: the tonie files on the SD card and uploading TAF files, see
   below
-- **System**: backup, firmware update, start the original firmware
+- **System**: backup, crash log (see "Crash dumps"), firmware update,
+  start the original firmware
 
 Saving (tabs Verbindung and Box) writes `teddybox.ini`, stores the WiFi in
 the original firmware's format and restarts. Unused for 15 minutes, the box
@@ -107,7 +111,9 @@ its web interface (`http://<cloud_host>:<tc_web_port>/api/getTagInfo`,
 plain HTTP, port 80 by default, field "Web-Port" on the setup page) for
 series and episode of each tonie from teddyCloud's `tonies.json` (or
 `tonies.custom.json`): the tonie on the box first, then the others on the
-card one every 2 s, each once per start. They are kept in `tb_names.txt`
+card one every 2 s, each once per start (while a tonie downloads and
+plays, memory is too short for the request: the box then asks again 30 s
+later). They are kept in `tb_names.txt`
 and also go to Home Assistant as "Tonie-Name". If teddyCloud's web
 interface needs a login, no names are fetched (log line once). Only the
 default content folder of teddyCloud is asked (no per-box overlay). QEMU
