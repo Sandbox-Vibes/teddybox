@@ -487,14 +487,17 @@ void app_main(void)
         wifi_init();
         cloud_init();
         mqtt_ha_init();
+        maint_guard_start();
         maint_run();
         /* Home Assistant shows the result (WiFi needs a few seconds, the run
            may have ended right away, e.g. battery too low) */
+        maint_stage("Ergebnis an Home Assistant");
         if (!mqtt_ha_flush(30000) && settings_get()->mqtt_host[0])
         {
             ESP_LOGW(TAG, "Result not sent to Home Assistant (MQTT not connected)");
         }
         mqtt_ha_shutdown();
+        maint_stage("Ausschalten");
         goto shutdown;
     }
 
@@ -850,6 +853,7 @@ shutdown:
     rtc_checksum_update();
 
     ESP_LOGI(TAG, "Poweroff");
+    maint_run_end();
     vTaskDelay(500 / portTICK_PERIOD_MS);
     audio_board_poweroff();
 
