@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_wifi.h"
+#include "esp_netif.h"
 #include "esp_ota_ops.h"
 #include "mqtt_client.h"
 
@@ -74,10 +75,21 @@ bool mqtt_ha_flush(int timeout_ms)
 static char cmd_topic[80];
 static char sw_version[32];
 static ha_ctx_t ctx;
+static char config_url[32];
 
 static void mqtt_publish_discovery(void)
 {
     char topic[128];
+    /* link on the device page in Home Assistant: the setup page in the home
+       network (it answers only in setup mode, see "Start setup") */
+    esp_netif_ip_info_t ip;
+    esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    config_url[0] = 0;
+    if (sta && esp_netif_get_ip_info(sta, &ip) == ESP_OK && ip.ip.addr)
+    {
+        snprintf(config_url, sizeof(config_url), "http://" IPSTR "/", IP2STR(&ip.ip));
+    }
+    ctx.config_url = config_url;
     char *payload = malloc(1024);
     if (!payload)
     {
@@ -209,6 +221,10 @@ static void mqtt_handle_command(const char *topic, int topic_len, const char *da
     case HA_CMD_BOOT_ORIGINAL:
         ESP_LOGW(TAG, "Command: start the original firmware");
         ctrl_request_boot_original();
+        break;
+    case HA_CMD_SETUP:
+        ESP_LOGW(TAG, "Command: start setup");
+        ctrl_request_setup();
         break;
     case HA_CMD_POWEROFF:
         ESP_LOGI(TAG, "Command: power off");

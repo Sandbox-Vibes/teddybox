@@ -26,6 +26,7 @@
 #include "speaker_eq.h"
 #include "settings.h"
 #include "wifi.h"
+#include "mdns_min.h"
 #include "ledman.h"
 #include "playback.h"
 #include "ota.h"
@@ -34,6 +35,12 @@
 static const char *TAG = "Setup";
 
 #define AP_IP "192.168.4.1"
+
+/* reached in the home network (true) or over the own hotspot */
+static bool in_home_net = false;
+static char lan_ip[16] = "";
+static char mdns_host[24] = ""; /* "teddybox-xxxx" */
+
 #ifndef CA_DIR
 #define CA_DIR "/sdcard/teddybox"
 #endif
@@ -176,10 +183,17 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(j, "user_agent_original", s->user_agent_original);
     /* for the page header and the backup file names */
     uint8_t mac[6];
-    char buf[24];
+    char buf[32];
     esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
     snprintf(buf, sizeof(buf), "TeddyBox-%02X%02X", mac[4], mac[5]);
     cJSON_AddStringToObject(j, "ap_ssid", buf);
+    cJSON_AddStringToObject(j, "net_mode", in_home_net ? "lan" : "ap");
+    if (in_home_net)
+    {
+        cJSON_AddStringToObject(j, "lan_ip", lan_ip);
+        snprintf(buf, sizeof(buf), "%s.local", mdns_host);
+        cJSON_AddStringToObject(j, "mdns", buf);
+    }
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
     snprintf(buf, sizeof(buf), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     cJSON_AddStringToObject(j, "box_id", buf);
@@ -622,7 +636,7 @@ static esp_err_t redirect_handler(httpd_req_t *req, httpd_err_code_t err)
 {
     touch();
     httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "http://" AP_IP "/");
+    httpd_resp_set_hdr(req, "Location", in_home_net ? "/" : "http://" AP_IP "/");
     return httpd_resp_send(req, NULL, 0);
 }
 
@@ -739,6 +753,101 @@ void setup_portal_start_dns(void)
     xTaskCreate(dns_task, "[TB] dns", 3072, NULL, 5, NULL);
 }
 
+/* mDNS responder for setup mode in the home network (mdns_min.c):
+   "teddybox-xxxx.local" -> the box, so the page is reachable by name */
+static void mdns_send(int sock, const struct sockaddr_in *to, const uint8_t *buf, int len)
+{
+    if (len > 0)
+    {
+        sendto(sock, buf, len, 0, (const struct sockaddr *)to, sizeof(*to));
+    }
+}
+
+static void mdns_task(void *arg)
+{
+    uint32_t ip = (uint32_t)(uintptr_t)arg;
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0)
+    {
+        vTaskDelete(NULL);
+        return;
+    }
+    int one = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    struct sockaddr_in addr = {.sin_family = AF_INET, .sin_port = htons(MDNS_PORT), .sin_addr.s_addr = htonl(INADDR_ANY)};
+    struct ip_mreq mreq = {.imr_multiaddr.s_addr = inet_addr(MDNS_GROUP), .imr_interface.s_addr = ip};
+    uint8_t ttl = 255;
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0 ||
+        setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
+    {
+        ESP_LOGW(TAG, "mDNS not available");
+        close(sock);
+        vTaskDelete(NULL);
+        return;
+    }
+    setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
+    struct sockaddr_in group = {.sin_family = AF_INET, .sin_port = htons(MDNS_PORT), .sin_addr.s_addr = inet_addr(MDNS_GROUP)};
+    static uint8_t in[512], out[128];
+    /* announce twice, as RFC 6762 suggests */
+    for (int i = 0; i < 2; i++)
+    {
+        mdns_send(sock, &group, out, mdns_min_announce(mdns_host, ip, out, sizeof(out)));
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    ESP_LOGI(TAG, "mDNS: %s.local", mdns_host);
+    while (1)
+    {
+        struct sockaddr_in from;
+        socklen_t from_len = sizeof(from);
+        int len = recvfrom(sock, in, sizeof(in), 0, (struct sockaddr *)&from, &from_len);
+        bool legacy = ntohs(from.sin_port) != MDNS_PORT;
+        int n = mdns_min_answer(in, len, mdns_host, ip, legacy, out, sizeof(out));
+        mdns_send(sock, legacy ? &from : &group, out, n);
+    }
+}
+
+/* setup mode with stored networks: try the home network first (20 s),
+   so the page is reachable from the phone or PC there */
+static bool connect_home_net(void)
+{
+    static wifi_config_t nets[3];
+    int n = wifi_stored_networks(nets, 3);
+    if (n == 0)
+    {
+        return false;
+    }
+    esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(mdns_host, sizeof(mdns_host), "teddybox-%02x%02x", mac[4], mac[5]);
+    esp_netif_set_hostname(sta, mdns_host);
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    for (int i = 0; i < n; i++)
+    {
+        ESP_LOGI(TAG, "Trying the home network '%.32s'", (char *)nets[i].sta.ssid);
+        esp_wifi_set_config(WIFI_IF_STA, &nets[i]);
+        esp_wifi_connect();
+        for (int t = 0; t < (20000 / n) / 250; t++)
+        {
+            vTaskDelay(pdMS_TO_TICKS(250));
+            esp_netif_ip_info_t ip;
+            if (esp_netif_get_ip_info(sta, &ip) == ESP_OK && ip.ip.addr)
+            {
+                snprintf(lan_ip, sizeof(lan_ip), IPSTR, IP2STR(&ip.ip));
+                in_home_net = true;
+                ESP_LOGI(TAG, "Setup page in the home network: http://%s/ or http://%s.local/", lan_ip, mdns_host);
+                xTaskCreate(mdns_task, "[TB] mdns", 3072, (void *)(uintptr_t)ip.ip.addr, 5, NULL);
+                return true;
+            }
+        }
+        esp_wifi_disconnect();
+    }
+    ESP_LOGW(TAG, "Home network not reachable, opening the hotspot");
+    esp_wifi_stop();
+    return false;
+}
+
 void setup_portal_run(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -763,13 +872,16 @@ void setup_portal_run(void)
     };
     ap.ap.ssid_len = snprintf((char *)ap.ap.ssid, sizeof(ap.ap.ssid), "TeddyBox-%02X%02X", mac[4], mac[5]);
 
-    /* APSTA so the page can scan for networks */
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI(TAG, "Hotspot '%s' open, setup page at http://" AP_IP "/", (char *)ap.ap.ssid);
-
-    setup_portal_start_dns();
+    /* the hotspot only when the home network is not reachable */
+    if (!connect_home_net())
+    {
+        /* APSTA so the page can scan for networks */
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
+        ESP_ERROR_CHECK(esp_wifi_start());
+        ESP_LOGI(TAG, "Hotspot '%s' open, setup page at http://" AP_IP "/", (char *)ap.ap.ssid);
+        setup_portal_start_dns();
+    }
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.stack_size = 8192;          /* cJSON and certificate parsing */

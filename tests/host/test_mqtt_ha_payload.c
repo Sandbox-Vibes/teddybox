@@ -50,6 +50,15 @@ int main(int argc, char **argv)
                 if (ha_discovery(&ctx, i, topic, sizeof topic, payload, sizeof payload) < 0) { printf("FAIL discovery %d\n", i); fails++; }
         }
         ha_set_german(0);
+        /* link to the setup page on the device page */
+        ha_discovery(&ctx, 0, topic, sizeof topic, payload, sizeof payload);
+        int ok = !strstr(payload, "configuration_url");
+        printf("%s no configuration_url without an address\n", ok ? "ok  " : "FAIL"); fails += !ok;
+        ctx.config_url = "http://192.168.10.42/";
+        ha_discovery(&ctx, 0, topic, sizeof topic, payload, sizeof payload);
+        ok = strstr(payload, "\"sw_version\":\"testver\",\"configuration_url\":\"http://192.168.10.42/\"}") != NULL;
+        printf("%s configuration_url in the device\n", ok ? "ok  " : "FAIL"); fails += !ok;
+        ctx.config_url = NULL;
         return fails != 0;
     }
     /* command parsing */
@@ -67,6 +76,7 @@ int main(int argc, char **argv)
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Nur Tiefenfilter", HA_CMD_SPEAKER_EQ, 1},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Wie Original", HA_CMD_SPEAKER_EQ, 0},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Optimier", HA_CMD_NONE, 0},
+        {"teddybox/aabbccddeeff/cmd/setup", "PRESS", HA_CMD_SETUP, 0},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Optimized", HA_CMD_SPEAKER_EQ, 2},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Bass cut only", HA_CMD_SPEAKER_EQ, 1},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Like original", HA_CMD_SPEAKER_EQ, 0},

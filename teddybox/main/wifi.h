@@ -7,6 +7,9 @@
 
 
 void wifi_init(void);
+/* stored networks, newest first (setup mode connects to the home network with them) */
+#include "esp_wifi_types.h"
+int wifi_stored_networks(wifi_config_t *out, int max);
 void wifi_save_nvs(void);
 void wifi_load_nvs(void);
 bool wifi_is_connected(void);
