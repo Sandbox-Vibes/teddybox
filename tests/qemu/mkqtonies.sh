@@ -45,7 +45,7 @@ t "listed complete and own" '[[ "$L" == *"\"uid\":\"$U\",\"alias\":\"\",\"tc_nam
 R=$(up bad.taf $U); echo "$R"
 t "damaged file refused (SHA-1)" '[[ "$R" == *"\"ok\":false"* && "$R" == *SHA-1* ]]'
 R=$(up short.taf $U); echo "$R"
-t "short file refused (length)" '[[ "$R" == *"\"ok\":false"* && "$R" == *nge* ]]'
+t "short file refused (length)" '[[ "$R" == *"\"ok\":false"* && ( "$R" == *ength* || "$R" == *Länge* ) ]]'
 L=$(list)
 t "good file still there" '[[ "$L" == *"\"audio_id\":1694498817"* ]]'
 R=$(up other.taf $U); L=$(list)
