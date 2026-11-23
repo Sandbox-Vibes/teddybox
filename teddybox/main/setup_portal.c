@@ -172,6 +172,15 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddStringToObject(j, "fw_slot", running->label);
     cJSON_AddBoolToObject(j, "boxine_fallback", s->boxine_fallback);
     cJSON_AddBoolToObject(j, "user_agent_original", s->user_agent_original);
+    /* for the page header and the backup file names */
+    uint8_t mac[6];
+    char buf[24];
+    esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
+    snprintf(buf, sizeof(buf), "TeddyBox-%02X%02X", mac[4], mac[5]);
+    cJSON_AddStringToObject(j, "ap_ssid", buf);
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(buf, sizeof(buf), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    cJSON_AddStringToObject(j, "box_id", buf);
     return send_json(req, j);
 }
 
