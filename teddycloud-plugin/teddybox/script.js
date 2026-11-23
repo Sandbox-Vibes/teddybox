@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const PLUGIN_VERSION = "0.1.0";
+  const PLUGIN_VERSION = "0.1.1";
   const REPO = "Sandbox-Vibes/teddybox";
   const $ = (id) => document.getElementById(id);
 
@@ -108,7 +108,14 @@
       }
       for (const b of boxes) {
         const ov = "?overlay=" + encodeURIComponent(b.ID);
+        /* TeddyBox reports "TeddyBox vX.Y.Z" over RTNL (newer teddyCloud stores it);
+           its user agent "toniebox-esp32-teddybox/vX.Y.Z" ends up as "teddybox/vX.Y.Z" */
         b.fw = await getText("/api/settings/get/internal.toniebox_firmware.rtnlVersion" + ov).catch(() => "");
+        if (!/^TeddyBox\b/.test(b.fw)) {
+          const ua = await getText("/api/settings/get/internal.toniebox_firmware.uaEsp32Firmware" + ov).catch(() => "");
+          if (/^teddybox\//i.test(ua)) b.fw = "TeddyBox " + ua.slice(9);
+          else if (!b.fw && ua) b.fw = ua;
+        }
         b.last = +(await getText("/api/settings/get/internal.last_connection" + ov).catch(() => "0")) || 0;
       }
       tb.innerHTML = "";

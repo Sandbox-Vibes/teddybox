@@ -1,7 +1,7 @@
 {
   "pluginName": "TeddyBox",
   "author": "TeddyBox contributors",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Overview of boxes running the TeddyBox custom firmware (version, update check, link to the setup page), audio files to a tonie in one step, and live box events.",
   "standalone": false,
   "pluginHomepage": "https://github.com/Sandbox-Vibes/teddybox",

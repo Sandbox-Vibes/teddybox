@@ -3,7 +3,8 @@
 A page in teddyCloud's web interface for boxes running TeddyBox.
 
 - **Boxes**: every box teddyCloud knows, which of them run TeddyBox and in
-  which version (TeddyBox reports "TeddyBox vX.Y.Z" over RTNL), the last
+  which version (from the RTNL version "TeddyBox vX.Y.Z" on newer teddyCloud,
+  otherwise from the user agent `toniebox-esp32-teddybox/vX.Y.Z`), the last
   connection, a hint when a newer release is on GitHub, and the link to the
   box's setup page in the home network (`http://teddybox-xxxx.local/`; it
   answers only in setup mode).
