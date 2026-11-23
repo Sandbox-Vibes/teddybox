@@ -364,7 +364,8 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 
 <section class="plain">
 <h2>Original-Firmware</h2>
-<p class="hint">Startet die Original-Firmware, die unverändert daneben liegt. Zurück zur TeddyBox: Box auf den Kopf, beide Ohren 20 Sekunden halten, bis die LED blau blinkt, dann loslassen.</p>
+<p class="hint">Startet die Original-Firmware, die unverändert daneben liegt. Sie bleibt dann aktiv, auch nach jedem Neustart. <b>Zurück zur TeddyBox geht nur am PC</b> mit esptool, wie bei der Installation (Boot-Auswahl neu schreiben).</p>
+<p class="hint">Ohne diese Seite kommst du aus der TeddyBox so zur Original-Firmware: Box auf den Kopf, beide Ohren 20 Sekunden halten, bis die LED blau blinkt, dann loslassen. In der Original-Firmware bedeutet dieselbe Geste dagegen Neustart, auf dem Ladegerät sogar Zurücksetzen auf Werkszustand.</p>
 <button type="button" class="sec danger" id="ofwbtn">Original-Firmware starten</button>
 </section>
 </div>
@@ -474,7 +475,7 @@ $('fwbtn').onclick=()=>{
   x.send(f);
 };
 $('ofwbtn').onclick=async()=>{
-  if(!confirm('Original-Firmware jetzt starten?'))return;
+  if(!confirm('Original-Firmware jetzt starten?\n\nZurück zur TeddyBox geht danach nur am PC mit esptool.'))return;
   try{await fetch('/api/original',{method:'POST'});alert('Die Original-Firmware startet.');}
   catch(e){alert('Hat nicht geklappt.');}
 };
