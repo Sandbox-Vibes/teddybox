@@ -315,6 +315,12 @@ unfinished download, one after another.
   Home Assistant gets it right away (diagnostic sensor "Letzte nächtliche
   Aktualisierung"). Every start logs
   `Maint: Nightly update: last <date>: <result>, next planned <date>`.
+- The run notes the step it is in (`Maint: Step: …`). If it does not end
+  normally (hangs, crash, power loss), the next start reports it as its
+  result: "unterbrochen bei: <step>" or "<result>, danach: <step>". If the
+  run is still going 50 minutes after it started (45 minutes plus 5 for
+  sending the result), a guard notes "hing bei: <step>" and switches the box
+  off, silently, as after a normal run.
 
 ## Home Assistant
 
