@@ -5,406 +5,721 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TeddyBox einrichten</title>
 <style>
-:root{--bg:#f6f4ef;--card:#fff;--text:#1f2328;--muted:#6b6f76;--accent:#c2410c;--ok:#15803d;--err:#b91c1c;--line:#e5e1d8}
-@media (prefers-color-scheme:dark){:root{--bg:#17181a;--card:#222326;--text:#ecebe8;--muted:#a1a1a6;--accent:#fb923c;--ok:#4ade80;--err:#f87171;--line:#34353a}}
-*{box-sizing:border-box}
-body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
-main{max-width:34rem;margin:0 auto;padding:1.25rem 1rem 3rem}
-h1{font-size:1.5rem;margin:.25rem 0 .25rem}
-.sub{color:var(--muted);margin:0 0 1.25rem}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1rem 1rem .5rem;margin:0 0 1rem}
-h2{font-size:1.05rem;margin:0 0 .25rem}
-.hint{color:var(--muted);font-size:.875rem;margin:0 0 .75rem}
-label{display:block;font-size:.875rem;font-weight:600;margin:.5rem 0 .25rem}
-input,select{width:100%;font:inherit;padding:.6rem .7rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
-input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
-.row{display:flex;flex-wrap:wrap;gap:.6rem}.row>div{flex:1 1 9rem;min-width:0;display:flex;flex-direction:column;justify-content:flex-end}.row>.small{flex:0 0 6.5rem}
-.nets{display:flex;flex-direction:column;gap:.35rem;margin:.25rem 0 .5rem;max-height:14rem;overflow:auto}
-.net{display:flex;justify-content:space-between;align-items:center;padding:.55rem .7rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;text-align:left;font:inherit;color:inherit}
-.net.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
-.net small{color:var(--muted)}
-button.main{width:100%;font:inherit;font-weight:700;padding:.85rem;border:0;border-radius:12px;background:var(--accent);color:#fff;cursor:pointer;margin-top:.5rem}
-button.link{background:none;border:0;color:var(--accent);font:inherit;padding:.25rem 0;cursor:pointer}
-.status{font-size:.875rem;margin:.4rem 0 .6rem;min-height:1.2em}
-.ok{color:var(--ok)}.err{color:var(--err)}
-details summary{cursor:pointer;color:var(--muted);font-size:.875rem;margin:.5rem 0}
-.tabs{position:sticky;top:0;z-index:5;display:flex;gap:.25rem;background:var(--bg);padding:.5rem 0 .6rem;margin:0 0 .5rem;border-bottom:1px solid var(--line);overflow-x:auto}
-.tabs button{flex:1 0 auto;font:inherit;font-size:.9rem;font-weight:600;padding:.5rem .75rem;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--text);cursor:pointer}
-.tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#fff}
-.tab[hidden]{display:none}
-.tonie{border:1px solid var(--line);border-radius:10px;padding:.6rem .7rem;margin:0 0 .5rem;background:var(--bg)}
-.tonie .uid{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;word-break:break-all}
-.tonie .name{font-weight:700;font-size:1.05rem}.tonie .name+.uid{font-weight:400;font-size:.8rem;color:var(--muted)}
-.tonie .meta{color:var(--muted);font-size:.85rem}
-.tonie .acts{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin-top:.35rem}
-.badge{display:inline-block;font-size:.75rem;font-weight:600;padding:.05rem .45rem;border-radius:999px;border:1px solid var(--line);margin:0 .25rem .15rem 0}
-.badge.own{border-color:var(--accent);color:var(--accent)}.badge.warn{border-color:var(--err);color:var(--err)}.badge.good{border-color:var(--ok);color:var(--ok)}
-progress{width:100%;height:.6rem;accent-color:var(--accent)}
+:root{--body:#EFE9DF;--page:#F7F3EC;--card:#FFFFFF;--line:#E5DED2;--line2:#EFE9DF;--inbd:#D9D1C3;--text:#1F2328;--label:#3B3F45;--muted:#5F636A;
+--accent:#C2410C;--onaccent:#FFFFFF;--link:#B03A0A;--nav:#E8E1D5;--soft:#F1EADF;--soft2:#FBF8F3;--dash:#C9BFAE;--sel:#FFF4EC;--segon:#FFFFFF;--shadow:rgba(31,35,40,.12);
+--radio:#B8B0A2;--btn:#1F2328;--onbtn:#FFFFFF;--ok:#15803D;--okbg:#DCFCE7;--oktx:#14532D;--warn:#A04A00;--warndot:#D97706;--warnbg:#FEF3C7;--warntx:#713F12;
+--ownbg:#FDE7D7;--owntx:#7C2D12;--ownbd:#F5C9AA;--err:#B91C1C;--errbd:#F1C4C4;--off:#A3A7AD;--pre:#1F2328;--pretx:#E8E1D5;
+--a0:#FDE7D7;--a0t:#9A3412;--a1:#DBEAFE;--a1t:#1E3A8A;--a2:#DCFCE7;--a2t:#14532D;--a3:#EDE9FE;--a3t:#5B21B6;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--body:#0B1124;--page:#121A30;--card:#1B2440;--line:#2C3757;--line2:#27314F;--inbd:#3A4668;--text:#EEF1F8;--label:#D6DCEC;--muted:#A9B3CF;
+--accent:#FCD34D;--onaccent:#121A30;--link:#FDE68A;--nav:#222B47;--soft:#26304D;--soft2:#161E36;--dash:#45527A;--sel:#2F3A60;--segon:#2C3757;--shadow:rgba(0,0,0,.5);
+--radio:#6E7A9C;--btn:#EEF1F8;--onbtn:#121A30;--ok:#4ADE80;--okbg:#13321F;--oktx:#86EFAC;--warn:#FBBF24;--warndot:#F59E0B;--warnbg:#3A2C0B;--warntx:#FCD34D;
+--ownbg:#3B2F5C;--owntx:#D8C8FF;--ownbd:#5B4A8A;--err:#F87171;--errbd:#5A2A2A;--off:#6E7A9C;--pre:#0B1124;--pretx:#D6DCEC;
+--a0:#3B2F5C;--a0t:#D8C8FF;--a1:#1E2A4A;--a1t:#BFDBFE;--a2:#13321F;--a2t:#86EFAC;--a3:#3A2C0B;--a3t:#FCD34D;color-scheme:dark}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--body);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--link)}
+.wrap{max-width:30rem;min-height:100vh;margin:0 auto;background:var(--page);display:flex;flex-direction:column}
+.rd{font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ic.s{width:16px;height:16px}
+header{padding:28px 20px 16px;display:flex;flex-direction:column;gap:16px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:44px;height:44px;border-radius:14px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:26px;line-height:1;flex-shrink:0}
+h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.01em}
+.sub{margin:0;font-size:13px;color:var(--muted)}
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px;background:var(--nav);border-radius:14px}
+.tabs button{height:40px;border:0;border-radius:10px;background:none;color:var(--label);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--accent);color:var(--onaccent)}
+main{padding:4px 16px 24px;display:flex;flex-direction:column;gap:14px;flex-grow:1}
+.tab{display:flex;flex-direction:column;gap:14px}.tab[hidden]{display:none}
+section,.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px}
+h2{margin:0;font-size:19px;font-weight:600;display:flex;align-items:center;gap:8px}
+h3{margin:0;font-size:16px;font-weight:600;overflow-wrap:anywhere}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.f{display:flex;flex-direction:column;gap:6px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.g21{display:grid;grid-template-columns:2fr 1fr;gap:10px}
+.lb{font-size:13px;font-weight:600;color:var(--label)}
+.hint{margin:0;font-size:13px;line-height:1.45;color:var(--muted)}
+.in{width:100%;height:46px;padding:0 14px;border:1px solid var(--inbd);border-radius:12px;background:var(--card);font:inherit;font-size:15px;color:var(--text)}
+.in:focus,.chk:focus-visible,button:focus-visible,summary:focus-visible,.drop:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.pw{position:relative}.pw .in{padding-right:52px}
+.pw button{position:absolute;right:2px;top:1px;width:44px;height:44px;border:0;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.chip{padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}
+.chip>span:first-child{font-size:12px;color:var(--muted)}
+.chip b{font-size:13px;display:flex;align-items:center;gap:5px;color:var(--muted)}
+.chip b::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--off)}
+.chip b.on{color:var(--ok)}.chip b.on::before{background:var(--ok)}
+.chip b.miss{color:var(--warn)}.chip b.miss::before{background:var(--warndot)}
+.linkbtn{height:36px;padding:0 4px;border:0;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--link);display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.nets{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden auto;max-height:16rem}
+.nets:empty{display:none}
+.net{min-height:52px;padding:0 14px;border:0;border-bottom:1px solid var(--line2);background:var(--card);font:inherit;color:var(--text);display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;flex-shrink:0}
+.net:last-child{border-bottom:0}
+.net .rad{width:18px;height:18px;border-radius:50%;border:2px solid var(--radio);flex-shrink:0}
+.net .nm{flex-grow:1;font-size:15px;overflow-wrap:anywhere}
+.net[aria-checked=true]{background:var(--sel)}.net[aria-checked=true] .rad{border:6px solid var(--accent)}.net[aria-checked=true] .nm{font-weight:600}
+.net .ic{color:var(--muted)}
+.bars{display:flex;align-items:flex-end;gap:2px;height:14px}
+.bars i{width:3px;border-radius:1px;background:var(--inbd)}.bars i.on{background:var(--text)}
+.bars i:nth-child(1){height:4px}.bars i:nth-child(2){height:7px}.bars i:nth-child(3){height:10px}.bars i:nth-child(4){height:14px}
+.drop{position:relative;min-height:76px;border:1.5px dashed var(--dash);border-radius:14px;background:var(--soft2);display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.drop .tile{width:40px;height:40px;border-radius:12px;background:var(--soft);color:var(--label);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.drop .t{display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1}
+.drop .t b{font-size:14px;overflow-wrap:anywhere}.drop .t span{font-size:12px;color:var(--muted)}
+.drop progress{width:100%;height:8px;accent-color:var(--accent)}
+.val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.vh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.rng{width:100%;accent-color:var(--accent);height:28px;margin:0}
+.ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.segs{display:grid;gap:4px;padding:4px;background:var(--soft);border-radius:12px}
+.seg{height:40px;border:0;border-radius:9px;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--label);cursor:pointer}
+.seg[aria-checked=true]{background:var(--segon);color:var(--text);box-shadow:0 1px 2px var(--shadow)}
+.chk{width:22px;height:22px;accent-color:var(--accent);margin:0;flex-shrink:0}
+.checks{display:flex;flex-direction:column;border-top:1px solid var(--line2)}
+.checks label{min-height:52px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line2);font-size:15px;cursor:pointer}
+.checks label:last-child{border-bottom:0}
+.opt{display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:14px;background:var(--soft2);border:1px solid var(--line2);cursor:pointer}
+.opt .chk{margin-top:1px}.opt>span{display:flex;flex-direction:column;gap:3px}.opt b{font-size:15px}
+.unit{display:flex;align-items:center;gap:10px}.unit .in{width:140px}.unit span{font-size:15px;color:var(--label)}
+details.more{background:var(--card);border:1px solid var(--line);border-radius:16px}
+details.more summary{min-height:56px;padding:8px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary>span{display:flex;flex-direction:column;gap:2px}
+details.more summary b{font-size:15px}details.more summary small{font-size:12px;color:var(--muted)}
+details.more summary .ic{color:var(--muted);transition:transform .15s}details.more[open] summary .ic{transform:rotate(180deg)}
+details.more .body{padding:0 18px 18px;display:flex;flex-direction:column;gap:14px}
+.foot{position:sticky;bottom:0;padding:14px 16px 20px;background:var(--page);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.foot[hidden]{display:none}
+.foot p{margin:0;font-size:12px;color:var(--muted);text-align:center}
+.primary{width:100%;height:52px;border:0;border-radius:14px;background:var(--btn);color:var(--onbtn);font:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.primary.m{height:50px;font-size:15px}
+.primary:disabled,.sec:disabled,.act:disabled{opacity:.55;cursor:default}
+.sec{height:46px;padding:0 14px;border:1px solid var(--inbd);border-radius:12px;background:var(--card);font:inherit;font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.sec.danger{color:var(--err);border-color:var(--errbd)}
+.status{margin:0;font-size:13px;min-height:1.2em;color:var(--muted)}.status:empty{display:none}
+.status.ok{color:var(--ok)}.status.err{color:var(--err)}
+.badge{height:24px;padding:0 9px;border-radius:999px;background:var(--soft);color:var(--label);font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.badge.good{background:var(--okbg);color:var(--oktx)}.badge.warn{background:var(--warnbg);color:var(--warntx)}.badge.own{background:var(--ownbg);color:var(--owntx)}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.tlist{display:flex;flex-direction:column;gap:14px}
+.tonie{gap:12px;padding:16px}
+.trow{display:flex;gap:12px;align-items:flex-start}
+.av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:18px;background:var(--soft);color:var(--muted)}
+.tinfo{display:flex;flex-direction:column;gap:4px;min-width:0;flex-grow:1}
+.tinfo .uid{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.tinfo h3.mono{font-size:14px;font-weight:400}
+.meta{margin:0;font-size:13px;color:var(--muted)}
+.acts{display:flex;gap:8px}
+.act{height:44px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--card);font:inherit;font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;flex-grow:1}
+.ico{width:44px;height:44px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.ico.on{background:var(--sel);border-color:var(--ownbd)}
+.listhd{display:flex;align-items:flex-end;justify-content:space-between;padding:0 4px;gap:8px}
+.listhd .ico{background:none;border-color:var(--inbd)}
+.note{display:flex;gap:10px;padding:12px 14px;border-radius:12px;background:var(--warnbg);color:var(--warntx)}
+.note p{margin:0;font-size:13px;line-height:1.45}
+.wait{border:1.5px dashed var(--dash);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;background:var(--soft2)}
+.wait[hidden]{display:none}
+.ring{width:52px;height:52px;border-radius:50%;border:4px solid var(--soft);border-top-color:var(--accent);border-right-color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
+.wait>span{display:flex;flex-direction:column;gap:3px}.wait b{font-size:15px}
+.files{display:flex;flex-direction:column;gap:8px}
+.files.locked{opacity:.5}.files.locked a,.files.locked button{pointer-events:none}
+.dl{min-height:52px;padding:0 14px;border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:12px;color:var(--text);text-decoration:none}
+.dl>span{display:flex;flex-direction:column}.dl b{font-size:14px}.dl small{font-size:12px;color:var(--muted)}
+pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:var(--pretx);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto}
+.plain{background:none}
+.plain h2{font-size:15px}
 </style>
 </head>
 <body>
-<main>
-<h1>TeddyBox einrichten</h1>
-<p class="sub">Alles ist optional bis auf das WLAN. Nach dem Speichern startet die Box neu. Diese Seite kommt wieder, wenn du beim Einschalten das große Ohr gedrückt hältst.</p>
-<nav class="tabs" role="tablist">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0"/><path d="M5.5 12.5a10 10 0 0 1 13 0"/><path d="M9 16.5a5 5 0 0 1 6 0"/><path d="M12 20h.01"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.5A3.8 3.8 0 0 1 17.5 18z"/></symbol>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v4"/><path d="M12 17.5h.01"/></symbol>
+</svg>
+<div class="wrap">
+<header>
+<div class="brand">
+<div class="logo" role="img" aria-label="TeddyBox">🧸</div>
+<div>
+<h1 class="rd">TeddyBox einrichten</h1>
+<p class="sub" id="apinfo">Hotspot der Box</p>
+</div>
+</div>
+<nav class="tabs" role="tablist" aria-label="Bereiche">
 <button type="button" role="tab" data-tab="net">Verbindung</button>
 <button type="button" role="tab" data-tab="box">Box</button>
 <button type="button" role="tab" data-tab="tonies">Tonies</button>
 <button type="button" role="tab" data-tab="sys">System</button>
 </nav>
-<div class="tab" id="tab-net">
+</header>
+<main>
 
+<div class="tab" id="tab-net">
+<div class="chips">
+<div class="chip"><span>WLAN</span><b id="stwifi">…</b></div>
+<div class="chip"><span>teddyCloud</span><b id="sttc">…</b></div>
+<div class="chip"><span>Home Assistant</span><b id="stha">…</b></div>
+</div>
 <section>
-<h2>WLAN</h2>
-<p class="hint">Netz auswählen oder Namen eingeben.</p>
-<div class="nets" id="nets"><span class="hint">Suche Netze …</span></div>
-<button class="link" type="button" id="rescan">Erneut suchen</button>
-<label for="ssid">Netzname (SSID)</label>
-<input id="ssid" autocomplete="off" autocapitalize="none" spellcheck="false">
-<label for="wpass">Passwort</label>
-<input id="wpass" type="password" autocomplete="off">
+<div class="hd"><h2 class="rd"><svg class="ic"><use href="#i-wifi"/></svg>WLAN</h2>
+<button class="linkbtn" type="button" id="rescan"><svg class="ic s"><use href="#i-redo"/></svg>Erneut suchen</button></div>
+<p class="hint">Netz auswählen oder Namen eingeben. Netze aus der Tonies-App werden automatisch übernommen.</p>
+<p class="hint" id="netsinfo">Suche Netze …</p>
+<div class="nets" id="nets" role="radiogroup" aria-label="Gefundene Netze"></div>
+<div class="f"><label class="lb" for="ssid">Netzname (SSID)</label>
+<input class="in" id="ssid" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+<div class="f"><label class="lb" for="wpass">Passwort</label>
+<div class="pw"><input class="in" id="wpass" type="password" autocomplete="off">
+<button type="button" id="wpshow" aria-label="Passwort anzeigen" aria-pressed="false"><svg class="ic"><use href="#i-eye"/></svg></button></div></div>
 </section>
 
 <section>
-<h2>teddyCloud</h2>
+<h2 class="rd"><svg class="ic"><use href="#i-cloud"/></svg>teddyCloud</h2>
 <p class="hint">Leer lassen, wenn die Box nur Inhalte von der SD-Karte spielen soll.</p>
-<div class="row">
-<div><label for="chost">Adresse (IP oder Name)</label><input id="chost" autocapitalize="none" spellcheck="false" placeholder="192.168.178.20"></div>
-<div class="small"><label for="cport">Port</label><input id="cport" type="number" min="1" max="65535"></div>
-<div class="small"><label for="cwport">Web-Port</label><input id="cwport" type="number" min="0" max="65535"></div>
+<div class="f"><label class="lb" for="chost">Adresse (IP oder Name)</label>
+<input class="in" id="chost" autocapitalize="none" spellcheck="false" placeholder="192.168.178.20"></div>
+<div class="g2">
+<div class="f"><label class="lb" for="cport">Port</label><input class="in" id="cport" type="number" min="1" max="65535"></div>
+<div class="f"><label class="lb" for="cwport">Web-Port</label><input class="in" id="cwport" type="number" min="0" max="65535"></div>
 </div>
 <p class="hint">Über den Web-Port (Weboberfläche von teddyCloud, meist 80) holt die Box die Namen der Tonies. 0 = nicht fragen.</p>
-<label for="cafile">CA-Zertifikat von teddyCloud (certs/server/ca.der)</label>
-<input id="cafile" type="file" accept=".der,.pem,.crt,.cer">
-<div class="status" id="castatus"></div>
+<div class="f"><span class="lb">CA-Zertifikat von teddyCloud</span>
+<label class="drop"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
+<span class="t"><b id="caname">Datei wählen</b><span>certs/server/ca.der · DER oder PEM</span></span>
+<input id="cafile" type="file" accept=".der,.pem,.crt,.cer"></label>
+<p class="status" id="castatus"></p></div>
 </section>
 
 <section>
-<h2>Home Assistant</h2>
+<h2 class="rd"><svg class="ic"><use href="#i-home"/></svg>Home Assistant</h2>
 <p class="hint">MQTT-Broker, z.&nbsp;B. das Mosquitto-Add-on. Leer lassen, um es abzuschalten.</p>
-<div class="row">
-<div><label for="mhost">Broker-Adresse</label><input id="mhost" autocapitalize="none" spellcheck="false" placeholder="192.168.178.10"></div>
-<div class="small"><label for="mport">Port</label><input id="mport" type="number" min="1" max="65535"></div>
+<div class="g21">
+<div class="f"><label class="lb" for="mhost">Broker-Adresse</label><input class="in" id="mhost" autocapitalize="none" spellcheck="false" placeholder="192.168.178.10"></div>
+<div class="f"><label class="lb" for="mport">Port</label><input class="in" id="mport" type="number" min="1" max="65535"></div>
 </div>
-<div class="row">
-<div><label for="muser">Benutzer</label><input id="muser" autocapitalize="none" spellcheck="false" autocomplete="off"></div>
-<div><label for="mpass">Passwort</label><input id="mpass" type="password" autocomplete="off"></div>
+<div class="g2">
+<div class="f"><label class="lb" for="muser">Benutzer</label><input class="in" id="muser" autocapitalize="none" spellcheck="false" autocomplete="off"></div>
+<div class="f"><label class="lb" for="mpass">Passwort</label><input class="in" id="mpass" type="password" autocomplete="off"></div>
 </div>
 </section>
 </div>
 
 <div class="tab" id="tab-box" hidden>
 <section>
-<h2>Box</h2>
-<div class="row">
-<div><label for="lang">Sprache der Ansagen</label>
-<select id="lang"><option value="1">Deutsch</option><option value="0">Englisch (UK)</option><option value="2">Englisch (USA)</option><option value="3">Französisch</option></select></div>
-</div>
-<div class="row">
-<div><label for="vmax">Max. Lautstärke %</label><input id="vmax" type="number" min="10" max="100" step="5"></div>
-<div><label for="vmaxh">Max. Lautstärke Kopfhörer %</label><input id="vmaxh" type="number" min="10" max="100" step="5"></div>
-<div><label for="tcset">Box-Einstellungen aus teddyCloud</label><select id="tcset"><option value="1">übernehmen, wenn dort geändert (Standard)</option><option value="0">ignorieren</option></select></div>
-<div><label for="idle">Aus nach (Sek.)</label><input id="idle" type="number" min="10" step="10"></div>
-</div>
-<div class="row">
-<div><label for="speq">Klang</label><select id="speq"><option value="full">Optimiert</option><option value="lowcut">Tiefenfilter</option><option value="off">Wie Original</option></select></div>
-<div><label for="led">LED-Helligkeit</label><select id="led"><option value="3">3 (hell)</option><option value="2">2</option><option value="1">1 (gedimmt)</option><option value="0">Aus</option></select></div>
-</div>
-<div class="row">
-<div><label for="slap">Klapsen</label><select id="slap"><option value="5">5 leicht</option><option value="4">4</option><option value="3">3 Original</option><option value="2">2</option><option value="1">1 fest</option><option value="0">Aus</option></select></div>
-<div><label for="tilt">Kippen</label><select id="tilt"><option value="5">5 (20°)</option><option value="4">4 (25°)</option><option value="3">3 (30°)</option><option value="2">2 (35°)</option><option value="1">1 (40°)</option><option value="0">Aus</option></select></div>
-</div>
-<label><input id="slaprev" type="checkbox" style="width:auto"> Klaps-Richtung umkehren</label>
-<label><input id="earsoff" type="checkbox" style="width:auto"> Beide Ohren kurz drücken schaltet aus</label>
-<p class="hint">Klapsen auf die Seite: Kapitel vor/zurück. Kippen: Kapitel oder Spulen. 5 reagiert am leichtesten.</p>
-<label for="uphour">Nächtliche Aktualisierung</label><select id="uphour"><option value="-1">Aus</option><option value="0">00:00 Uhr</option><option value="1">01:00 Uhr</option><option value="2">02:00 Uhr</option><option value="3">03:00 Uhr</option><option value="4">04:00 Uhr</option><option value="5">05:00 Uhr</option><option value="6">06:00 Uhr</option><option value="7">07:00 Uhr</option><option value="8">08:00 Uhr</option><option value="9">09:00 Uhr</option><option value="10">10:00 Uhr</option><option value="11">11:00 Uhr</option><option value="12">12:00 Uhr</option><option value="13">13:00 Uhr</option><option value="14">14:00 Uhr</option><option value="15">15:00 Uhr</option><option value="16">16:00 Uhr</option><option value="17">17:00 Uhr</option><option value="18">18:00 Uhr</option><option value="19">19:00 Uhr</option><option value="20">20:00 Uhr</option><option value="21">21:00 Uhr</option><option value="22">22:00 Uhr</option><option value="23">23:00 Uhr</option></select>
-<p class="hint">Die Box wacht einmal täglich lautlos auf und lädt neue Versionen ihrer Tonies und abgebrochene Downloads (am Ladegerät immer, im Akkubetrieb ab 50 %). Ein Ohr drücken startet die Box normal.</p>
-<label for="fcint">Abgleich mit teddyCloud</label><select id="fcint"><option value="15">alle 15 Minuten</option><option value="30">alle 30 Minuten</option><option value="60">stündlich (Standard)</option><option value="180">alle 3 Stunden</option><option value="360">alle 6 Stunden</option></select>
-<p class="hint">Fragt bei teddyCloud nach neuen Tonie-Versionen und geänderten Box-Einstellungen (Lautstärke, LED, Klapsen) – nur wenn nichts spielt, außerdem nach dem Abnehmen eines Tonies.</p>
-<details><summary>Decoder und Prozessortakt</summary>
-<div class="row">
-<div><label for="decoder">Decoder</label><select id="decoder"><option value="celt">CELT (Standard, wie Original)</option><option value="adf">ESP-ADF (Ausweichlösung)</option></select></div>
-<div><label for="cpumhz">Prozessortakt</label><select id="cpumhz"><option value="160">160 MHz (Standard)</option><option value="240">240 MHz</option></select></div>
-<div><label for="dlplay">Download beim Abspielen</label><select id="dlplay"><option value="0">unbegrenzt (Standard)</option><option value="192">192 KiB/s</option><option value="96">96 KiB/s</option></select></div>
-<div><label for="rtnl">Ereignisse an teddyCloud (RTNL)</label><select id="rtnl"><option value="1">senden (Standard)</option><option value="0">nicht senden</option></select></div>
-<div><label for="readahead">Vorauslesen von der SD-Karte</label><select id="readahead"><option value="1">an (Standard)</option><option value="0">aus (nur zur Fehlersuche)</option></select></div>
-</div>
-<p class="hint">CELT braucht deutlich weniger Arbeitsspeicher. Mit 160 MHz hält der Akku etwas länger, mit ESP-ADF stockten bei 160 MHz aber manche Tonies. Im Log zeigt „Decoder … % CPU“ die Auslastung. Der Download-Takt gilt nur, solange ein Tonie läuft, sonst lädt die Box immer mit voller Geschwindigkeit.</p>
-</details>
-<details><summary>Erweitert</summary>
-<label><input id="boxfb" type="checkbox" style="width:auto"> Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist</label>
-<label><input id="uaorig" type="checkbox" style="width:auto"> Als Original-Firmware ausgeben (User-Agent)</label>
-<p class="hint">Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.</p>
-</details>
+<h2 class="rd">Ton</h2>
+<div class="f"><label class="lb" for="lang">Sprache der Ansagen</label>
+<select class="in" id="lang"><option value="1">Deutsch</option><option value="0">Englisch (UK)</option><option value="2">Englisch (USA)</option><option value="3">Französisch</option></select></div>
+<div class="f"><div class="vh"><label class="lb" for="vmax">Max. Lautstärke Lautsprecher</label><span class="val" id="vmax-v"></span></div>
+<input class="rng" id="vmax" type="range" min="10" max="100" step="5"></div>
+<div class="f"><div class="vh"><label class="lb" for="vmaxh">Max. Lautstärke Kopfhörer</label><span class="val" id="vmaxh-v"></span></div>
+<input class="rng" id="vmaxh" type="range" min="10" max="100" step="5"></div>
+<div class="f"><span class="lb" id="speq-l">Klang</span>
+<div class="segs" role="radiogroup" aria-labelledby="speq-l" data-for="speq" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+<button class="seg" type="button" role="radio" data-v="full">Optimiert</button>
+<button class="seg" type="button" role="radio" data-v="lowcut">Tiefenfilter</button>
+<button class="seg" type="button" role="radio" data-v="off">Wie Original</button></div>
+<input type="hidden" id="speq">
+<p class="hint">„Optimiert“ ist am Lautsprecher der Box eingemessen.</p></div>
 </section>
+
+<section>
+<h2 class="rd">Licht und Gesten</h2>
+<div class="f"><span class="lb" id="led-l">LED-Helligkeit</span>
+<div class="segs" role="radiogroup" aria-labelledby="led-l" data-for="led" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+<button class="seg" type="button" role="radio" data-v="0">Aus</button>
+<button class="seg" type="button" role="radio" data-v="1">Gedimmt</button>
+<button class="seg" type="button" role="radio" data-v="2">Mittel</button>
+<button class="seg" type="button" role="radio" data-v="3">Hell</button></div>
+<input type="hidden" id="led"></div>
+<div class="f"><div class="vh"><label class="lb" for="slap">Klapsen</label><span class="val" id="slap-v"></span></div>
+<input class="rng" id="slap" type="range" min="0" max="5" step="1">
+<div class="ticks"><span>Aus</span><span>fest</span><span>leicht</span></div></div>
+<div class="f"><div class="vh"><label class="lb" for="tilt">Kippen</label><span class="val" id="tilt-v"></span></div>
+<input class="rng" id="tilt" type="range" min="0" max="5" step="1">
+<div class="ticks"><span>Aus</span><span>40°</span><span>20°</span></div></div>
+<p class="hint">Klaps auf die Seite: Kapitel vor/zurück. Kippen: Kapitel oder Spulen. Weiter rechts reagiert die Box leichter.</p>
+<div class="checks">
+<label><input class="chk" id="slaprev" type="checkbox">Klaps-Richtung umkehren</label>
+<label><input class="chk" id="earsoff" type="checkbox">Beide Ohren kurz drücken schaltet aus</label>
+</div>
+</section>
+
+<section>
+<h2 class="rd">Inhalte und teddyCloud</h2>
+<div class="f"><label class="lb" for="uphour">Nächtliche Aktualisierung</label>
+<select class="in" id="uphour"></select>
+<p class="hint">Die Box wacht einmal täglich lautlos auf und lädt neue Versionen ihrer Tonies und abgebrochene Downloads – am Ladegerät immer, im Akkubetrieb ab 50 %. Ein Ohr drücken startet die Box normal.</p></div>
+<div class="f"><label class="lb" for="fcint">Abgleich mit teddyCloud</label>
+<select class="in" id="fcint"><option value="15">alle 15 Minuten</option><option value="30">alle 30 Minuten</option><option value="60">stündlich (Standard)</option><option value="180">alle 3 Stunden</option><option value="360">alle 6 Stunden</option></select>
+<p class="hint">Fragt nach neuen Tonie-Versionen und geänderten Box-Einstellungen – nur wenn nichts spielt, außerdem nach dem Abnehmen eines Tonies.</p></div>
+<label class="opt"><input class="chk" id="tcset" type="checkbox">
+<span><b>Einstellungen aus teddyCloud übernehmen</b><span class="hint">Lautstärke, LED und Klapsen, wenn sie dort geändert werden.</span></span></label>
+</section>
+
+<section>
+<h2 class="rd">Strom</h2>
+<div class="f"><label class="lb" for="idle">Ausschalten nach</label>
+<div class="unit"><input class="in" id="idle" type="number" min="10" step="10"><span>Sekunden ohne Tonie</span></div></div>
+</section>
+
+<details class="more">
+<summary><span><b>Decoder und Prozessortakt</b><small id="advsum"></small></span><svg class="ic"><use href="#i-chev"/></svg></summary>
+<div class="body">
+<div class="f"><label class="lb" for="decoder">Decoder</label><select class="in" id="decoder"><option value="celt">CELT (Standard, wie Original)</option><option value="adf">ESP-ADF (Ausweichlösung)</option></select></div>
+<div class="f"><label class="lb" for="cpumhz">Prozessortakt</label><select class="in" id="cpumhz"><option value="160">160 MHz (Standard)</option><option value="240">240 MHz</option></select></div>
+<div class="f"><label class="lb" for="dlplay">Download beim Abspielen</label><select class="in" id="dlplay"><option value="0">unbegrenzt (Standard)</option><option value="192">192 KiB/s</option><option value="96">96 KiB/s</option></select></div>
+<div class="f"><label class="lb" for="rtnl">Ereignisse an teddyCloud (RTNL)</label><select class="in" id="rtnl"><option value="1">senden (Standard)</option><option value="0">nicht senden</option></select></div>
+<div class="f"><label class="lb" for="readahead">Vorauslesen von der SD-Karte</label><select class="in" id="readahead"><option value="1">an (Standard)</option><option value="0">aus (nur zur Fehlersuche)</option></select></div>
+<p class="hint">CELT braucht deutlich weniger Arbeitsspeicher. Mit 160 MHz hält der Akku etwas länger, mit ESP-ADF stockten bei 160 MHz aber manche Tonies. Im Log zeigt „Decoder … % CPU“ die Auslastung. Der Download-Takt gilt nur, solange ein Tonie läuft.</p>
+</div>
+</details>
+<details class="more">
+<summary><span><b>Erweitert</b><small>Tonies-Cloud als Ausweg, User-Agent</small></span><svg class="ic"><use href="#i-chev"/></svg></summary>
+<div class="body">
+<div class="checks">
+<label><input class="chk" id="boxfb" type="checkbox">Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist</label>
+<label><input class="chk" id="uaorig" type="checkbox">Als Original-Firmware ausgeben (User-Agent)</label>
+</div>
+<p class="hint">Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.</p>
+</div>
+</details>
 </div>
 
 <div class="tab" id="tab-tonies" hidden>
-<section>
-<h2>Tonies auf der SD-Karte</h2>
-<p class="hint" id="tnspace">Lade Liste …</p>
-<div id="tnlist"></div>
-<button class="link" type="button" id="tnreload">Liste neu laden</button>
-</section>
-<section>
-<h2>Tonie bespielen</h2>
-<p class="hint">Eine fertige TAF-Datei (z.&nbsp;B. aus teddyCloud oder TonieToolbox) für einen Tonie hochladen. Die Box prüft Header, Länge und Prüfsumme. Hochgeladene Dateien sind geschützt: teddyCloud und die nächtliche Aktualisierung ersetzen sie nicht.</p>
-<label for="tnuid">Tonie</label>
-<select id="tnseen"><option value="">– zuletzt aufgelegt –</option></select>
-<input id="tnuid" placeholder="UID, z. B. E00403500EEA5646" autocapitalize="characters" spellcheck="false" style="margin-top:.4rem">
-<p class="hint">Ein neuer Tonie erscheint oben, sobald er einmal auf der Box lag (auch ohne Inhalt).</p>
-<label for="tnfile">TAF-Datei</label>
-<input id="tnfile" type="file" accept=".taf,application/octet-stream">
-<progress id="tnprog" max="100" value="0" hidden></progress>
-<div class="status" id="tnstatus"></div>
-<button class="main" id="tnbtn" type="button" style="background:var(--text)">Hochladen</button>
+<div class="listhd">
+<div><h2 class="rd">Auf der SD-Karte</h2><p class="hint" id="tnspace">Lade Liste …</p></div>
+<button type="button" class="ico" id="tnreload" aria-label="Liste neu laden"><svg class="ic"><use href="#i-redo"/></svg></button>
+</div>
+<div class="tlist" id="tnlist"></div>
+<section style="margin-top:8px">
+<h2 class="rd">Tonie bespielen</h2>
+<p class="hint">Eine fertige TAF-Datei (z.&nbsp;B. aus teddyCloud oder TonieToolbox) hochladen. Die Box prüft Header, Länge und Prüfsumme. Hochgeladene Dateien sind geschützt: teddyCloud und die nächtliche Aktualisierung ersetzen sie nicht.</p>
+<div class="f"><label class="lb" for="tnseen">Tonie</label>
+<select class="in" id="tnseen"><option value="">– zuletzt aufgelegt –</option></select>
+<input class="in mono" id="tnuid" aria-label="Oder UID eingeben" placeholder="oder UID eingeben, z. B. E00403500EEA5646" autocapitalize="characters" spellcheck="false" style="font-size:13px">
+<p class="hint">Ein neuer Tonie erscheint hier, sobald er einmal auf der Box lag (auch ohne Inhalt).</p></div>
+<div class="f"><span class="lb">TAF-Datei</span>
+<label class="drop" style="flex-wrap:wrap"><span class="tile"><svg class="ic"><use href="#i-file"/></svg></span>
+<span class="t"><b id="tnname">Datei wählen</b><span id="tnsub">.taf aus teddyCloud oder TonieToolbox</span></span>
+<span class="val" id="tnpct"></span>
+<progress id="tnprog" max="100" value="0" hidden aria-label="Upload-Fortschritt"></progress>
+<input id="tnfile" type="file" accept=".taf,application/octet-stream"></label>
+<p class="status" id="tnstatus"></p></div>
+<button class="primary m" id="tnbtn" type="button">Hochladen</button>
 </section>
 </div>
 
 <div class="tab" id="tab-sys" hidden>
 <section>
-<h2>Sicherung</h2>
-<p class="hint">Die Zertifikate sind für jede Box einzigartig. Ohne sie kommt die Box weder zu teddyCloud noch zur Tonies-Cloud. Das Flash-Abbild enthält zusätzlich die Original-Firmware und die WLAN-Daten und stellt die Box mit esptool komplett wieder her.</p>
-<p class="hint"><b>Die Dateien enthalten den privaten Schlüssel der Box.</b> Bewahre sie sicher auf und gib sie nicht weiter.</p>
-<button class="main" id="bkunlock" type="button" style="background:var(--text)">Sicherung freigeben</button>
-<div class="status" id="bkstatus"></div>
-<div id="bkfiles" hidden>
-<p><a id="bkcerts" href="/backup/certs.zip">Zertifikate herunterladen (für teddyCloud)</a></p>
-<p><a id="bkflash" href="/backup/flash.bin">Komplettes Flash-Abbild herunterladen</a> <span class="hint" id="bksize"></span></p>
-<button class="link" type="button" id="bksd">Beides auf die SD-Karte sichern</button>
+<h2 class="rd">Sicherung</h2>
+<p class="hint">Die Zertifikate sind für jede Box einzigartig – ohne sie kommt die Box weder zu teddyCloud noch zur Tonies-Cloud. Das Flash-Abbild enthält zusätzlich die Original-Firmware und die WLAN-Daten und stellt die Box mit esptool komplett wieder her.</p>
+<div class="note"><svg class="ic"><use href="#i-warn"/></svg><p><b>Enthält den privaten Schlüssel der Box.</b> Sicher aufbewahren und nicht weitergeben.</p></div>
+<button class="sec" id="bkunlock" type="button">Sicherung freigeben</button>
+<div class="wait" id="bkwait" hidden><div class="ring" id="bkcount">60 s</div>
+<span><b>Jetzt das kleine Ohr drücken</b><span class="hint">So bestätigst du an der Box, dass du die Sicherung laden darfst. Die LED blinkt blau.</span></span></div>
+<p class="status" id="bkstatus"></p>
+<div class="files locked" id="bkfiles">
+<a class="dl" id="bkcerts" href="/backup/certs.zip"><svg class="ic"><use href="#i-down"/></svg><span><b>Zertifikate (für teddyCloud)</b><small id="bkcname">toniebox-…-certs.zip</small></span></a>
+<a class="dl" id="bkflash" href="/backup/flash.bin"><svg class="ic"><use href="#i-down"/></svg><span><b>Komplettes Flash-Abbild</b><small id="bksize">toniebox-…-flash.bin</small></span></a>
+<button class="linkbtn" type="button" id="bksd" style="justify-content:center;height:44px">Beides auf die SD-Karte sichern</button>
 </div>
 </section>
 
 <section>
-<h2>Absturzprotokoll</h2>
-<p class="hint">Stürzt die Firmware ab, startet die Box neu und schreibt beim nächsten Start eine Zeile nach <code>tb_crash.txt</code> auf der SD-Karte: Version, betroffener Task und die Absturzstelle als Adressen. Es stehen keine Zugangsdaten darin, du kannst den Text also zur Fehlersuche weitergeben.</p>
-<pre id="crlog" style="white-space:pre-wrap;word-break:break-all;font-size:12px;max-height:240px;overflow:auto;background:rgba(127,127,127,.12);padding:8px;border-radius:6px">…</pre>
-<div class="status" id="crstatus"></div>
-<button type="button" id="crcopy">Kopieren</button>
-<button class="link" type="button" id="crdel">Protokoll löschen</button>
+<div class="hd"><h2 class="rd">Absturzprotokoll</h2><span class="badge good" id="crbadge">leer</span></div>
+<pre class="mono" id="crlog">…</pre>
+<p class="hint">Enthält Version, betroffenen Task und Adressen, keine Zugangsdaten – du kannst den Text zur Fehlersuche weitergeben.</p>
+<p class="status" id="crstatus"></p>
+<div class="g2"><button type="button" class="sec" id="crcopy">Kopieren</button><button type="button" class="sec" id="crdel">Protokoll löschen</button></div>
 </section>
 
 <section>
-<h2>Firmware aktualisieren</h2>
-<p class="hint" id="fwinfo"></p>
-<button type="button" id="ofwbtn">Original-Firmware starten</button>
-<p class="hint">Startet die Original-Firmware. Zurück zur TeddyBox wie bei der Installation beschrieben. Ohne Einrichtungsseite: Box auf den Kopf, beide Ohren 20 Sekunden halten, bis die LED blau blinkt, dann loslassen.</p>
-<label for="fwfile">Neue TeddyBox-Firmware (teddybox.bin)</label>
-<input id="fwfile" type="file" accept=".bin">
-<div id="pdask" hidden>
+<div class="hd"><h2 class="rd">Firmware</h2><span class="mono hint" id="fwinfo" style="font-size:12px;text-align:right"></span></div>
+<div class="f"><span class="lb">Neue TeddyBox-Firmware</span>
+<label class="drop"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
+<span class="t"><b id="fwname">teddybox.bin wählen</b><span>Startet auf Probe, sonst zurück zur bisherigen</span></span>
+<input id="fwfile" type="file" accept=".bin"></label></div>
+<div id="pdask" hidden class="f">
 <p class="hint">Für das erste Update wird der Slot der Notfall-App (PD) gebraucht. Die normale Original-Firmware bleibt erhalten, die PD-App ist in deinem Flash-Dump gesichert.</p>
-<label><input id="pdok" type="checkbox" style="width:auto"> Notfall-App (PD) dafür überschreiben</label>
+<label class="opt"><input class="chk" id="pdok" type="checkbox"><span><b>Notfall-App (PD) dafür überschreiben</b></span></label>
 </div>
-<div class="status" id="fwstatus"></div>
-<button class="main" id="fwbtn" type="button" style="background:var(--text)">Firmware hochladen</button>
-<p class="hint">Die neue Version startet auf Probe. Läuft sie nicht sauber an, startet die Box beim nächsten Mal wieder die bisherige.</p>
+<p class="status" id="fwstatus"></p>
+<button class="primary m" id="fwbtn" type="button">Firmware hochladen</button>
 </section>
-</div>
 
-<div id="savebar">
-<div class="status" id="status"></div>
-<button class="main" id="save" type="button">Speichern und neu starten</button>
+<section class="plain">
+<h2>Original-Firmware</h2>
+<p class="hint">Startet die Original-Firmware, die unverändert daneben liegt. Sie bleibt dann aktiv, auch nach jedem Neustart. <b>Zurück zur TeddyBox geht nur am PC</b> mit esptool, wie bei der Installation (Boot-Auswahl neu schreiben).</p>
+<p class="hint">Ohne diese Seite kommst du aus der TeddyBox so zur Original-Firmware: Box auf den Kopf, beide Ohren 20 Sekunden halten, bis die LED blau blinkt, dann loslassen. In der Original-Firmware bedeutet dieselbe Geste dagegen Neustart, auf dem Ladegerät sogar Zurücksetzen auf Werkszustand.</p>
+<button type="button" class="sec danger" id="ofwbtn">Original-Firmware starten</button>
+</section>
 </div>
 </main>
+
+<div class="foot" id="savebar">
+<p class="status" id="status" style="text-align:center"></p>
+<button class="primary" id="save" type="button">Speichern und neu starten</button>
+<p id="footnote">Ohne Eingabe schaltet sich die Box nach 15 Minuten aus.</p>
+</div>
+</div>
 <script>
 const $=id=>document.getElementById(id);
+/* language: German if the browser prefers German, else English */
+const DE=/^de\b/i.test((navigator.languages&&navigator.languages[0])||navigator.language||'');
+const EN={
+'TeddyBox einrichten':'Set up TeddyBox','Hotspot der Box':'Hotspot of the box','Bereiche':'Sections',
+'Verbindung':'Connection','Box':'Box','Tonies':'Tonies','System':'System',
+'WLAN':'WiFi','Erneut suchen':'Scan again','Netz auswählen oder Namen eingeben. Netze aus der Tonies-App werden automatisch übernommen.':'Pick a network or enter its name. Networks from the Tonies app are used automatically.',
+'Suche Netze …':'Searching for networks …','Gefundene Netze':'Networks found','Netzname (SSID)':'Network name (SSID)','Passwort':'Password','Passwort anzeigen':'Show password','Passwort verbergen':'Hide password',
+'Leer lassen, wenn die Box nur Inhalte von der SD-Karte spielen soll.':'Leave empty if the box should only play content from the SD card.',
+'Adresse (IP oder Name)':'Address (IP or name)','Port':'Port','Web-Port':'Web port',
+'Über den Web-Port (Weboberfläche von teddyCloud, meist 80) holt die Box die Namen der Tonies. 0 = nicht fragen.':'The box gets the names of the tonies over the web port (teddyCloud\'s web interface, usually 80). 0 = don\'t ask.',
+'CA-Zertifikat von teddyCloud':'teddyCloud CA certificate','Datei wählen':'Choose file','certs/server/ca.der · DER oder PEM':'certs/server/ca.der · DER or PEM',
+'MQTT-Broker, z. B. das Mosquitto-Add-on. Leer lassen, um es abzuschalten.':'MQTT broker, e.g. the Mosquitto add-on. Leave empty to switch it off.',
+'Broker-Adresse':'Broker address','Benutzer':'User',
+'Ton':'Sound','Sprache der Ansagen':'Language of the announcements','Deutsch':'German','Englisch (UK)':'English (UK)','Englisch (USA)':'English (US)','Französisch':'French',
+'Max. Lautstärke Lautsprecher':'Max. volume speaker','Max. Lautstärke Kopfhörer':'Max. volume headphones','Klang':'Sound profile','Optimiert':'Optimized','Tiefenfilter':'Bass cut','Wie Original':'Like original',
+'„Optimiert“ ist am Lautsprecher der Box eingemessen.':'"Optimized" is tuned to the speaker of the box.',
+'Licht und Gesten':'Light and gestures','LED-Helligkeit':'LED brightness','Aus':'Off','Gedimmt':'Dimmed','Mittel':'Medium','Hell':'Bright',
+'Klapsen':'Slap','Kippen':'Tilt','fest':'firm','leicht':'light',
+'Klaps auf die Seite: Kapitel vor/zurück. Kippen: Kapitel oder Spulen. Weiter rechts reagiert die Box leichter.':'Slap on the side: chapter forward/back. Tilt: chapter or wind. Further right, the box reacts more easily.',
+'Klaps-Richtung umkehren':'Reverse slap direction','Beide Ohren kurz drücken schaltet aus':'Pressing both ears briefly switches off',
+'Inhalte und teddyCloud':'Content and teddyCloud','Nächtliche Aktualisierung':'Nightly update',
+'Die Box wacht einmal täglich lautlos auf und lädt neue Versionen ihrer Tonies und abgebrochene Downloads – am Ladegerät immer, im Akkubetrieb ab 50 %. Ein Ohr drücken startet die Box normal.':'Once a day the box wakes up silently and downloads new versions of its tonies and unfinished downloads – always on the charger, on battery from 50 %. Pressing an ear starts the box normally.',
+'Abgleich mit teddyCloud':'Check with teddyCloud','alle 15 Minuten':'every 15 minutes','alle 30 Minuten':'every 30 minutes','stündlich (Standard)':'hourly (default)','alle 3 Stunden':'every 3 hours','alle 6 Stunden':'every 6 hours',
+'Fragt nach neuen Tonie-Versionen und geänderten Box-Einstellungen – nur wenn nichts spielt, außerdem nach dem Abnehmen eines Tonies.':'Asks for new tonie versions and changed box settings – only while nothing plays, and after a tonie is taken off.',
+'Einstellungen aus teddyCloud übernehmen':'Take settings from teddyCloud','Lautstärke, LED und Klapsen, wenn sie dort geändert werden.':'Volume, LED and slap, when they are changed there.',
+'Strom':'Power','Ausschalten nach':'Switch off after','Sekunden ohne Tonie':'seconds without a tonie',
+'Decoder und Prozessortakt':'Decoder and CPU clock','Decoder':'Decoder','CELT (Standard, wie Original)':'CELT (default, like original)','ESP-ADF (Ausweichlösung)':'ESP-ADF (fallback)',
+'Prozessortakt':'CPU clock','160 MHz (Standard)':'160 MHz (default)','Download beim Abspielen':'Download while playing','unbegrenzt (Standard)':'unlimited (default)',
+'Ereignisse an teddyCloud (RTNL)':'Events to teddyCloud (RTNL)','senden (Standard)':'send (default)','nicht senden':'don\'t send',
+'Vorauslesen von der SD-Karte':'Read ahead from the SD card','an (Standard)':'on (default)','aus (nur zur Fehlersuche)':'off (debugging only)',
+'CELT braucht deutlich weniger Arbeitsspeicher. Mit 160 MHz hält der Akku etwas länger, mit ESP-ADF stockten bei 160 MHz aber manche Tonies. Im Log zeigt „Decoder … % CPU“ die Auslastung. Der Download-Takt gilt nur, solange ein Tonie läuft.':'CELT needs much less memory. At 160 MHz the battery lasts a little longer, but with ESP-ADF some tonies stuttered at 160 MHz. "Decoder … % CPU" in the log shows the load. The download limit only applies while a tonie plays.',
+'Erweitert':'Advanced','Tonies-Cloud als Ausweg, User-Agent':'Tonies cloud as fallback, user agent',
+'Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist':'Go to the Tonies cloud directly when teddyCloud is unreachable','Als Original-Firmware ausgeben (User-Agent)':'Identify as the original firmware (user agent)',
+'Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.':'Both are off by default. Boxine can still recognize TeddyBox by how it connects and behaves. If the box certificate is blocked, the Tonies cloud stops working for the original firmware and through teddyCloud too.',
+'Auf der SD-Karte':'On the SD card','Lade Liste …':'Loading list …','Liste neu laden':'Reload list',
+'Tonie bespielen':'Put content on a tonie',
+'Eine fertige TAF-Datei (z. B. aus teddyCloud oder TonieToolbox) hochladen. Die Box prüft Header, Länge und Prüfsumme. Hochgeladene Dateien sind geschützt: teddyCloud und die nächtliche Aktualisierung ersetzen sie nicht.':'Upload a finished TAF file (e.g. from teddyCloud or TonieToolbox). The box checks header, length and checksum. Uploaded files are protected: teddyCloud and the nightly update do not replace them.',
+'Tonie':'Tonie','– zuletzt aufgelegt –':'– recently placed –','Oder UID eingeben':'Or enter the UID','oder UID eingeben, z. B. E00403500EEA5646':'or enter the UID, e.g. E00403500EEA5646',
+'Ein neuer Tonie erscheint hier, sobald er einmal auf der Box lag (auch ohne Inhalt).':'A new tonie shows up here once it has been on the box (even without content).',
+'TAF-Datei':'TAF file','.taf aus teddyCloud oder TonieToolbox':'.taf from teddyCloud or TonieToolbox','Upload-Fortschritt':'Upload progress','Hochladen':'Upload',
+'Sicherung':'Backup',
+'Die Zertifikate sind für jede Box einzigartig – ohne sie kommt die Box weder zu teddyCloud noch zur Tonies-Cloud. Das Flash-Abbild enthält zusätzlich die Original-Firmware und die WLAN-Daten und stellt die Box mit esptool komplett wieder her.':'The certificates are unique to each box – without them it reaches neither teddyCloud nor the Tonies cloud. The flash image also contains the original firmware and the WiFi data and restores the box completely with esptool.',
+'Enthält den privaten Schlüssel der Box.':'Contains the private key of the box.','Sicher aufbewahren und nicht weitergeben.':'Keep it safe and do not share it.',
+'Sicherung freigeben':'Release backup','Jetzt das kleine Ohr drücken':'Press the small ear now',
+'So bestätigst du an der Box, dass du die Sicherung laden darfst. Die LED blinkt blau.':'This confirms at the box that you may download the backup. The LED blinks blue.',
+'Zertifikate (für teddyCloud)':'Certificates (for teddyCloud)','Komplettes Flash-Abbild':'Complete flash image','Beides auf die SD-Karte sichern':'Save both to the SD card',
+'Absturzprotokoll':'Crash log','leer':'empty',
+'Enthält Version, betroffenen Task und Adressen, keine Zugangsdaten – du kannst den Text zur Fehlersuche weitergeben.':'Contains version, affected task and addresses, no credentials – you can share the text for troubleshooting.',
+'Kopieren':'Copy','Protokoll löschen':'Delete log',
+'Firmware':'Firmware','Neue TeddyBox-Firmware':'New TeddyBox firmware','teddybox.bin wählen':'Choose teddybox.bin','Startet auf Probe, sonst zurück zur bisherigen':'Boots on probation, otherwise back to the previous one',
+'Für das erste Update wird der Slot der Notfall-App (PD) gebraucht. Die normale Original-Firmware bleibt erhalten, die PD-App ist in deinem Flash-Dump gesichert.':'The first update needs the slot of the emergency app (PD). The regular original firmware stays, the PD app is saved in your flash dump.',
+'Notfall-App (PD) dafür überschreiben':'Overwrite the emergency app (PD) for it','Firmware hochladen':'Upload firmware',
+'Original-Firmware':'Original firmware',
+'Startet die Original-Firmware, die unverändert daneben liegt. Sie bleibt dann aktiv, auch nach jedem Neustart.':'Starts the original firmware, which is kept unchanged next to TeddyBox. It then stays active, also after every restart.',
+'Zurück zur TeddyBox geht nur am PC':'Back to TeddyBox only works on a PC','mit esptool, wie bei der Installation (Boot-Auswahl neu schreiben).':'with esptool, as during installation (write the boot selection again).',
+'Ohne diese Seite kommst du aus der TeddyBox so zur Original-Firmware: Box auf den Kopf, beide Ohren 20 Sekunden halten, bis die LED blau blinkt, dann loslassen. In der Original-Firmware bedeutet dieselbe Geste dagegen Neustart, auf dem Ladegerät sogar Zurücksetzen auf Werkszustand.':'Without this page you get from TeddyBox to the original firmware like this: box upside down, hold both ears for 20 seconds until the LED blinks blue, then let go. In the original firmware the same gesture means restart, on the charger even factory reset.',
+'Original-Firmware starten':'Start original firmware','Speichern und neu starten':'Save and restart',
+'Ohne Eingabe schaltet sich die Box nach 15 Minuten aus.':'Without input the box switches off after 15 minutes.','Schreibt teddybox.ini auf die SD-Karte.':'Writes teddybox.ini to the SD card.',
+/* script texts */
+'eingerichtet':'set up','fehlt':'missing','ohne Zertifikat':'no certificate','an':'on','aus':'off',
+'Keine Netze gefunden.':'No networks found.','Suche fehlgeschlagen.':'Scan failed.','schwach':'weak','mittel':'fair','gut':'good','sehr gut':'very good',
+'1 · fest':'1 · firm','3 · wie Original':'3 · like original','5 · leicht':'5 · light','unbegrenzt':'unlimited',
+'Einstellungen konnten nicht geladen werden.':'Could not load the settings.','Eigenes CA-Zertifikat gespeichert':'Own CA certificate stored',
+'Lade hoch …':'Uploading …','Zertifikat gespeichert: {s}':'Certificate stored: {s}','Fehler: {s}':'Error: {s}','Upload fehlgeschlagen.':'Upload failed.','unbekannt':'unknown',
+'Bitte eine Datei auswählen.':'Please choose a file.','Lade hoch … {p} %':'Uploading … {p} %','Installiert. Die Box startet mit der neuen Version neu.':'Installed. The box restarts with the new version.',
+'Original-Firmware jetzt starten?\n\nZurück zur TeddyBox geht danach nur am PC mit esptool.':'Start the original firmware now?\n\nBack to TeddyBox then only works on a PC with esptool.',
+'Die Original-Firmware startet.':'The original firmware is starting.','Hat nicht geklappt.':'That did not work.',
+'Bitte ein WLAN auswählen.':'Please choose a WiFi network.','Speichere …':'Saving …',
+'Gespeichert. Die Box startet neu und verbindet sich mit „{s}“. Du kannst diese Seite schließen.':'Saved. The box restarts and connects to "{s}". You can close this page.',
+'Speichern fehlgeschlagen.':'Saving failed.','Keine Antwort der Box.':'No answer from the box.','Keine Verbindung zur Box.':'No connection to the box.',
+'Freigegeben für 10 Minuten. Das Flash-Abbild ({n} MB) dauert 1–3 Minuten.':'Released for 10 minutes. The flash image ({n} MB) takes 1–3 minutes.',
+'Kein Ohr gedrückt. Bitte noch einmal versuchen.':'No ear pressed. Please try again.','Schreibe auf die SD-Karte … (1–2 Minuten)':'Writing to the SD card … (1–2 minutes)',
+'Gesichert in {s} auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.':'Saved in {s} on the SD card. Whoever has the card has the key of the box.',
+'Sichern auf die SD-Karte fehlgeschlagen.':'Saving to the SD card failed.',
+'Vollständig':'Complete','Download unvollständig':'Download incomplete','Neue Version wartet':'New version waiting','Beschädigte Datei':'Damaged file','Stream':'Stream',
+'Geschützt':'Protected','von teddyCloud':'from teddyCloud','Name aus teddyCloud':'Name from teddyCloud','noch ohne Namen':'no name yet',
+'{n} Tonie':'{n} tonie','{n} Tonies':'{n} tonies','{f} frei von {t}':'{f} free of {t}',
+'{s} geladen · ':'{s} loaded · ','Wird beim nächsten Abgleich weitergeladen.':'Continues at the next check.','Keine abspielbare Datei':'No playable file','{n} Kapitel':'{n} chapters','1 Kapitel':'1 chapter',
+'Datei ersetzen':'Replace file','Datei hochladen':'Upload file','Schutz aufheben':'Remove protection','Vor teddyCloud schützen':'Protect from teddyCloud',
+'Namen ändern':'Rename','Namen geben':'Give a name','Löschen':'Delete','Alle Dateien von {s} löschen?':'Delete all files of {s}?',
+'Noch keine Tonies auf der Karte.':'No tonies on the card yet.','auf der Karte':'on the card','neu':'new','Liste konnte nicht geladen werden.':'Could not load the list.',
+'Name für {u} (leer = Name aus teddyCloud: {t})':'Name for {u} (empty = name from teddyCloud: {t})','Name für {u} (leer = keiner)':'Name for {u} (empty = none)',
+'Bitte einen Tonie wählen oder die 16-stellige UID eingeben.':'Please choose a tonie or enter the 16-digit UID.','Bitte eine TAF-Datei auswählen.':'Please choose a TAF file.',
+'Die vorhandene Datei von {u} wird ersetzt. Weiter?':'The existing file of {u} will be replaced. Continue?','Wird hochgeladen …':'Uploading …',
+'Bei großen Tonies dauert das über den Hotspot einige Minuten.':'For big tonies this takes a few minutes over the hotspot.',
+'Gespeichert: {n} Kapitel, Prüfsumme stimmt.':'Stored: {n} chapters, checksum correct.','Upload abgebrochen.':'Upload aborted.','für':'for',
+'tb_crash.txt: keine Abstürze aufgezeichnet.':'tb_crash.txt: no crashes recorded.','1 Absturz':'1 crash','{n} Abstürze':'{n} crashes',
+'Kopiert.':'Copied.','unverändert lassen':'leave unchanged','Text markiert, jetzt kopieren.':'Text selected, copy it now.','Absturzprotokoll löschen?':'Delete the crash log?'
+};
+function T(s,v){let r=DE?s:(EN[s]??s);if(v)for(const k in v)r=r.split('{'+k+'}').join(v[k]);return r;}
+function num(x){return DE?String(x).replace('.',','):String(x);}
+/* translate the static page once */
+function trPage(){
+  document.documentElement.lang=DE?'de':'en';document.title=T('TeddyBox einrichten');
+  const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+  while((n=w.nextNode())){const t=n.nodeValue.trim();if(t&&EN[t]!==undefined&&n.parentNode.nodeName!=='SCRIPT')n.nodeValue=n.nodeValue.replace(t,EN[t]);}
+  document.querySelectorAll('[placeholder],[aria-label],[title]').forEach(e=>['placeholder','aria-label','title'].forEach(a=>{const v=e.getAttribute(a);if(v&&EN[v]!==undefined)e.setAttribute(a,EN[v]);}));
+}
+if(!DE)trPage();
 let cfg={};
 function setStatus(el,msg,cls){el.textContent=msg;el.className='status '+(cls||'');}
-function bars(rssi){return rssi>-55?'▂▄▆█':rssi>-67?'▂▄▆':rssi>-78?'▂▄':'▂';}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function ic(n,s){return '<svg class="ic'+(s?' s':'')+'"><use href="#i-'+n+'"/></svg>';}
+function chip(el,txt,cls){el.textContent=T(txt);el.className=cls||'';}
+function level(rssi){return rssi>-55?4:rssi>-67?3:rssi>-78?2:1;}
+function pickNet(b){document.querySelectorAll('.net').forEach(x=>x.setAttribute('aria-checked',x===b));}
 async function scan(){
-  $('nets').innerHTML='<span class="hint">Suche Netze …</span>';
+  $('nets').innerHTML='';$('netsinfo').hidden=false;$('netsinfo').textContent=T('Suche Netze …');
   try{
-    const r=await fetch('/api/scan');const list=await r.json();
-    $('nets').innerHTML='';
-    if(!list.length){$('nets').innerHTML='<span class="hint">Keine Netze gefunden.</span>';return;}
+    const list=await (await fetch('/api/scan')).json();
+    if(!list.length){$('netsinfo').textContent=T('Keine Netze gefunden.');return;}
+    $('netsinfo').hidden=true;
     list.forEach(n=>{
-      const b=document.createElement('button');b.type='button';b.className='net'+(n.ssid===$('ssid').value?' sel':'');
-      const name=document.createElement('span');name.textContent=n.ssid+(n.secure?' 🔒':'');
-      const sig=document.createElement('small');sig.textContent=bars(n.rssi);
-      b.append(name,sig);
-      b.onclick=()=>{$('ssid').value=n.ssid;document.querySelectorAll('.net').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');$('wpass').focus();};
+      const b=document.createElement('button');b.type='button';b.className='net';b.setAttribute('role','radio');
+      b.setAttribute('aria-checked',n.ssid===$('ssid').value);
+      const l=level(n.rssi);
+      b.innerHTML='<span class="rad"></span><span class="nm">'+esc(n.ssid)+'</span>'+(n.secure?ic('lock',1):'')+
+        '<span class="bars" role="img" aria-label="Signal '+T(['','schwach','mittel','gut','sehr gut'][l])+'">'+[1,2,3,4].map(i=>'<i'+(i<=l?' class="on"':'')+'></i>').join('')+'</span>';
+      b.onclick=()=>{$('ssid').value=n.ssid;pickNet(b);$('wpass').focus();};
       $('nets').append(b);
     });
-  }catch(e){$('nets').innerHTML='<span class="hint">Suche fehlgeschlagen.</span>';}
+  }catch(e){$('netsinfo').textContent=T('Suche fehlgeschlagen.');}
 }
-async function bkPoll(){
-  const s=await (await fetch('/api/backup/status')).json();
-  if(s.unlocked){setStatus($('bkstatus'),'Freigegeben für 10 Minuten.','ok');$('bkfiles').hidden=false;$('bkunlock').hidden=true;
-    $('bksize').textContent='('+Math.round(s.flash_size/1048576)+' MB, dauert 1–3 Minuten)';return;}
-  if(s.waiting){setStatus($('bkstatus'),'Drücke jetzt das kleine Ohr der Box (die LED blinkt blau) …');setTimeout(bkPoll,1000);return;}
-  setStatus($('bkstatus'),'Kein Ohr gedrückt. Bitte noch einmal versuchen.','err');$('bkunlock').disabled=false;
+$('ssid').oninput=()=>document.querySelectorAll('.net').forEach(x=>x.setAttribute('aria-checked',x.querySelector('.nm').textContent===$('ssid').value));
+$('wpshow').onclick=()=>{const v=$('wpass').type==='password';$('wpass').type=v?'text':'password';$('wpshow').setAttribute('aria-pressed',v);$('wpshow').setAttribute('aria-label',T(v?'Passwort verbergen':'Passwort anzeigen'));};
+/* segmented controls write a hidden input */
+function segSet(id,v){const g=document.querySelector('.segs[data-for="'+id+'"]');$(id).value=v;
+  g.querySelectorAll('.seg').forEach(b=>b.setAttribute('aria-checked',b.dataset.v===String(v)));}
+document.querySelectorAll('.segs').forEach(g=>g.querySelectorAll('.seg').forEach(b=>b.onclick=()=>segSet(g.dataset.for,b.dataset.v)));
+/* sliders with their value */
+const slapTxt=['Aus','1 · fest','2','3 · wie Original','4','5 · leicht'],tiltTxt=['Aus','1 · 40°','2 · 35°','3 · 30°','4 · 25°','5 · 20°'];
+function rngShow(){$('vmax-v').textContent=$('vmax').value+' %';$('vmaxh-v').textContent=$('vmaxh').value+' %';
+  $('slap-v').textContent=T(slapTxt[+$('slap').value]);$('tilt-v').textContent=T(tiltTxt[+$('tilt').value]);}
+['vmax','vmaxh','slap','tilt'].forEach(id=>$(id).oninput=rngShow);
+function advSum(){$('advsum').textContent=($('decoder').value==='celt'?'CELT':'ESP-ADF')+' · '+$('cpumhz').value+' MHz · Download '+($('dlplay').value==='0'?T('unbegrenzt'):$('dlplay').value+' KiB/s')+' · RTNL '+T($('rtnl').value==='1'?'an':'aus');}
+['decoder','cpumhz','dlplay','rtnl'].forEach(id=>$(id).onchange=advSum);
+(function(){const s=$('uphour');s.add(new Option(T('Aus'),'-1'));for(let h=0;h<24;h++)s.add(new Option(String(h).padStart(2,'0')+(DE?':00 Uhr':':00'),String(h)));})();
+function chips(){
+  chip($('stwifi'),cfg.wifi_ssid?'eingerichtet':'fehlt',cfg.wifi_ssid?'on':'miss');
+  chip($('sttc'),cfg.cloud_host?(cfg.ca_custom?'eingerichtet':'ohne Zertifikat'):'fehlt',cfg.cloud_host&&cfg.ca_custom?'on':'miss');
+  chip($('stha'),cfg.mqtt_host?'an':'aus',cfg.mqtt_host?'on':'');
 }
 async function load(){
   try{
     cfg=await (await fetch('/api/config')).json();
+    $('apinfo').textContent='Hotspot '+(cfg.ap_ssid||'TeddyBox')+' · '+location.hostname;
     $('ssid').value=cfg.wifi_ssid||'';
-    if(cfg.wifi_ssid)$('wpass').placeholder='unverändert lassen';
+    if(cfg.wifi_ssid)$('wpass').placeholder=T('unverändert lassen');
     $('chost').value=cfg.cloud_host||'';$('cport').value=cfg.cloud_port||443;$('cwport').value=cfg.tc_web_port??80;
-    if(cfg.ca_custom)setStatus($('castatus'),'Eigenes CA-Zertifikat ist gespeichert.','ok');
+    if(cfg.ca_custom){$('caname').textContent=T('Eigenes CA-Zertifikat gespeichert');}
     $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
-    if(cfg.mqtt_pass_set)$('mpass').placeholder='unverändert lassen';
-    $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('vmaxh').value=cfg.volume_max_hdp||100;$('tcset').value=cfg.tc_box_settings===false?'0':'1';$('idle').value=cfg.idle_timeout||60;$('speq').value=cfg.speaker_eq||'full';$('led').value=String(cfg.led_brightness??3);$('slap').value=String(cfg.slap??3);$('slaprev').checked=!!cfg.slap_reverse;$('tilt').value=String(cfg.tilt??3);$('uphour').value=String(cfg.update_hour??3);$('decoder').value=cfg.decoder||'celt';$('cpumhz').value=String(cfg.cpu_mhz||160);$('dlplay').value=String(cfg.download_playing??0);$('readahead').value=cfg.readahead===false?'0':'1';$('rtnl').value=cfg.rtnl===false?'0':'1';
+    if(cfg.mqtt_pass_set)$('mpass').placeholder=T('unverändert lassen');
+    $('lang').value=String(cfg.lang_id??1);$('vmax').value=cfg.volume_max||100;$('vmaxh').value=cfg.volume_max_hdp||100;
+    $('tcset').checked=cfg.tc_box_settings!==false;$('idle').value=cfg.idle_timeout||60;
+    segSet('speq',cfg.speaker_eq||'full');segSet('led',String(cfg.led_brightness??3));
+    $('slap').value=cfg.slap??3;$('slaprev').checked=!!cfg.slap_reverse;$('tilt').value=cfg.tilt??3;
+    $('uphour').value=String(cfg.update_hour??3);$('decoder').value=cfg.decoder||'celt';$('cpumhz').value=String(cfg.cpu_mhz||160);
+    $('dlplay').value=String(cfg.download_playing??0);$('readahead').value=cfg.readahead===false?'0':'1';$('rtnl').value=cfg.rtnl===false?'0':'1';
     $('fcint').value=String(cfg.freshness_interval||60);
-    $('fwinfo').textContent='Läuft: TeddyBox '+(cfg.fw_version||'?')+' aus Slot '+(cfg.fw_slot||'?');
+    $('fwinfo').textContent='TeddyBox '+(cfg.fw_version||'?')+' · '+(cfg.fw_slot||'?');
     $('earsoff').checked=cfg.ears_poweroff!==false;
     $('boxfb').checked=!!cfg.boxine_fallback;$('uaorig').checked=!!cfg.user_agent_original;
-  }catch(e){setStatus($('status'),'Einstellungen konnten nicht geladen werden.','err');}
-  scan();
+    if(cfg.box_id){$('bkcname').textContent='toniebox-'+cfg.box_id+'-certs.zip';$('bksize').textContent='toniebox-'+cfg.box_id+'-flash.bin';}
+    chips();
+  }catch(e){setStatus($('status'),T('Einstellungen konnten nicht geladen werden.'),'err');}
+  rngShow();advSum();scan();
 }
 $('rescan').onclick=scan;
 $('cafile').onchange=async()=>{
   const f=$('cafile').files[0];if(!f)return;
-  setStatus($('castatus'),'Lade hoch …');
+  $('caname').textContent=f.name;setStatus($('castatus'),T('Lade hoch …'));
   try{
-    const r=await fetch('/api/ca',{method:'POST',body:await f.arrayBuffer()});
-    const j=await r.json();
-    setStatus($('castatus'),j.ok?'Zertifikat gespeichert: '+j.subject:'Fehler: '+j.error,j.ok?'ok':'err');
-  }catch(e){setStatus($('castatus'),'Upload fehlgeschlagen.','err');}
+    const j=await (await fetch('/api/ca',{method:'POST',body:await f.arrayBuffer()})).json();
+    setStatus($('castatus'),j.ok?T('Zertifikat gespeichert: {s}',{s:j.subject}):T('Fehler: {s}',{s:j.error}),j.ok?'ok':'err');
+    if(j.ok){cfg.ca_custom=true;chips();}
+  }catch(e){setStatus($('castatus'),T('Upload fehlgeschlagen.'),'err');}
 };
+$('fwfile').onchange=()=>{const f=$('fwfile').files[0];$('fwname').textContent=f?f.name:T('teddybox.bin wählen');};
 $('fwbtn').onclick=()=>{
   const f=$('fwfile').files[0];
-  if(!f){setStatus($('fwstatus'),'Bitte eine Datei auswählen.','err');return;}
+  if(!f){setStatus($('fwstatus'),T('Bitte eine Datei auswählen.'),'err');return;}
   const x=new XMLHttpRequest();
   x.open('POST','/api/firmware'+($('pdok').checked?'?pd=1':''));
-  x.upload.onprogress=e=>{if(e.lengthComputable)setStatus($('fwstatus'),'Lade hoch … '+Math.round(e.loaded*100/e.total)+' %');};
+  x.upload.onprogress=e=>{if(e.lengthComputable)setStatus($('fwstatus'),T('Lade hoch … {p} %',{p:Math.round(e.loaded*100/e.total)}));};
   x.onload=()=>{
     let j={};try{j=JSON.parse(x.responseText);}catch(e){}
-    if(j.ok){setStatus($('fwstatus'),'Installiert. Die Box startet mit der neuen Version neu.','ok');$('fwbtn').disabled=true;$('save').disabled=true;}
-    else{setStatus($('fwstatus'),'Fehler: '+(j.error||'unbekannt'),'err');if(j.needs_pd)$('pdask').hidden=false;}
+    $('fwbtn').disabled=false;
+    if(j.ok){setStatus($('fwstatus'),T('Installiert. Die Box startet mit der neuen Version neu.'),'ok');$('fwbtn').disabled=true;$('save').disabled=true;}
+    else{setStatus($('fwstatus'),T('Fehler: {s}',{s:j.error||T('unbekannt')}),'err');if(j.needs_pd)$('pdask').hidden=false;}
   };
-  x.onerror=()=>setStatus($('fwstatus'),'Upload fehlgeschlagen.','err');
-  setStatus($('fwstatus'),'Lade hoch …');
+  x.onerror=()=>{$('fwbtn').disabled=false;setStatus($('fwstatus'),T('Upload fehlgeschlagen.'),'err');};
+  $('fwbtn').disabled=true;setStatus($('fwstatus'),T('Lade hoch …'));
   x.send(f);
 };
 $('ofwbtn').onclick=async()=>{
-  if(!confirm('Original-Firmware jetzt starten?'))return;
-  try{await fetch('/api/original',{method:'POST'});setStatus($('status'),'Die Original-Firmware startet.','ok');}
-  catch(e){setStatus($('status'),'Hat nicht geklappt.','err');}
+  if(!confirm(T('Original-Firmware jetzt starten?\n\nZurück zur TeddyBox geht danach nur am PC mit esptool.')))return;
+  try{await fetch('/api/original',{method:'POST'});alert(T('Die Original-Firmware startet.'));}
+  catch(e){alert(T('Hat nicht geklappt.'));}
 };
 $('save').onclick=async()=>{
-  if(!$('ssid').value.trim()&&!cfg.wifi_ssid){setStatus($('status'),'Bitte ein WLAN auswählen.','err');return;}
+  if(!$('ssid').value.trim()&&!cfg.wifi_ssid){showTab('net');setStatus($('status'),T('Bitte ein WLAN auswählen.'),'err');return;}
   const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
     cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,tc_web_port:$('cwport').value===''?80:+$('cwport').value,
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
-    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,volume_max_hdp:+$('vmaxh').value||100,tc_box_settings:$('tcset').value==='1',idle_timeout:+$('idle').value||60,speaker_eq:$('speq').value,led_brightness:+$('led').value,slap:+$('slap').value,slap_reverse:$('slaprev').checked,tilt:+$('tilt').value,update_hour:+$('uphour').value,decoder:$('decoder').value,cpu_mhz:+$('cpumhz').value,download_playing:+$('dlplay').value,readahead:$('readahead').value==='1',rtnl:$('rtnl').value==='1',
-    boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked};
-  body.freshness_interval=+$('fcint').value||60;
-  setStatus($('status'),'Speichere …');
-  body.ears_poweroff=$('earsoff').checked;
+    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,volume_max_hdp:+$('vmaxh').value||100,tc_box_settings:$('tcset').checked,idle_timeout:+$('idle').value||60,
+    speaker_eq:$('speq').value||'full',led_brightness:+$('led').value,slap:+$('slap').value,slap_reverse:$('slaprev').checked,tilt:+$('tilt').value,
+    update_hour:+$('uphour').value,decoder:$('decoder').value,cpu_mhz:+$('cpumhz').value,download_playing:+$('dlplay').value,
+    readahead:$('readahead').value==='1',rtnl:$('rtnl').value==='1',boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked,
+    freshness_interval:+$('fcint').value||60,ears_poweroff:$('earsoff').checked};
+  setStatus($('status'),T('Speichere …'));
   try{
-    const r=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const j=await r.json();
-    if(j.ok){setStatus($('status'),'Gespeichert. Die Box startet neu und verbindet sich mit „'+(body.wifi_ssid||cfg.wifi_ssid)+'“. Du kannst diese Seite schließen.','ok');$('save').disabled=true;}
-    else setStatus($('status'),'Fehler: '+j.error,'err');
-  }catch(e){setStatus($('status'),'Speichern fehlgeschlagen.','err');}
+    const j=await (await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+    if(j.ok){setStatus($('status'),T('Gespeichert. Die Box startet neu und verbindet sich mit „{s}“. Du kannst diese Seite schließen.',{s:body.wifi_ssid||cfg.wifi_ssid}),'ok');$('save').disabled=true;}
+    else setStatus($('status'),T('Fehler: {s}',{s:j.error}),'err');
+  }catch(e){setStatus($('status'),T('Speichern fehlgeschlagen.'),'err');}
 };
-$('bkunlock').onclick=async()=>{$('bkunlock').disabled=true;try{await fetch('/api/backup/unlock',{method:'POST'});bkPoll();}catch(e){setStatus($('bkstatus'),'Keine Verbindung zur Box.','err');$('bkunlock').disabled=false;}};
-$('bksd').onclick=async()=>{$('bksd').disabled=true;setStatus($('bkstatus'),'Schreibe auf die SD-Karte … (1–2 Minuten)');
+/* backup: the small ear releases the downloads */
+let bkUntil=0;
+async function bkPoll(){
+  let s;try{s=await (await fetch('/api/backup/status')).json();}catch(e){setStatus($('bkstatus'),T('Keine Antwort der Box.'),'err');$('bkunlock').disabled=false;$('bkwait').hidden=true;return;}
+  if(s.unlocked){$('bkwait').hidden=true;$('bkunlock').hidden=true;$('bkfiles').classList.remove('locked');
+    setStatus($('bkstatus'),T('Freigegeben für 10 Minuten. Das Flash-Abbild ({n} MB) dauert 1–3 Minuten.',{n:Math.round(s.flash_size/1048576)}),'ok');
+    $('bksize').textContent=(cfg.box_id?'toniebox-'+cfg.box_id+'-flash.bin · ':'')+Math.round(s.flash_size/1048576)+' MB';return;}
+  if(s.waiting){$('bkwait').hidden=false;$('bkcount').textContent=Math.max(0,Math.ceil((bkUntil-Date.now())/1000))+' s';setTimeout(bkPoll,1000);return;}
+  $('bkwait').hidden=true;setStatus($('bkstatus'),T('Kein Ohr gedrückt. Bitte noch einmal versuchen.'),'err');$('bkunlock').disabled=false;
+}
+$('bkunlock').onclick=async()=>{$('bkunlock').disabled=true;setStatus($('bkstatus'),'');bkUntil=Date.now()+60000;
+  try{await fetch('/api/backup/unlock',{method:'POST'});bkPoll();}catch(e){setStatus($('bkstatus'),T('Keine Verbindung zur Box.'),'err');$('bkunlock').disabled=false;}};
+$('bksd').onclick=async()=>{$('bksd').disabled=true;setStatus($('bkstatus'),T('Schreibe auf die SD-Karte … (1–2 Minuten)'));
   try{const j=await (await fetch('/api/backup/sd',{method:'POST'})).json();
-    setStatus($('bkstatus'),j.ok?'Gesichert in '+j.dir+' auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.':'Sichern auf die SD-Karte fehlgeschlagen.',j.ok?'ok':'err');}
-  catch(e){setStatus($('bkstatus'),'Keine Antwort der Box.','err');}
+    setStatus($('bkstatus'),j.ok?T('Gesichert in {s} auf der SD-Karte. Wer die Karte hat, hat den Schlüssel der Box.',{s:j.dir}):T('Sichern auf die SD-Karte fehlgeschlagen.'),j.ok?'ok':'err');}
+  catch(e){setStatus($('bkstatus'),T('Keine Antwort der Box.'),'err');}
   $('bksd').disabled=false;};
 function showTab(name){
   if(!$('tab-'+name))name='net';
   document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!=='tab-'+name);
   document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));
   $('savebar').hidden=!(name==='net'||name==='box');
+  $('footnote').textContent=T(name==='box'?'Schreibt teddybox.ini auf die SD-Karte.':'Ohne Eingabe schaltet sich die Box nach 15 Minuten aus.');
   if(name==='tonies'&&!tnLoaded)tnLoad();
   if(name==='sys')crLoad();
   try{history.replaceState(null,'','#'+name);}catch(e){}
 }
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+/* tonies */
 let tnLoaded=false,tnHave={};
-function mb(b){return b<0?'–':(b/1048576).toFixed(b<10485760?1:0)+' MB';}
-function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function tnState(t){
+function mb(b){return b<0?'–':num((b/1048576).toFixed(b<10485760?1:0))+' MB';}
+function gb(m){return m>=1024?num((m/1024).toFixed(1))+' GB':m+' MB';}
+function uidFmt(u){return u.match(/../g).join(':');}
+function hash(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h%4;}
+function badge(cls,txt,pre){return '<span class="badge'+(cls?' '+cls:'')+'">'+(pre||'')+esc(T(txt))+'</span>';}
+function tnBadges(t){
   const b=[];
-  if(t.state==='ok'||t.state==='ok_old')b.push('<span class="badge good">vollständig</span>');
-  if(t.state==='partial'){b.push('<span class="badge warn">unvollständig'+(t.tmp>=0?' ('+mb(t.tmp)+' geladen)':'')+'</span>');}
-  if(t.state==='ok_old'||t.state==='old')b.push('<span class="badge">neue Version wartet</span>');
-  if(t.bad)b.push('<span class="badge warn">beschädigte Datei</span>');
-  if(t.stream)b.push('<span class="badge">Stream</span>');
-  b.push(t.own?'<span class="badge own">eigene Datei (geschützt)</span>':'<span class="badge">von teddyCloud</span>');
-  if(!t.alias&&t.tc_name)b.push('<span class="badge">Name aus teddyCloud</span>');
+  if(t.state==='ok'||t.state==='ok_old')b.push(badge('good','Vollständig'));
+  if(t.state==='partial')b.push(badge('warn','Download unvollständig'));
+  if(t.state==='ok_old'||t.state==='old')b.push(badge('','Neue Version wartet'));
+  if(t.bad)b.push(badge('warn','Beschädigte Datei'));
+  if(t.stream)b.push(badge('','Stream'));
+  b.push(t.own?badge('own','Geschützt',ic('lock',1)):badge('','von teddyCloud'));
+  if(!t.alias&&t.tc_name)b.push(badge('','Name aus teddyCloud'));
   return b.join('');
 }
+function btn(cls,html,label,fn){const b=document.createElement('button');b.type='button';b.className=cls;b.innerHTML=html;if(label){b.setAttribute('aria-label',label);b.title=label;}b.onclick=fn;return b;}
 async function tnLoad(){
-  tnLoaded=true;setStatus($('tnspace'),'Lade Liste …');
+  tnLoaded=true;$('tnspace').textContent=T('Lade Liste …');$('tnspace').className='hint';
   try{
     const j=await (await fetch('/api/tonies')).json();
-    $('tnspace').textContent=j.tonies.length+' Tonie(s), '+j.free_mb+' MB von '+j.total_mb+' MB frei';
+    $('tnspace').textContent=T(j.tonies.length===1?'{n} Tonie':'{n} Tonies',{n:j.tonies.length})+' · '+T('{f} frei von {t}',{f:gb(j.free_mb),t:gb(j.total_mb)});
     tnHave={};const list=$('tnlist');list.innerHTML='';
-    j.tonies.sort((a,b)=>{const x=a.alias||a.tc_name,y=b.alias||b.tc_name;return (!x-!y)||(x||a.uid).localeCompare(y||b.uid,'de');}).forEach(t=>{
+    j.tonies.sort((a,b)=>{const x=a.alias||a.tc_name,y=b.alias||b.tc_name;return (!x-!y)||(x||a.uid).localeCompare(y||b.uid,DE?'de':'en');}).forEach(t=>{
       tnHave[t.uid]=t;
-      const d=document.createElement('div');d.className='tonie';
-      const shown=t.alias||t.tc_name;
-      d.innerHTML=(shown?'<div class="name">'+esc(shown)+'</div>':'')+'<div class="uid">'+esc(t.uid)+'</div><div>'+tnState(t)+'</div><div class="meta">'+
-        (t.size>=0?mb(t.size)+(t.chapters?', '+t.chapters+' Kapitel':'')+(t.audio_id?', Audio-ID '+t.audio_id.toString(16).toUpperCase():''):'keine abspielbare Datei')+'</div>';
+      const shown=t.alias||t.tc_name,c=hash(t.uid);
+      const d=document.createElement('article');d.className='card tonie';
+      const av=shown?'<div class="av rd" aria-hidden="true" style="background:var(--a'+c+');color:var(--a'+c+'t)">'+esc([...shown.trim()][0].toUpperCase())+'</div>':'<div class="av" aria-hidden="true">'+ic('tag')+'</div>';
+      d.innerHTML='<div class="trow">'+av+'<div class="tinfo">'+(shown?'<h3>'+esc(shown)+'</h3><span class="uid mono">'+uidFmt(t.uid)+'</span>':'<h3 class="mono">'+uidFmt(t.uid)+'</h3><span class="uid">'+esc(T('noch ohne Namen'))+'</span>')+
+        '<div class="badges">'+tnBadges(t)+'</div></div></div><p class="meta">'+esc(
+        t.state==='partial'?(t.tmp>=0?T('{s} geladen · ',{s:mb(t.tmp)}):'')+T('Wird beim nächsten Abgleich weitergeladen.'):
+        t.size>=0?mb(t.size)+(t.chapters?' · '+T(t.chapters===1?'1 Kapitel':'{n} Kapitel',{n:t.chapters}):'')+(t.audio_id?' · Audio-ID '+t.audio_id.toString(16).toUpperCase():''):T('Keine abspielbare Datei'))+'</p>';
       const a=document.createElement('div');a.className='acts';
-      const rep=document.createElement('button');rep.className='link';rep.type='button';rep.textContent='Datei hochladen';
-      rep.onclick=()=>{$('tnuid').value=t.uid;$('tnseen').value='';$('tnfile').click();};
-      const nm=document.createElement('button');nm.className='link';nm.type='button';nm.textContent=shown?'Name ändern':'Name geben';
-      nm.onclick=()=>tnAlias(t.uid,t.alias||t.tc_name,t.tc_name);
-      a.append(rep,nm);
-      if(t.size>=0){
-        const own=document.createElement('button');own.className='link';own.type='button';
-        own.textContent=t.own?'Schutz aufheben':'Vor teddyCloud schützen';
-        own.onclick=async()=>{await fetch('/api/tonie/own?uid='+t.uid+'&on='+(t.own?0:1),{method:'POST'});tnLoad();};
-        a.append(own);
-      }
-      const del=document.createElement('button');del.className='link';del.type='button';del.textContent='Löschen';
-      del.onclick=async()=>{if(!confirm('Alle Dateien von '+t.uid+' löschen?'))return;await fetch('/api/tonie/delete?uid='+t.uid,{method:'POST'});tnLoad();};
-      a.append(del);d.append(a);list.append(d);
+      a.append(btn('act',ic('up',1)+esc(T(t.size>=0?'Datei ersetzen':'Datei hochladen')),'',()=>{$('tnuid').value=t.uid;$('tnseen').value='';$('tnfile').click();}));
+      if(t.size>=0)a.append(btn('ico'+(t.own?' on':''),ic('shield'),T(t.own?'Schutz aufheben':'Vor teddyCloud schützen'),async()=>{await fetch('/api/tonie/own?uid='+t.uid+'&on='+(t.own?0:1),{method:'POST'});tnLoad();}));
+      a.append(btn('ico',ic('pen'),T(shown?'Namen ändern':'Namen geben'),()=>tnAlias(t.uid,t.alias||t.tc_name,t.tc_name)),
+        btn('ico',ic('trash'),T('Löschen'),async()=>{if(!confirm(T('Alle Dateien von {s} löschen?',{s:shown||uidFmt(t.uid)})))return;await fetch('/api/tonie/delete?uid='+t.uid,{method:'POST'});tnLoad();}));
+      d.append(a);list.append(d);
     });
-    if(!j.tonies.length)list.innerHTML='<p class="hint">Noch keine Tonies auf der Karte.</p>';
-    const sel=$('tnseen');sel.innerHTML='<option value="">– zuletzt aufgelegt –</option>';
-    j.seen.forEach(s=>{const o=document.createElement('option');o.value=s.uid;
-      const when=s.time?new Date(s.time*1000).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):'';
-      o.textContent=(s.alias?s.alias+' – ':'')+s.uid+(tnHave[s.uid]?' (auf der Karte)':' (neu)')+(when?', '+when:'');sel.append(o);});
-  }catch(e){setStatus($('tnspace'),'Liste konnte nicht geladen werden.','err');}
+    if(!j.tonies.length)list.innerHTML='<p class="hint" style="padding:0 4px">'+esc(T('Noch keine Tonies auf der Karte.'))+'</p>';
+    const sel=$('tnseen');sel.innerHTML='';sel.add(new Option(T('– zuletzt aufgelegt –'),''));
+    j.seen.forEach(s=>{
+      const when=s.time?new Date(s.time*1000).toLocaleString(DE?'de-DE':'en-GB',{dateStyle:'short',timeStyle:'short'}):'';
+      sel.add(new Option((s.alias?s.alias+' – ':'')+uidFmt(s.uid)+' ('+T(tnHave[s.uid]?'auf der Karte':'neu')+')'+(when?', '+when:''),s.uid));});
+  }catch(e){setStatus($('tnspace'),T('Liste konnte nicht geladen werden.'),'err');}
 }
 async function tnAlias(uid,old,tc){
-  const n=prompt('Name für '+uid+(tc?' (leer = Name aus teddyCloud: '+tc+')':' (leer = keiner)'),old||'');
+  const n=prompt(tc?T('Name für {u} (leer = Name aus teddyCloud: {t})',{u:uidFmt(uid),t:tc}):T('Name für {u} (leer = keiner)',{u:uidFmt(uid)}),old||'');
   if(n===null)return;
   try{const j=await (await fetch('/api/tonie/alias?uid='+uid,{method:'POST',body:n.trim().slice(0,40)})).json();
-    if(!j.ok)alert('Fehler: '+j.error);}catch(e){alert('Keine Verbindung zur Box.');}
+    if(!j.ok)alert(T('Fehler: {s}',{s:j.error}));}catch(e){alert(T('Keine Verbindung zur Box.'));}
   tnLoad();
 }
 $('tnreload').onclick=tnLoad;
 $('tnseen').onchange=()=>{if($('tnseen').value)$('tnuid').value=$('tnseen').value;};
-$('tnfile').onchange=()=>{if($('tnfile').files[0]&&$('tnuid').value)setStatus($('tnstatus'),'Bereit: '+$('tnfile').files[0].name+' für '+$('tnuid').value);};
+$('tnfile').onchange=()=>{const f=$('tnfile').files[0];$('tnname').textContent=f?f.name:T('Datei wählen');$('tnpct').textContent='';
+  $('tnsub').textContent=f?num((f.size/1048576).toFixed(1))+' MB'+($('tnuid').value?' '+T('für')+' '+$('tnuid').value.toUpperCase():''):T('.taf aus teddyCloud oder TonieToolbox');setStatus($('tnstatus'),'');};
 $('tnbtn').onclick=()=>{
   const uid=$('tnuid').value.trim().toUpperCase().replace(/[^0-9A-F]/g,'');
   const f=$('tnfile').files[0];
-  if(uid.length!==16){setStatus($('tnstatus'),'Bitte einen Tonie wählen oder die 16-stellige UID eingeben.','err');return;}
-  if(!f){setStatus($('tnstatus'),'Bitte eine TAF-Datei auswählen.','err');return;}
-  if(tnHave[uid]&&tnHave[uid].size>=0&&!confirm('Die vorhandene Datei von '+uid+' wird ersetzt. Weiter?'))return;
+  if(uid.length!==16){setStatus($('tnstatus'),T('Bitte einen Tonie wählen oder die 16-stellige UID eingeben.'),'err');return;}
+  if(!f){setStatus($('tnstatus'),T('Bitte eine TAF-Datei auswählen.'),'err');return;}
+  if(tnHave[uid]&&tnHave[uid].size>=0&&!confirm(T('Die vorhandene Datei von {u} wird ersetzt. Weiter?',{u:uidFmt(uid)})))return;
   const x=new XMLHttpRequest();x.open('POST','/api/tonie/upload?uid='+uid);
-  $('tnprog').hidden=false;$('tnprog').value=0;$('tnbtn').disabled=true;
-  x.upload.onprogress=e=>{if(e.lengthComputable){$('tnprog').value=e.loaded*100/e.total;setStatus($('tnstatus'),'Lade hoch … '+Math.round(e.loaded*100/e.total)+' %');}};
+  $('tnprog').hidden=false;$('tnprog').value=0;$('tnbtn').disabled=true;$('tnbtn').textContent=T('Wird hochgeladen …');
+  $('tnsub').textContent=T('Bei großen Tonies dauert das über den Hotspot einige Minuten.');
+  const done=()=>{$('tnbtn').disabled=false;$('tnbtn').textContent=T('Hochladen');$('tnprog').hidden=true;$('tnpct').textContent='';};
+  x.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded*100/e.total);$('tnprog').value=p;$('tnpct').textContent=p+' %';}};
   x.onload=()=>{
     let j={};try{j=JSON.parse(x.responseText);}catch(e){}
-    $('tnbtn').disabled=false;$('tnprog').hidden=true;
-    if(j.ok){setStatus($('tnstatus'),'Gespeichert: '+j.chapters+' Kapitel, Prüfsumme stimmt.','ok');$('tnfile').value='';tnLoad();}
-    else setStatus($('tnstatus'),'Fehler: '+(j.error||'unbekannt'),'err');
+    done();
+    if(j.ok){setStatus($('tnstatus'),T('Gespeichert: {n} Kapitel, Prüfsumme stimmt.',{n:j.chapters}),'ok');$('tnfile').value='';$('tnname').textContent=T('Datei wählen');$('tnsub').textContent=T('.taf aus teddyCloud oder TonieToolbox');tnLoad();}
+    else setStatus($('tnstatus'),T('Fehler: {s}',{s:j.error||T('unbekannt')}),'err');
   };
-  x.onerror=()=>{$('tnbtn').disabled=false;$('tnprog').hidden=true;setStatus($('tnstatus'),'Upload abgebrochen.','err');};
-  setStatus($('tnstatus'),'Lade hoch …');x.send(f);
+  x.onerror=()=>{done();setStatus($('tnstatus'),T('Upload abgebrochen.'),'err');};
+  setStatus($('tnstatus'),'');x.send(f);
 };
+/* crash log */
 async function crLoad(){
-  try{const t=await (await fetch('/api/crashlog')).text();
-    $('crlog').textContent=t.trim()||'Keine Abstürze aufgezeichnet.';
-    $('crcopy').hidden=$('crdel').hidden=!t.trim();setStatus($('crstatus'),'');}
-  catch(e){$('crlog').textContent='';setStatus($('crstatus'),'Keine Antwort der Box.','err');}
+  try{const t=(await (await fetch('/api/crashlog')).text()).trim();
+    $('crlog').textContent=t||T('tb_crash.txt: keine Abstürze aufgezeichnet.');
+    const n=(t.match(/^TeddyBox /gm)||[]).length;
+    $('crbadge').textContent=t?(n>1?T('{n} Abstürze',{n}):T('1 Absturz')):T('leer');$('crbadge').className='badge '+(t?'warn':'good');
+    $('crcopy').disabled=$('crdel').disabled=!t;setStatus($('crstatus'),'');}
+  catch(e){$('crlog').textContent='';setStatus($('crstatus'),T('Keine Antwort der Box.'),'err');}
 }
 $('crcopy').onclick=async()=>{
   const t=$('crlog').textContent;
-  try{await navigator.clipboard.writeText(t);setStatus($('crstatus'),'Kopiert.','ok');}
-  catch(e){const r=document.createRange();r.selectNodeContents($('crlog'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);setStatus($('crstatus'),'Text markiert, jetzt kopieren.','ok');}
+  try{await navigator.clipboard.writeText(t);setStatus($('crstatus'),T('Kopiert.'),'ok');}
+  catch(e){const r=document.createRange();r.selectNodeContents($('crlog'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);setStatus($('crstatus'),T('Text markiert, jetzt kopieren.'),'ok');}
 };
-$('crdel').onclick=async()=>{if(!confirm('Absturzprotokoll löschen?'))return;
+$('crdel').onclick=async()=>{if(!confirm(T('Absturzprotokoll löschen?')))return;
   try{await fetch('/api/crashlog/delete',{method:'POST'});}catch(e){}crLoad();};
 showTab(location.hash.slice(1));
+window.addEventListener("hashchange",()=>showTab(location.hash.slice(1)));
 load();
 </script>
 </body>
