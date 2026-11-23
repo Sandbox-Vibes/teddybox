@@ -44,8 +44,10 @@ typedef struct
        run that never finished is reported at the next start */
     time_t run_start;
     char stage[48];
+    /* update_hour the planned run was made for, so a changed setting plans again */
+    int plan_hour;
 } maint_rtc_t;
-#define MAINT_MAGIC 0x4D41494Fu /* "MAIO": layout with run_start/stage */
+#define MAINT_MAGIC 0x4D414950u /* "MAIP": layout with plan_hour */
 static RTC_NOINIT_ATTR maint_rtc_t rtc;
 
 static void rtc_check(void)
@@ -130,13 +132,17 @@ void maint_schedule_next(void)
         rtc.next = 0;
         return;
     }
-    /* keep a planned run; plan again only when it is missing or passed */
-    if (rtc.next > now && rtc.next - now < 26 * 3600)
+    /* keep a planned run; plan again only when it is missing or passed, or
+       the hour was changed on the setup page */
+    if (rtc.next > now && rtc.next - now < 26 * 3600 && rtc.plan_hour == hour)
     {
         return;
     }
     /* some minutes later than the full hour, not every box at once */
-    rtc.next = maint_next_time(now, hour, esp_random() % 30, rtc.last, 12 * 3600);
+    /* at least an hour after the last run: not twice in one night, but a new
+       hour set on the same day still works */
+    rtc.next = maint_next_time(now, hour, esp_random() % 30, rtc.last, MAINT_MIN_GAP_S);
+    rtc.plan_hour = hour;
     struct tm tm;
     localtime_r(&rtc.next, &tm);
     ESP_LOGI(TAG, "Next update %02d.%02d. %02d:%02d", tm.tm_mday, tm.tm_mon + 1, tm.tm_hour, tm.tm_min);

@@ -16,6 +16,8 @@
 #define MAINT_MAX_RUN_S (45 * 60)
 /* a download without progress for this long is given up (resumed next time) */
 #define MAINT_STALL_S 120
+/* minimum time between the start of two runs */
+#define MAINT_MIN_GAP_S 3600
 
 /* very early in app_main, on a timer wake: is the update due now? */
 bool maint_due(void);
