@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "esp_attr.h"
 #include "esp_log.h"
+#include "i18n.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_random.h"
@@ -79,11 +80,11 @@ static void check_unfinished(void)
     if (rtc.last >= rtc.run_start && prev[0])
     {
         /* the result was there, it hung or crashed afterwards */
-        snprintf(rtc.result, sizeof(rtc.result), "%.30s, danach: %.23s", prev, rtc.stage);
+        snprintf(rtc.result, sizeof(rtc.result), L("%.30s, then: %.23s", "%.30s, danach: %.23s"), prev, rtc.stage);
     }
     else
     {
-        snprintf(rtc.result, sizeof(rtc.result), "unterbrochen bei: %.45s", rtc.stage);
+        snprintf(rtc.result, sizeof(rtc.result), L("interrupted at: %.45s", "unterbrochen bei: %.45s"), rtc.stage);
         rtc.last = rtc.run_start;
     }
     ESP_LOGW(TAG, "Last nightly update did not end normally (step: %s)", rtc.stage);
@@ -285,7 +286,7 @@ static void check_ears(void)
     if (ears_pressed())
     {
         ESP_LOGI(TAG, "Ear pressed, stopping the update and starting normally");
-        snprintf(rtc.result, sizeof(rtc.result), "abgebrochen (Ohr gedrückt)");
+        snprintf(rtc.result, sizeof(rtc.result), L("cancelled (ear pressed)", "abgebrochen (Ohr gedrückt)"));
         rtc.last = time(NULL);
         rtc.run_start = 0;
         nvs_store();
@@ -349,7 +350,7 @@ static bool download(uint64_t uid, const uint8_t token[32], int64_t deadline_us)
         if (i == 600)
         {
             ESP_LOGE(TAG, "Download of %016llX does not end after the abort (60 s)", (unsigned long long)uid);
-            stage_set("Download %016llX endet nicht", uid, 0, 0);
+            stage_set(L("download %016llX does not end", "Download %016llX endet nicht"), uid, 0, 0);
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
@@ -473,24 +474,24 @@ void maint_run(void)
     const int64_t deadline = start + MAINT_MAX_RUN_S * 1000000LL;
     rtc.next = 0; /* planned again when going to sleep */
     rtc.run_start = time(NULL);
-    stage_set("Start", 0, 0, 0);
+    stage_set(L("start", "Start"), 0, 0, 0);
 
     if (!settings_get()->cloud_enabled)
     {
-        finish("kein teddyCloud eingerichtet", 0, 0);
+        finish(L("no teddyCloud set up", "kein teddyCloud eingerichtet"), 0, 0);
         return;
     }
     int percent;
     if (!battery_ok(&percent))
     {
         ESP_LOGI(TAG, "Battery at %d %%, below %d %%: not today", percent, MAINT_MIN_BATTERY_PERCENT);
-        finish("übersprungen (Akku %d %%)", percent, 0);
+        finish(L("skipped (battery %d %%)", "übersprungen (Akku %d %%)"), percent, 0);
         return;
     }
     ESP_LOGI(TAG, "Update started (%s)", percent < 0 ? "on the charger" : "on battery");
 
     /* the cloud task runs the freshness check once it is connected */
-    stage_set("warte auf teddyCloud", 0, 0, 0);
+    stage_set(L("waiting for teddyCloud", "warte auf teddyCloud"), 0, 0, 0);
     int runs = freshness_runs();
     while (freshness_runs() == runs)
     {
@@ -498,14 +499,14 @@ void maint_run(void)
         if (esp_timer_get_time() - start > 180 * 1000000LL)
         {
             ESP_LOGW(TAG, "No freshness check within 3 minutes (WiFi or teddyCloud not reachable)");
-            finish("teddyCloud nicht erreichbar", 0, 0);
+            finish(L("teddyCloud unreachable", "teddyCloud nicht erreichbar"), 0, 0);
             return;
         }
         vTaskDelay(pdMS_TO_TICKS(250));
     }
 
     static candidate_t cand[MAX_CANDIDATES];
-    stage_set("SD-Karte durchsuchen", 0, 0, 0);
+    stage_set(L("scanning the SD card", "SD-Karte durchsuchen"), 0, 0, 0);
     int n = find_candidates(cand, MAX_CANDIDATES);
     int done = 0, failed = 0, no_token = 0;
     for (int i = 0; i < n; i++)
@@ -524,7 +525,7 @@ void maint_run(void)
             break;
         }
         ESP_LOGI(TAG, "  %016llX: downloading", (unsigned long long)cand[i].uid);
-        stage_set("Download %016llX (%d/%d)", (unsigned long long)cand[i].uid, i + 1, n);
+        stage_set(L("download %016llX (%d/%d)", "Download %016llX (%d/%d)"), (unsigned long long)cand[i].uid, i + 1, n);
         if (download(cand[i].uid, token, deadline))
         {
             char old[56];
@@ -540,15 +541,15 @@ void maint_run(void)
 
     if (!n)
     {
-        finish("alles aktuell", 0, 0);
+        finish(L("all up to date", "alles aktuell"), 0, 0);
     }
     else if (!failed)
     {
-        finish(no_token ? "%d Tonie(s) aktualisiert, %d ohne Token" : "%d Tonie(s) aktualisiert", done, no_token);
+        finish(no_token ? L("%d tonie(s) updated, %d without token", "%d Tonie(s) aktualisiert, %d ohne Token") : L("%d tonie(s) updated", "%d Tonie(s) aktualisiert"), done, no_token);
     }
     else
     {
-        finish("%d aktualisiert, %d nicht fertig (später weiter)", done, failed);
+        finish(L("%d updated, %d unfinished (continued later)", "%d aktualisiert, %d nicht fertig (später weiter)"), done, failed);
     }
 }
 
@@ -573,11 +574,11 @@ static void guard_task(void *arg)
     snprintf(prev, sizeof(prev), "%s", rtc.result);
     if (rtc.last >= rtc.run_start && prev[0])
     {
-        snprintf(rtc.result, sizeof(rtc.result), "%.30s, hing bei: %.21s", prev, rtc.stage);
+        snprintf(rtc.result, sizeof(rtc.result), L("%.30s, hung at: %.21s", "%.30s, hing bei: %.21s"), prev, rtc.stage);
     }
     else
     {
-        snprintf(rtc.result, sizeof(rtc.result), "hing bei: %.53s", rtc.stage);
+        snprintf(rtc.result, sizeof(rtc.result), L("hung at: %.53s", "hing bei: %.53s"), rtc.stage);
         rtc.last = rtc.run_start ? rtc.run_start : time(NULL);
     }
     ESP_LOGE(TAG, "Nightly update still running after %d min (step: %s): switching off", (MAINT_MAX_RUN_S + MAINT_GUARD_EXTRA_S) / 60, rtc.stage);

@@ -10,102 +10,112 @@ typedef struct
 {
     const char *component; /* sensor, binary_sensor, number, button */
     const char *object;    /* unique part of the entity id */
-    const char *name;
+    const char *name;      /* English */
+    const char *name_de;
     const char *extra;     /* additional JSON members, "%s" is replaced by the base topic */
 } ha_entity_t;
 
 static const ha_entity_t entities[] = {
-    {"sensor", "status", "Status",
+    {"sensor", "status", "Status", "Status",
      "\"value_template\":\"{{ value_json.status }}\",\"icon\":\"mdi:play-pause\""},
-    {"sensor", "tonie", "Tonie",
+    {"sensor", "tonie", "Tonie", "Tonie",
      "\"value_template\":\"{{ value_json.tonie if value_json.tonie else 'kein Tonie' }}\",\"icon\":\"mdi:nfc-variant\""},
-    {"sensor", "tonie_name", "Tonie-Name",
+    {"sensor", "tonie_name", "Tonie name", "Tonie-Name",
      "\"value_template\":\"{{ value_json.tonie_name if value_json.tonie_name else (value_json.tonie if value_json.tonie else 'kein Tonie') }}\","
      "\"icon\":\"mdi:account-music\""},
-    {"sensor", "chapter", "Kapitel",
+    {"sensor", "chapter", "Chapter", "Kapitel",
      "\"value_template\":\"{{ value_json.chapter if value_json.chapters else 0 }}\",\"icon\":\"mdi:book-open-page-variant\""},
-    {"sensor", "chapters", "Kapitel gesamt",
+    {"sensor", "chapters", "Chapters total", "Kapitel gesamt",
      "\"value_template\":\"{{ value_json.chapters }}\",\"icon\":\"mdi:book-multiple\",\"entity_category\":\"diagnostic\""},
     /* progress: null in the state JSON renders as "None", which HA shows as unknown */
-    {"sensor", "progress", "Fortschritt",
+    {"sensor", "progress", "Progress", "Fortschritt",
      "\"value_template\":\"{{ value_json.progress }}\",\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:progress-clock\""},
-    {"sensor", "chapter_progress", "Kapitel-Fortschritt",
+    {"sensor", "chapter_progress", "Chapter progress", "Kapitel-Fortschritt",
      "\"value_template\":\"{{ value_json.chapter_progress }}\",\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:progress-helper\""},
-    {"sensor", "position", "Gespielt",
+    {"sensor", "position", "Played", "Gespielt",
      "\"value_template\":\"{{ value_json.position }}\",\"device_class\":\"duration\",\"unit_of_measurement\":\"min\","
      "\"suggested_display_precision\":0"},
-    {"sensor", "duration", "Gesamtdauer",
+    {"sensor", "duration", "Total duration", "Gesamtdauer",
      "\"value_template\":\"{{ value_json.duration }}\",\"device_class\":\"duration\",\"unit_of_measurement\":\"min\","
      "\"suggested_display_precision\":0"},
-    {"sensor", "download", "Download",
+    {"sensor", "download", "Download", "Download",
      "\"value_template\":\"{{ value_json.download }}\",\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:download\""},
-    {"number", "volume", "Lautstärke",
+    {"number", "volume", "Volume", "Lautstärke",
      "\"value_template\":\"{{ value_json.volume }}\",\"command_topic\":\"%s/cmd/volume\",\"min\":0,\"max\":%d,\"step\":5,"
      "\"unit_of_measurement\":\"%%\",\"icon\":\"mdi:volume-high\""},
-    {"sensor", "battery", "Akku (geschätzt)",
+    {"sensor", "battery", "Battery (estimated)", "Akku (geschätzt)",
      "\"value_template\":\"{{ value_json.battery if value_json.battery >= 0 else None }}\",\"device_class\":\"battery\","
      "\"unit_of_measurement\":\"%%\",\"state_class\":\"measurement\""},
-    {"sensor", "battery_voltage", "Akkuspannung",
+    {"sensor", "battery_voltage", "Battery voltage", "Akkuspannung",
      "\"value_template\":\"{{ (value_json.battery_mv / 1000) | round(2) if value_json.battery_mv else None }}\","
      "\"device_class\":\"voltage\",\"unit_of_measurement\":\"V\",\"suggested_display_precision\":2,\"state_class\":\"measurement\",\"entity_category\":\"diagnostic\""},
-    {"binary_sensor", "charging", "Lädt",
+    {"binary_sensor", "charging", "Charging", "Lädt",
      "\"value_template\":\"{{ 'ON' if value_json.charging else 'OFF' }}\",\"device_class\":\"battery_charging\""},
-    {"binary_sensor", "battery_low", "Akku schwach",
+    {"binary_sensor", "battery_low", "Battery low", "Akku schwach",
      "\"value_template\":\"{{ 'ON' if value_json.battery_state in ['low', 'critical'] else 'OFF' }}\",\"device_class\":\"battery\""},
-    {"binary_sensor", "headphones", "Kopfhörer",
+    {"binary_sensor", "headphones", "Headphones", "Kopfhörer",
      "\"value_template\":\"{{ 'ON' if value_json.headphones else 'OFF' }}\",\"icon\":\"mdi:headphones\""},
-    {"sensor", "rssi", "WLAN-Signal",
+    {"sensor", "rssi", "WiFi signal", "WLAN-Signal",
      "\"value_template\":\"{{ value_json.rssi if value_json.rssi else None }}\",\"device_class\":\"signal_strength\","
      "\"unit_of_measurement\":\"dBm\",\"state_class\":\"measurement\",\"entity_category\":\"diagnostic\""},
-    {"number", "led", "LED-Helligkeit",
+    {"number", "led", "LED brightness", "LED-Helligkeit",
      "\"value_template\":\"{{ value_json.led }}\",\"command_topic\":\"%s/cmd/led\",\"min\":0,\"max\":3,\"step\":1,"
      "\"mode\":\"slider\",\"icon\":\"mdi:led-on\",\"entity_category\":\"config\""},
-    {"number", "slap", "Klapsen (Empfindlichkeit)",
+    {"number", "slap", "Slap (sensitivity)", "Klapsen (Empfindlichkeit)",
      "\"value_template\":\"{{ value_json.slap }}\",\"command_topic\":\"%s/cmd/slap\",\"min\":0,\"max\":5,\"step\":1,"
      "\"mode\":\"slider\",\"icon\":\"mdi:hand-back-left\",\"entity_category\":\"config\""},
-    {"switch", "slap_reverse", "Klapsen umgekehrt",
+    {"switch", "slap_reverse", "Slap reversed", "Klapsen umgekehrt",
      "\"value_template\":\"{{ 'ON' if value_json.slap_reverse else 'OFF' }}\",\"command_topic\":\"%s/cmd/slap_reverse\","
      "\"icon\":\"mdi:swap-horizontal\",\"entity_category\":\"config\""},
-    {"number", "tilt", "Kippen (Empfindlichkeit)",
+    {"number", "tilt", "Tilt (sensitivity)", "Kippen (Empfindlichkeit)",
      "\"value_template\":\"{{ value_json.tilt }}\",\"command_topic\":\"%s/cmd/tilt\",\"min\":0,\"max\":5,\"step\":1,"
      "\"mode\":\"slider\",\"icon\":\"mdi:phone-rotate-landscape\",\"entity_category\":\"config\""},
     /* diagnostics: own state topic <base>/diag, every minute */
-    {"sensor", "diag_free_heap", "Freier Speicher",
+    {"sensor", "diag_free_heap", "Free memory", "Freier Speicher",
      "\"value_template\":\"{{ value_json.free_kb }}\",\"unit_of_measurement\":\"kB\",\"state_class\":\"measurement\","
      "\"icon\":\"mdi:memory\",\"entity_category\":\"diagnostic\""},
-    {"sensor", "diag_min_free_heap", "Freier Speicher (Minimum seit Start)",
+    {"sensor", "diag_min_free_heap", "Free memory (minimum since start)", "Freier Speicher (Minimum seit Start)",
      "\"value_template\":\"{{ value_json.min_free_kb }}\",\"unit_of_measurement\":\"kB\",\"state_class\":\"measurement\","
      "\"icon\":\"mdi:memory\",\"entity_category\":\"diagnostic\""},
-    {"sensor", "diag_boot", "Gestartet",
+    {"sensor", "diag_boot", "Started", "Gestartet",
      "\"value_template\":\"{{ value_json.boot }}\",\"device_class\":\"timestamp\",\"entity_category\":\"diagnostic\""},
-    {"sensor", "diag_reset", "Grund des letzten Starts",
+    {"sensor", "diag_reset", "Reason of the last start", "Grund des letzten Starts",
      "\"value_template\":\"{{ value_json.reset }}\",\"icon\":\"mdi:restart-alert\",\"entity_category\":\"diagnostic\""},
-    {"sensor", "diag_update", "Letzte nächtliche Aktualisierung",
+    {"sensor", "diag_update", "Last nightly update", "Letzte nächtliche Aktualisierung",
      "\"value_template\":\"{{ value_json.update if value_json.update else None }}\",\"icon\":\"mdi:cloud-download\",\"entity_category\":\"diagnostic\""},
-    {"sensor", "diag_slot", "Firmware-Slot",
+    {"sensor", "diag_slot", "Firmware slot", "Firmware-Slot",
      "\"value_template\":\"{{ value_json.slot }}\",\"icon\":\"mdi:chip\",\"entity_category\":\"diagnostic\""},
-    {"select", "speaker_eq", "Lautsprecher-Klang",
+    {"select", "speaker_eq", "Speaker sound", "Lautsprecher-Klang",
      "\"value_template\":\"{{ value_json.speaker_eq }}\",\"command_topic\":\"%s/cmd/speaker_eq\","
      "\"options\":[\"Optimiert\",\"Nur Tiefenfilter\",\"Wie Original\"],\"icon\":\"mdi:tune-vertical\",\"entity_category\":\"config\""},
-    {"button", "stop", "Stopp",
+    {"button", "stop", "Stop", "Stopp",
      "\"command_topic\":\"%s/cmd/stop\",\"icon\":\"mdi:stop\""},
-    {"button", "next", "Nächstes Kapitel",
+    {"button", "next", "Next chapter", "Nächstes Kapitel",
      "\"command_topic\":\"%s/cmd/next\",\"icon\":\"mdi:skip-next\""},
-    {"button", "prev", "Vorheriges Kapitel",
+    {"button", "prev", "Previous chapter", "Vorheriges Kapitel",
      "\"command_topic\":\"%s/cmd/prev\",\"icon\":\"mdi:skip-previous\""},
-    {"button", "poweroff", "Ausschalten",
+    {"button", "poweroff", "Power off", "Ausschalten",
      "\"command_topic\":\"%s/cmd/poweroff\",\"icon\":\"mdi:power\""},
-    {"button", "original", "Original-Firmware starten",
+    {"button", "original", "Start original firmware", "Original-Firmware starten",
      "\"command_topic\":\"%s/cmd/original\",\"icon\":\"mdi:swap-horizontal-bold\",\"entity_category\":\"config\","
      "\"enabled_by_default\":false"},
-    {"number", "sleep_timer", "Schlaf-Timer",
+    {"number", "sleep_timer", "Sleep timer", "Schlaf-Timer",
      "\"value_template\":\"{{ value_json.sleep_timer }}\",\"command_topic\":\"%s/cmd/sleep_timer\",\"min\":0,\"max\":240,"
      "\"step\":5,\"unit_of_measurement\":\"min\",\"icon\":\"mdi:sleep\""},
 };
 
 #define ENTITY_COUNT ((int)(sizeof(entities) / sizeof(entities[0])))
 
-static const char *const speaker_eq_labels[HA_SPEAKER_EQ_COUNT] = {"Wie Original", "Nur Tiefenfilter", "Optimiert"};
+static const char *const speaker_eq_labels_de[HA_SPEAKER_EQ_COUNT] = {"Wie Original", "Nur Tiefenfilter", "Optimiert"};
+static const char *const speaker_eq_labels_en[HA_SPEAKER_EQ_COUNT] = {"Like original", "Bass cut only", "Optimized"};
+static bool text_de;
+
+void ha_set_german(bool de)
+{
+    text_de = de;
+}
+
+#define speaker_eq_labels (text_de ? speaker_eq_labels_de : speaker_eq_labels_en)
 
 const char *ha_speaker_eq_label(int mode)
 {
@@ -136,6 +146,25 @@ static int format_extra(const ha_ctx_t *ctx, const ha_entity_t *e, char *buf, si
     return (n < 0 || (size_t)n >= size) ? -1 : n;
 }
 
+/* replaces every "from" in buf by "to"; false if it does not fit */
+static bool replace_all(char *buf, size_t size, const char *from, const char *to)
+{
+    size_t fl = strlen(from), tl = strlen(to);
+    char *p = buf;
+    while ((p = strstr(p, from)))
+    {
+        size_t rest = strlen(p + fl);
+        if ((size_t)(p - buf) + tl + rest + 1 > size)
+        {
+            return false;
+        }
+        memmove(p + tl, p + fl, rest + 1);
+        memcpy(p, to, tl);
+        p += tl;
+    }
+    return true;
+}
+
 int ha_discovery(const ha_ctx_t *ctx, int idx, char *topic, size_t topic_size, char *payload, size_t payload_size)
 {
     if (idx < 0 || idx >= ENTITY_COUNT)
@@ -155,6 +184,22 @@ int ha_discovery(const ha_ctx_t *ctx, int idx, char *topic, size_t topic_size, c
     {
         return -1;
     }
+    /* the table holds the German texts of templates and options */
+    if (!text_de)
+    {
+        bool ok = replace_all(extra, sizeof(extra), "'kein Tonie'", "'no tonie'");
+        for (int i = 0; i < HA_SPEAKER_EQ_COUNT; i++)
+        {
+            char from[40], to[40];
+            snprintf(from, sizeof(from), "\"%s\"", speaker_eq_labels_de[i]);
+            snprintf(to, sizeof(to), "\"%s\"", speaker_eq_labels_en[i]);
+            ok = ok && replace_all(extra, sizeof(extra), from, to);
+        }
+        if (!ok)
+        {
+            return -1;
+        }
+    }
 
     /* buttons have no state; diagnostics have their own topic */
     char state_topic[96] = "";
@@ -171,7 +216,7 @@ int ha_discovery(const ha_ctx_t *ctx, int idx, char *topic, size_t topic_size, c
                  "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"TeddyBox\",\"manufacturer\":\"toniebox-reverse-engineering\","
                  "\"model\":\"Toniebox ESP32 (TeddyBox)\",\"sw_version\":\"%s\"},"
                  "\"origin\":{\"name\":\"TeddyBox\",\"sw_version\":\"%s\",\"url\":\"https://github.com/toniebox-reverse-engineering/teddybox\"}}",
-                 e->name, ctx->device_id, e->object, e->component, ctx->device_id, e->object, state_topic,
+                 text_de ? e->name_de : e->name, ctx->device_id, e->object, e->component, ctx->device_id, e->object, state_topic,
                  ctx->base_topic, extra,
                  ctx->device_id, ctx->sw_version, ctx->sw_version);
     return (n < 0 || (size_t)n >= payload_size) ? -1 : n;
@@ -328,11 +373,13 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     }
     if (IS("speaker_eq"))
     {
-        for (int i = 0; i < HA_SPEAKER_EQ_COUNT; i++)
+        /* both languages, a select may still show the other one after a switch */
+        for (int i = 0; i < 2 * HA_SPEAKER_EQ_COUNT; i++)
         {
-            if (data_len == (int)strlen(speaker_eq_labels[i]) && !strncmp(data, speaker_eq_labels[i], data_len))
+            const char *l = i < HA_SPEAKER_EQ_COUNT ? speaker_eq_labels_en[i] : speaker_eq_labels_de[i - HA_SPEAKER_EQ_COUNT];
+            if (data_len == (int)strlen(l) && !strncmp(data, l, data_len))
             {
-                *value = i;
+                *value = i % HA_SPEAKER_EQ_COUNT;
                 return HA_CMD_SPEAKER_EQ;
             }
         }

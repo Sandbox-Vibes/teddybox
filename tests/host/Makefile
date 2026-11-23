@@ -22,6 +22,7 @@ test: test_mqtt_ha_payload test_freshness test_settings test_speaker_eq test_ogg
 	./test_mqtt_ha_payload
 	./test_mqtt_ha_payload discovery | python3 -c "import sys,json; [json.loads(l.split('\t')[1]) for l in sys.stdin]; print('discovery JSON ok')"
 	./test_mqtt_ha_payload state | python3 check_state.py
+	./test_mqtt_ha_payload lang
 
 test_tonie_names: test_tonie_names.c $(MAIN)/tonie_names.c
 	$(CC) $(CFLAGS) -DTONIE_NAMES_DIR=\"/tmp/tb_names_test\" $^ -o $@

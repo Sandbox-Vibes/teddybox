@@ -63,6 +63,8 @@ typedef struct
     bool slap_reverse;
     /* both ears pressed and let go within 2 s: power off (as Hackiebox CFW) */
     bool ears_poweroff;
+    /* language of texts from the box (Home Assistant, results, error messages): false English, true German */
+    bool text_de;
     /* tilt = chapter / seek: 0 off, 1 (tilt furthest) .. 5, 3 = 30 degrees as before */
     uint8_t tilt_level;
     /* memory/stack lines in the serial log (every 30 s and at events) */

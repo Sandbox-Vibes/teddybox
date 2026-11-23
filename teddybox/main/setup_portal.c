@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "i18n.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
@@ -157,6 +158,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "slap", s->slap_level);
     cJSON_AddBoolToObject(j, "slap_reverse", s->slap_reverse);
     cJSON_AddBoolToObject(j, "ears_poweroff", s->ears_poweroff);
+    cJSON_AddStringToObject(j, "text_lang", s->text_de ? "de" : "en");
     cJSON_AddNumberToObject(j, "tilt", s->tilt_level);
     cJSON_AddNumberToObject(j, "update_hour", s->update_hour);
     cJSON_AddNumberToObject(j, "freshness_interval", s->freshness_min);
@@ -240,7 +242,7 @@ static esp_err_t ca_handler(httpd_req_t *req)
     char *body = read_body(req, &len);
     if (!body)
     {
-        return send_result(req, false, "Datei fehlt oder ist zu groß");
+        return send_result(req, false, L("File missing or too big", "Datei fehlt oder ist zu groß"));
     }
 
     /* accepts DER and PEM; PEM needs the terminating NUL in the length */
@@ -252,7 +254,7 @@ static esp_err_t ca_handler(httpd_req_t *req)
     if (r != 0)
     {
         mbedtls_x509_crt_free(&crt);
-        return send_result(req, false, "Kein gültiges Zertifikat");
+        return send_result(req, false, L("Not a valid certificate", "Kein gültiges Zertifikat"));
     }
 
     char subject[128];
@@ -268,7 +270,7 @@ static esp_err_t ca_handler(httpd_req_t *req)
     mbedtls_x509_crt_free(&crt);
     if (!ok)
     {
-        return send_result(req, false, "SD-Karte nicht beschreibbar");
+        return send_result(req, false, L("SD card not writable", "SD-Karte nicht beschreibbar"));
     }
 
     settings_t *s = settings_get_mutable();
@@ -334,7 +336,7 @@ static esp_err_t save_handler(httpd_req_t *req)
     free(body);
     if (!o)
     {
-        return send_result(req, false, "Ungültige Anfrage");
+        return send_result(req, false, L("Invalid request", "Ungültige Anfrage"));
     }
 
     settings_t *s = settings_get_mutable();
@@ -348,12 +350,12 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (wpass[0] && strlen(wpass) < 8)
     {
         cJSON_Delete(o);
-        return send_result(req, false, "Das WLAN-Passwort muss mindestens 8 Zeichen haben");
+        return send_result(req, false, L("The WiFi password needs at least 8 characters", "Das WLAN-Passwort muss mindestens 8 Zeichen haben"));
     }
     if (!ssid[0] && !last[0])
     {
         cJSON_Delete(o);
-        return send_result(req, false, "Kein WLAN angegeben");
+        return send_result(req, false, L("No WiFi given", "Kein WLAN angegeben"));
     }
     /* validate everything before anything is stored */
     char chost[sizeof(s->cloud_host)] = "", mhost[sizeof(s->mqtt_host)] = "";
@@ -362,7 +364,7 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (!valid_host(chost) || !valid_host(mhost))
     {
         cJSON_Delete(o);
-        return send_result(req, false, "Ungültige Adresse, bitte nur IP oder Hostnamen ohne http:// und Pfad");
+        return send_result(req, false, L("Invalid address, only an IP or host name without http:// and path", "Ungültige Adresse, bitte nur IP oder Hostnamen ohne http:// und Pfad"));
     }
     /* same network and no new password: keep what is stored */
     if (ssid[0] && (strcmp(ssid, last) || wpass[0]))
@@ -370,7 +372,7 @@ static esp_err_t save_handler(httpd_req_t *req)
         if (wifi_store_credentials(ssid, wpass) != ESP_OK)
         {
             cJSON_Delete(o);
-            return send_result(req, false, "WLAN konnte nicht gespeichert werden");
+            return send_result(req, false, L("Could not save the WiFi", "WLAN konnte nicht gespeichert werden"));
         }
     }
 
@@ -446,6 +448,11 @@ static esp_err_t save_handler(httpd_req_t *req)
     {
         s->slap_reverse = cJSON_IsTrue(sr);
     }
+    cJSON *tl = cJSON_GetObjectItemCaseSensitive(o, "text_lang");
+    if (cJSON_IsString(tl) && (!strcmp(tl->valuestring, "en") || !strcmp(tl->valuestring, "de")))
+    {
+        s->text_de = tl->valuestring[0] == 'd';
+    }
     cJSON *ep = cJSON_GetObjectItemCaseSensitive(o, "ears_poweroff");
     if (cJSON_IsBool(ep))
     {
@@ -498,7 +505,7 @@ static esp_err_t save_handler(httpd_req_t *req)
 
     if (settings_save_ini(SETTINGS_INI_PATH) != 0)
     {
-        return send_result(req, false, "SD-Karte nicht beschreibbar");
+        return send_result(req, false, L("SD card not writable", "SD-Karte nicht beschreibbar"));
     }
 
     saved = true;

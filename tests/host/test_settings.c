@@ -16,7 +16,7 @@ int main(void)
 
     settings_t *s = settings_get_mutable();
     /* compiled-in defaults */
-    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead && s->volume_max_hdp == 100 && s->tc_box_settings && s->ears_poweroff);
+    CHECK(s->decoder_celt && s->cpu_mhz == 160 && !s->claim && s->dl_playing_kib_s == 0 && s->readahead && s->volume_max_hdp == 100 && s->tc_box_settings && s->ears_poweroff && !s->text_de);
     strcpy(s->cloud_host, "192.168.178.20");
     s->cloud_port = 8443;
     s->freshness_min = 30;
@@ -37,6 +37,7 @@ int main(void)
     s->tilt_level = 0;
     s->boxine_fallback = true;
     s->user_agent_original = true;
+    s->text_de = true;
     CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
     CHECK(settings_ini_exists());
 
@@ -55,6 +56,7 @@ int main(void)
     CHECK(s->lang_id == 3 && s->volume_max == 70 && s->idle_timeout_s == 300);
     CHECK(s->volume_max_hdp == 40 && !s->tc_box_settings);
     CHECK(s->boxine_fallback && s->user_agent_original);
+    CHECK(s->text_de);
     CHECK(s->speaker_eq == SPEAKER_EQ_LOWCUT);
     CHECK(s->led_brightness == 1);
     CHECK(s->slap_level == 5 && s->slap_reverse && s->tilt_level == 0);

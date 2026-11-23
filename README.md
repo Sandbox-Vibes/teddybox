@@ -83,8 +83,9 @@ automatically, otherwise open `http://192.168.4.1/`. Four tabs:
   start the original firmware
 
 The page is in German when the browser prefers German, otherwise in
-English. Messages that come from the box itself (errors of an upload, for
-example) stay German.
+English. Texts that come from the box itself (error messages, Home
+Assistant names, the nightly update result) follow `text_language`
+(English by default, see "Configuration").
 
 Saving (tabs Verbindung and Box) writes `teddybox.ini`, stores the WiFi in
 the original firmware's format and restarts. Unused for 15 minutes, the box
@@ -175,6 +176,7 @@ Written by the setup page; all keys are optional.
 | `download_playing` | 0 | KiB/s while a tonie plays, 0 = unlimited |
 | `readahead` | 1 | 0 only for diagnosis |
 | `ears_poweroff` | 1 | both ears pressed briefly switch the box off |
+| `text_language` | en | language of texts from the box: Home Assistant entity names and values, nightly update result, error messages on the setup page; `en` or `de` (setup page: Box tab) |
 | `rtnl` | 1 | box events to teddyCloud, see below |
 | `mem_log` | 1 | memory lines in the serial log |
 
