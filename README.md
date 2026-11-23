@@ -72,6 +72,14 @@ announcement, blinks blue/green and opens the WiFi hotspot `TeddyBox-XXXX`
 (no password, only while setup runs). Phones show the setup page
 automatically, otherwise open `http://192.168.4.1/`. Four tabs:
 
+![Setup page: tabs Connection, Box, Tonies and System](docs/images/setup-light.png)
+
+<details><summary>Dark mode (follows the phone or PC setting)</summary>
+
+![Setup page in dark mode](docs/images/setup-dark.png)
+
+</details>
+
 - **Verbindung**: WiFi (with network scan), teddyCloud (address, port, CA
   upload as DER or PEM), Home Assistant (MQTT)
 - **Box**: volume, language, power off time, speaker sound, LED, slap and
