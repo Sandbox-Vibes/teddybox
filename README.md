@@ -169,6 +169,7 @@ Written by the setup page; all keys are optional.
 | `download_playing` | 0 | KiB/s while a tonie plays, 0 = unlimited |
 | `readahead` | 1 | 0 only for diagnosis |
 | `ears_poweroff` | 1 | both ears pressed briefly switch the box off |
+| `text_language` | en | language of texts from the box: Home Assistant entity names and values, nightly update result, error messages on the setup page; `en` or `de` (setup page: Box tab) |
 | `rtnl` | 1 | box events to teddyCloud, see below |
 | `mem_log` | 1 | memory lines in the serial log |
 

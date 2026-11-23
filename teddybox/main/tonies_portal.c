@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "i18n.h"
 #include "esp_vfs_fat.h"
 #include "mbedtls/sha1.h"
 #include "tonies_portal.h"
@@ -98,7 +99,7 @@ static esp_err_t alias_handler(httpd_req_t *req)
     uint64_t uid;
     if (!query_uid(req, &uid))
     {
-        return send_msg(req, false, "Ungültige UID", NULL);
+        return send_msg(req, false, L("Invalid UID", "Ungültige UID"), NULL);
     }
     /* body: the new name (UTF-8), empty removes it */
     char name[ALIAS_LEN] = "";
@@ -116,7 +117,7 @@ static esp_err_t alias_handler(httpd_req_t *req)
     name[got] = 0;
     tonie_names_clean(name, sizeof(name));
     bool ok = tonie_names_set(TONIE_ALIAS_FILE, uid, name);
-    return send_msg(req, ok, ok ? NULL : "Konnte nicht gespeichert werden", NULL);
+    return send_msg(req, ok, ok ? NULL : L("Could not be saved", "Konnte nicht gespeichert werden"), NULL);
 }
 
 /* ---------------------------------------------------------------- list */
@@ -228,7 +229,7 @@ static esp_err_t list_handler(httpd_req_t *req)
     uint64_t *uids = malloc(sizeof(uint64_t) * LIST_MAX);
     if (!uids)
     {
-        return send_msg(req, false, "Kein Speicher frei", NULL);
+        return send_msg(req, false, L("Out of memory", "Kein Speicher frei"), NULL);
     }
     int n = collect_uids(uids, LIST_MAX);
     tonie_name_t *al = calloc(TONIE_NAMES_MAX, sizeof(tonie_name_t));
@@ -302,7 +303,7 @@ static esp_err_t delete_handler(httpd_req_t *req)
     uint64_t uid;
     if (!query_uid(req, &uid))
     {
-        return send_msg(req, false, "Ungültige UID", NULL);
+        return send_msg(req, false, L("Invalid UID", "Ungültige UID"), NULL);
     }
     char *file = pb_build_filename(uid);
     remove_all(file, false);
@@ -322,7 +323,7 @@ static esp_err_t own_handler(httpd_req_t *req)
     httpd_query_key_value(query, "on", on, sizeof(on));
     if (!query_uid(req, &uid))
     {
-        return send_msg(req, false, "Ungültige UID", NULL);
+        return send_msg(req, false, L("Invalid UID", "Ungültige UID"), NULL);
     }
     char *file = pb_build_filename(uid);
     char p[72];
@@ -344,7 +345,7 @@ static esp_err_t own_handler(httpd_req_t *req)
         ok = true;
     }
     free(file);
-    return send_msg(req, ok, ok ? NULL : "Keine Datei für diesen Tonie", NULL);
+    return send_msg(req, ok, ok ? NULL : L("No file for this tonie", "Keine Datei für diesen Tonie"), NULL);
 }
 
 /* -------------------------------------------------------------- upload */
@@ -355,25 +356,25 @@ static const char *check_header(const uint8_t *buf, size_t total, uint8_t sha1[2
     uint32_t len = (uint32_t)buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
     if (len == 0 || len > TONIEFILE_FRAME_SIZE - 4)
     {
-        return "Keine TAF-Datei (Header)";
+        return L("Not a TAF file (header)", "Keine TAF-Datei (Header)");
     }
     TonieboxAudioFileHeader *taf = toniebox_audio_file_header__unpack(NULL, len, buf + 4);
     if (!taf)
     {
-        return "Keine TAF-Datei (Header nicht lesbar)";
+        return L("Not a TAF file (header unreadable)", "Keine TAF-Datei (Header nicht lesbar)");
     }
     const char *err = NULL;
     if (PB_IS_STREAM_LENGTH(taf->num_bytes))
     {
-        err = "Stream-Dateien können nicht hochgeladen werden";
+        err = L("Stream files cannot be uploaded", "Stream-Dateien können nicht hochgeladen werden");
     }
     else if (taf->num_bytes + TONIEFILE_FRAME_SIZE != total)
     {
-        err = "Dateilänge passt nicht zum Header (unvollständig?)";
+        err = L("File length does not match the header (incomplete?)", "Dateilänge passt nicht zum Header (unvollständig?)");
     }
     else if (taf->sha1_hash.len != 20)
     {
-        err = "Header ohne SHA-1";
+        err = L("Header without SHA-1", "Header ohne SHA-1");
     }
     else
     {
@@ -391,18 +392,18 @@ static esp_err_t upload_handler(httpd_req_t *req)
     uint64_t uid;
     if (!query_uid(req, &uid))
     {
-        return send_msg(req, false, "Ungültige UID", NULL);
+        return send_msg(req, false, L("Invalid UID", "Ungültige UID"), NULL);
     }
     size_t total = req->content_len;
     if (total < TONIEFILE_FRAME_SIZE * 2)
     {
-        return send_msg(req, false, "Datei zu klein", NULL);
+        return send_msg(req, false, L("File too small", "Datei zu klein"), NULL);
     }
     uint64_t sd_total = 0, sd_free = 0;
     esp_vfs_fat_info("/sdcard", &sd_total, &sd_free);
     if (sd_free < (uint64_t)total + 64 * 1024)
     {
-        return send_msg(req, false, "Nicht genug Platz auf der SD-Karte", NULL);
+        return send_msg(req, false, L("Not enough space on the SD card", "Nicht genug Platz auf der SD-Karte"), NULL);
     }
 
     char *file = pb_build_filename(uid);
@@ -414,7 +415,7 @@ static esp_err_t upload_handler(httpd_req_t *req)
 
     uint8_t *buf = malloc(UPLOAD_BUF);
     FILE *f = buf ? fopen(upl, "wb") : NULL;
-    const char *err = !buf ? "Kein Speicher frei" : !f ? "Datei kann nicht angelegt werden" : NULL;
+    const char *err = !buf ? L("Out of memory", "Kein Speicher frei") : !f ? L("Cannot create the file", "Datei kann nicht angelegt werden") : NULL;
     uint8_t sha1[20], digest[20];
     uint32_t audio_id = 0;
     int chapters = 0;
@@ -437,13 +438,13 @@ static esp_err_t upload_handler(httpd_req_t *req)
             {
                 if (++timeouts > UPLOAD_TIMEOUTS_MAX)
                 {
-                    err = "Zeitüberschreitung";
+                    err = L("Timeout", "Zeitüberschreitung");
                 }
                 continue;
             }
             if (r <= 0)
             {
-                err = "Verbindung abgebrochen";
+                err = L("Connection lost", "Verbindung abgebrochen");
                 break;
             }
             timeouts = 0;
@@ -464,7 +465,7 @@ static esp_err_t upload_handler(httpd_req_t *req)
         }
         if (!err && fwrite(buf, 1, fill, f) != fill)
         {
-            err = "Schreibfehler auf der SD-Karte";
+            err = L("Write error on the SD card", "Schreibfehler auf der SD-Karte");
         }
         got += fill;
     }
@@ -472,12 +473,12 @@ static esp_err_t upload_handler(httpd_req_t *req)
     mbedtls_sha1_free(&ctx);
     if (f && fclose(f) != 0 && !err)
     {
-        err = "Schreibfehler auf der SD-Karte";
+        err = L("Write error on the SD card", "Schreibfehler auf der SD-Karte");
     }
     free(buf);
     if (!err && memcmp(digest, sha1, 20))
     {
-        err = "SHA-1 stimmt nicht, Datei beschädigt";
+        err = L("SHA-1 does not match, file damaged", "SHA-1 stimmt nicht, Datei beschädigt");
     }
 
     if (err)
@@ -517,7 +518,7 @@ static esp_err_t upload_handler(httpd_req_t *req)
     char extra[96];
     snprintf(extra, sizeof(extra), "\"audio_id\":%lu,\"chapters\":%d,\"seconds\":%d", (unsigned long)audio_id, chapters,
              ms / 1000);
-    return send_msg(req, ok, ok ? NULL : "Umbenennen fehlgeschlagen", extra);
+    return send_msg(req, ok, ok ? NULL : L("Renaming failed", "Umbenennen fehlgeschlagen"), extra);
 }
 
 esp_err_t tonies_portal_register(httpd_handle_t server, void (*touch_fn)(void))

@@ -431,6 +431,7 @@ void mqtt_ha_init(void)
     char mac_str[13];
     snprintf(mac_str, sizeof(mac_str), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
+    ha_set_german(s->text_de);
     snprintf(device_id, sizeof(device_id), "teddybox_%s", mac_str);
     if (s->mqtt_topic[0])
     {

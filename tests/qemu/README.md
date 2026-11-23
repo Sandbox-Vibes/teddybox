@@ -16,7 +16,7 @@ media), builds it, patches out the ADC calibration QEMU does not have
 | `mkqra.sh` | read-ahead: SD hangs, seek, growing file, ending during a hang | |
 | `mkqtcset.sh` | box settings from teddyCloud: baseline, change taken over, box change stays (`run` drives teddyCloud's web API) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
 | `mkqtonies.sh` | Tonies tab: list, upload (good, damaged, too short), protection, delete; crash log view/delete (`run` drives it with curl through a port forward) | |
-| `mkqmaint.sh` | nightly update report: a run that did not end normally is reported with its step, a normal end keeps its result (`run` starts QEMU) | — |
+| `mkqmaint.sh` | nightly update report: a run that did not end normally is reported with its step, a normal end keeps its result, German texts with `text_language = de` (`run` starts QEMU) | — |
 | `mkqnames.sh` | tonie names from teddyCloud's web API, no name where it has none, own name wins (`run` adds a custom tonie to the local teddyCloud and restores it) | teddyCloud web API on 127.0.0.1:80 (`TC_DIR`, default `/tmp/tc`) |
 | `mkqcrash.sh` | crash dump: crash on purpose, restart, summary logged and written once to `tb_crash.txt` | |
 | `mkqv.sh` | SHA-1 check of TAF files, rename to `.bad` | `TAF=` a small tonie file (< 300 KB) |

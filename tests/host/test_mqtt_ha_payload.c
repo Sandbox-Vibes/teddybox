@@ -26,6 +26,32 @@ int main(int argc, char **argv)
         ha_state_json(&b, buf, sizeof buf); printf("%s\n", buf);
         return 0;
     }
+    if (argc > 1 && !strcmp(argv[1], "lang")) {
+        /* English by default, German with ha_set_german(true) */
+        int fails = 0, tonie = -1, eq = -1;
+        for (int i = 0; i < ha_discovery_count(); i++) {
+            ha_discovery(&ctx, i, topic, sizeof topic, payload, sizeof payload);
+            if (strstr(topic, "/tonie_name/")) tonie = i;
+            if (strstr(topic, "/speaker_eq/")) eq = i;
+        }
+        for (int de = 0; de < 2; de++) {
+            ha_set_german(de);
+            ha_discovery(&ctx, tonie, topic, sizeof topic, payload, sizeof payload);
+            int ok = de ? strstr(payload, "\"name\":\"Tonie-Name\"") && strstr(payload, "'kein Tonie'")
+                        : strstr(payload, "\"name\":\"Tonie name\"") && strstr(payload, "'no tonie'") && !strstr(payload, "kein");
+            printf("%s %s names and templates\n", ok ? "ok  " : "FAIL", de ? "German" : "English"); fails += !ok;
+            ha_discovery(&ctx, eq, topic, sizeof topic, payload, sizeof payload);
+            ok = strstr(topic, "speaker_eq") && (de ? strstr(payload, "[\"Optimiert\",\"Nur Tiefenfilter\",\"Wie Original\"]")
+                                                 : strstr(payload, "[\"Optimized\",\"Bass cut only\",\"Like original\"]"));
+            printf("%s %s select options\n", ok ? "ok  " : "FAIL", de ? "German" : "English"); fails += !ok;
+            ok = !strcmp(ha_speaker_eq_label(2), de ? "Optimiert" : "Optimized");
+            printf("%s %s state label\n", ok ? "ok  " : "FAIL", de ? "German" : "English"); fails += !ok;
+            for (int i = 0; i < ha_discovery_count(); i++)
+                if (ha_discovery(&ctx, i, topic, sizeof topic, payload, sizeof payload) < 0) { printf("FAIL discovery %d\n", i); fails++; }
+        }
+        ha_set_german(0);
+        return fails != 0;
+    }
     /* command parsing */
     struct { const char *t, *d; ha_cmd_t want; int val; } c[] = {
         {"teddybox/aabbccddeeff/cmd/volume", "50.0", HA_CMD_VOLUME, 50},
@@ -41,6 +67,9 @@ int main(int argc, char **argv)
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Nur Tiefenfilter", HA_CMD_SPEAKER_EQ, 1},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Wie Original", HA_CMD_SPEAKER_EQ, 0},
         {"teddybox/aabbccddeeff/cmd/speaker_eq", "Optimier", HA_CMD_NONE, 0},
+        {"teddybox/aabbccddeeff/cmd/speaker_eq", "Optimized", HA_CMD_SPEAKER_EQ, 2},
+        {"teddybox/aabbccddeeff/cmd/speaker_eq", "Bass cut only", HA_CMD_SPEAKER_EQ, 1},
+        {"teddybox/aabbccddeeff/cmd/speaker_eq", "Like original", HA_CMD_SPEAKER_EQ, 0},
         {"teddybox/aabbccddeeff/cmd/led", "0", HA_CMD_LED, 0},
         {"teddybox/aabbccddeeff/cmd/led", "3.0", HA_CMD_LED, 3},
         {"teddybox/aabbccddeeff/cmd/led", "4", HA_CMD_NONE, 0},

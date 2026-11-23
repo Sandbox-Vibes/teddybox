@@ -15,6 +15,7 @@
 #include "soc/rtc.h"
 
 #include "esp_log.h"
+#include "i18n.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 #include "esp_vfs.h"
@@ -491,13 +492,13 @@ void app_main(void)
         maint_run();
         /* Home Assistant shows the result (WiFi needs a few seconds, the run
            may have ended right away, e.g. battery too low) */
-        maint_stage("Ergebnis an Home Assistant");
+        maint_stage(L("result to Home Assistant", "Ergebnis an Home Assistant"));
         if (!mqtt_ha_flush(30000) && settings_get()->mqtt_host[0])
         {
             ESP_LOGW(TAG, "Result not sent to Home Assistant (MQTT not connected)");
         }
         mqtt_ha_shutdown();
-        maint_stage("Ausschalten");
+        maint_stage(L("switching off", "Ausschalten"));
         goto shutdown;
     }
 

@@ -32,22 +32,30 @@ void app_main(void)
        switching off: the result stays, with the step after it */
     maint_run();
     maint_last(&r);
-    check("1a result of the run", strstr(r, "kein teddyCloud") != NULL);
-    maint_stage("Ausschalten");
+    check("1a result of the run", strstr(r, "no teddyCloud") != NULL);
+    maint_stage("switching off");
     /* next start without maint_run_end() */
     maint_log_status();
     time_t t = maint_last(&r);
     ESP_LOGI(TAG, "result: '%s'", r);
-    check("1b unfinished run reported with its step", t > 0 && strstr(r, "kein teddyCloud") && strstr(r, "danach: Ausschalten"));
+    check("1b unfinished run reported with its step", t > 0 && strstr(r, "no teddyCloud") && strstr(r, "then: switching off"));
 
     /* 2: normal end: the result is kept as it is */
     maint_run();
-    maint_stage("Ausschalten");
+    maint_stage("switching off");
     maint_run_end();
     maint_log_status();
     maint_last(&r);
     ESP_LOGI(TAG, "result: '%s'", r);
-    check("2 normal end keeps the result", !strcmp(r, "kein teddyCloud eingerichtet"));
+    check("2 normal end keeps the result", !strcmp(r, "no teddyCloud set up"));
+
+    /* 3: German texts with text_language = de */
+    settings_get_mutable()->text_de = true;
+    maint_run();
+    maint_run_end();
+    maint_last(&r);
+    ESP_LOGI(TAG, "result: '%s'", r);
+    check("3 German result", !strcmp(r, "kein teddyCloud eingerichtet"));
 
     ESP_LOGI(TAG, "%s", fails ? "FAILED" : "ALL OK");
     vTaskDelay(portMAX_DELAY);

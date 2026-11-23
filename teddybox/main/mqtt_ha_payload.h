@@ -76,6 +76,9 @@ typedef enum
 /* select labels, index = speaker_eq_t */
 #define HA_SPEAKER_EQ_COUNT 3
 const char *ha_speaker_eq_label(int mode);
+/* language of entity names, select options and template texts: false English (default), true German;
+   commands are understood in both */
+void ha_set_german(bool de);
 
 /* number of discovery messages */
 int ha_discovery_count(void);

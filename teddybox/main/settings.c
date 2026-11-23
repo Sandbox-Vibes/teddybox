@@ -45,6 +45,7 @@ static settings_t settings = {
     .claim = false,
     .readahead = true,
     .ears_poweroff = true,
+    .text_de = false,
     .rtnl = true,
     .decoder_celt = true,
     .cpu_mhz = 160,
@@ -172,6 +173,12 @@ int settings_save_ini(const char *path)
                  "# nothing plays and after a tonie was removed (at most every 15 minutes), 15-720\n"
                  "freshness_interval = %u\n",
                  s->freshness_min) > 0 &&
+         ok;
+    ok = fprintf(f,
+                 "# language of texts from the box (Home Assistant entities, nightly update result, error messages\n"
+                 "# on the setup page): en (default) or de\n"
+                 "text_language = %s\n",
+                 s->text_de ? "de" : "en") > 0 &&
          ok;
     ok = (fclose(f) == 0) && ok;
 
@@ -455,6 +462,17 @@ void settings_load_ini(void)
             else
             {
                 ESP_LOGW(TAG, "Invalid mem_log '%s' (0 or 1)", val);
+            }
+        }
+        else if (!strcmp(key, "text_language"))
+        {
+            if (!strcmp(val, "en") || !strcmp(val, "de"))
+            {
+                settings.text_de = val[0] == 'd';
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid text_language '%s' (en or de)", val);
             }
         }
         else if (!strcmp(key, "ears_poweroff"))
