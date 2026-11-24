@@ -30,7 +30,7 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Speaker sound | flat | three profiles in the DAC's own filters: flat, low cut, tuned (measured, default) |
 | Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original) |
 | System sounds | yes | the same sounds, read from the box's assets |
-| Firmware updates | from Boxine, automatically | uploaded on the setup page, A/B with rollback |
+| Firmware updates | from Boxine, automatically | online from GitHub releases or uploaded, on the setup page, A/B with rollback |
 | Back to the other firmware | — | upside down, both ears 20 s, let go; setup page; Home Assistant |
 | Gestures | ears, slap, tilt; upside down both ears 10 s: restart | the same, plus as Hackiebox CFW: both ears briefly = off, upside-down slap = start over; see "Gestures" |
 | Sleep timer | — (Toniebox 2 / app only) | small ear held 2 s (30 min) or Home Assistant; quieter at the end, then off |
@@ -646,11 +646,23 @@ esptool.py write_flash 0x16f000 otadata_original.bin
 
 ## Firmware updates
 
-Updates of TeddyBox itself are uploaded on the setup page (hold the big ear
-while switching on, section "Firmware aktualisieren"). There is no network
-port for updates, so physical access to the box is required.
+Updates of TeddyBox itself are installed on the setup page (System tab,
+section "Firmware"). Outside setup mode the box has no port for updates;
+setup mode is started at the box (big ear while switching on) or with the
+"Start setup" button in Home Assistant.
 
-- The upload is checked before anything is written: ESP32-S3 image with
+- **Online update**: when setup mode runs in the home network, the page asks
+  GitHub (api.github.com) for the latest release of
+  `Sandbox-Vibes/teddybox` and offers "Install vX.Y.Z" if it is newer. The
+  box then downloads `teddybox-vX.Y.Z.bin` of that release itself over
+  HTTPS (certificate check with the common CA bundle), compares it with the
+  release's `SHA256SUMS` and installs it like an upload. Only release tags
+  like `v1.2.3` of that repository are accepted, the page cannot make the
+  box load anything else. In hotspot mode (no internet) only the upload is
+  offered.
+- **Upload**: choose a `teddybox-*.bin` from a release (or your own build).
+
+- The image is checked before anything is written: ESP32-S3 image with
   project name `teddybox` (original Boxine apps are refused), fits the slot,
   SHA-256 verified at the end.
 - The first update needs the slot of the PD app (stock layout: PD,
