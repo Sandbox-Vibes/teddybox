@@ -30,3 +30,17 @@ void maint_token_names(uint64_t uid, char dir[9], char file[9])
         snprintf(file + 2 * i, 3, "%02X", (unsigned)(uid >> (8 * (i + 4))) & 0xFF);
     }
 }
+int32_t maint_drift_ppm(int64_t box_us, int64_t real_us)
+{
+    return real_us > 0 ? (int32_t)((box_us - real_us) * 1000000LL / real_us) : 0;
+}
+int64_t maint_drift_real_to_box(int64_t real_us, int32_t ppm)
+{
+    return real_us + real_us / 1000000LL * ppm + (real_us % 1000000LL) * ppm / 1000000LL;
+}
+int64_t maint_drift_box_to_real(int64_t box_us, int32_t ppm)
+{
+    /* box = real * (1e6 + ppm) / 1e6 */
+    int64_t d = 1000000LL + ppm;
+    return box_us / d * 1000000LL + (box_us % d) * 1000000LL / d;
+}

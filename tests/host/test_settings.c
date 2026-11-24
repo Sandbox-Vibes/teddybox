@@ -114,6 +114,20 @@ int main(void)
     CHECK(s->update_hour == -1 && !strcmp(s->timezone, "UTC0"));
     s->update_hour = 3; snprintf(s->timezone, sizeof(s->timezone), "CET-1CEST,M3.5.0,M10.5.0/3");
 
+    /* nightly update on battery: -1 = only on the charger, invalid keeps the value */
+    s->update_battery = 30;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("update_battery = 5\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->update_battery == 30);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("update_battery = -1\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->update_battery == -1);
+    CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
+    s->update_battery = 50;
+    settings_load_ini();
+    CHECK(s->update_battery == -1);
+    s->update_battery = 30;
+
     /* decoder and CPU clock */
     s->decoder_celt = false; s->cpu_mhz = 240;
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("decoder = mp3\ncpu_mhz = 80\n", f); fclose(f);

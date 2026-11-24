@@ -174,6 +174,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddStringToObject(j, "text_lang", s->text_de ? "de" : "en");
     cJSON_AddNumberToObject(j, "tilt", s->tilt_level);
     cJSON_AddNumberToObject(j, "update_hour", s->update_hour);
+    cJSON_AddNumberToObject(j, "update_battery", s->update_battery);
     cJSON_AddNumberToObject(j, "freshness_interval", s->freshness_min);
     cJSON_AddStringToObject(j, "decoder", s->decoder_celt ? "celt" : "adf");
     cJSON_AddNumberToObject(j, "cpu_mhz", s->cpu_mhz);
@@ -459,6 +460,10 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (get_int(o, "update_hour", -1, 23, &v))
     {
         s->update_hour = v;
+    }
+    if (get_int(o, "update_battery", -1, 100, &v) && (v == -1 || v >= 10))
+    {
+        s->update_battery = v;
     }
     if (get_int(o, "freshness_interval", 15, 720, &v))
     {

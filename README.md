@@ -20,7 +20,7 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Tonie placed is reported (claim) | always | off by default (`claim = 1`) |
 | Freshness check (new episodes, changed content) | yes | yes, same protocol |
 | Downloads | to `.tmp`, renamed when complete | the same; plus SHA-1 check of every file against its header, damaged files are downloaded again |
-| Nightly content update | — | optional, at a set hour, on the charger or from 50 % battery |
+| Nightly content update | — | optional, at a set hour, on the charger or from 30 % battery (adjustable) |
 | Opus decoder | libopus, CELT only | the same (libopus 1.5.2, CELT only, fixed point), ESP-ADF as fallback |
 | SD card hangs during playback | own SD task with double buffers | own read-ahead task, 32 KB (about 2.7 s) |
 | Setup | Tonies app, hotspot `Toniebox-XXXX` | own setup page, hotspot `TeddyBox-XXXX` (big ear while switching on); WiFi of the original is used as is |
@@ -192,6 +192,7 @@ Written by the setup page; all keys are optional.
 | `slap`, `slap_reverse` | 3, 0 | slap on the side for next/previous chapter: 0 off, 1 firm to 5 light |
 | `tilt` | 3 | tilt for chapter/seek: 0 off, 1 far to 5 a little |
 | `update_hour` | 3 | nightly update, -1 off |
+| `update_battery` | 30 | nightly update without the charger from this battery charge (10–100 %), -1 only on the charger |
 | `freshness_interval` | 60 | minutes between freshness checks (15-720), see below |
 | `timezone` | `CET-1CEST,M3.5.0,M10.5.0/3` | POSIX TZ |
 | `claim` | 0 | report placed tonies to teddyCloud |
@@ -333,7 +334,9 @@ and without reading NFC. It waits for the freshness check against teddyCloud
 and then downloads every tonie that has a new version (`<file>.old`) or an
 unfinished download, one after another.
 
-- On the charger always, on battery only from 50 % (resting voltage).
+- On the charger always, on battery from `update_battery` (default 30 %,
+  resting voltage; setup page: Box tab, "Without the charger"), or with
+  `update_battery = -1` only on the charger.
 - A pressed ear stops it and starts the box normally; a download without
   progress for 2 minutes, low battery or 45 minutes in total stop it, the
   rest continues the next night or when the tonie is placed.
@@ -348,6 +351,13 @@ unfinished download, one after another.
 - Needs a valid clock (set from teddyCloud on every connection; kept in deep
   sleep, lost when the battery is removed: then the next normal start plans
   it again).
+- The clock in deep sleep runs on the internal RC oscillator and drifts
+  (seen: about 1 %, 9 minutes fast after 14 hours). At the first time sync
+  after a sleep of 2 hours or more the box measures the drift
+  (`Maint: Clock: … drift <n> ppm`), averages it with the previous value and
+  keeps it in NVS. With it the clock is corrected at every wake and the
+  sleep timer is lengthened or shortened, so the run starts on time and its
+  result carries the right time. Values beyond 5 % are ignored.
 - The result (also "skipped (battery x %)") is kept in NVS, so it survives
   power loss and flashing. After a run the box waits up to 30 s for MQTT, so
   Home Assistant gets it right away (diagnostic sensor "Last nightly

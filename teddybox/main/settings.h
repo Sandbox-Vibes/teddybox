@@ -71,6 +71,8 @@ typedef struct
     bool mem_log;
     /* nightly update of the tonies at this hour (local time), -1 = off */
     int8_t update_hour;
+    /* nightly update on battery from this charge in %, -1 = only on the charger */
+    int8_t update_battery;
     /* freshness check (new versions, box settings from teddyCloud) every
        that many minutes while nothing plays, and after a tonie was removed */
     uint16_t freshness_min;

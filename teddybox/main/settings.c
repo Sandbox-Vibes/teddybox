@@ -41,6 +41,7 @@ static settings_t settings = {
     .tilt_level = 3,
     .mem_log = true,
     .update_hour = 3,
+    .update_battery = 30,
     .freshness_min = 60,
     .claim = false,
     .readahead = true,
@@ -138,6 +139,8 @@ int settings_save_ini(const char *path)
                      "mem_log = %u\n"
                      "# nightly update of the tonies (new versions, unfinished downloads): hour 0-23, -1 off\n"
                      "update_hour = %d\n"
+                     "# nightly update on battery from this charge (10-100 %%), -1 = only on the charger\n"
+                     "update_battery = %d\n"
                      "# local time (POSIX TZ), default Germany/Central Europe\n"
                      "timezone = %s\n"
                      "# report placed tonies to teddyCloud like the original box; off: teddyCloud forwards them to the Boxine cloud\n"
@@ -167,7 +170,7 @@ int settings_save_ini(const char *path)
                      s->ha_discovery_prefix,
                      s->lang_id, s->volume_max, s->volume_max_hdp, s->volume_default, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness, s->ears_poweroff ? 1 : 0,
-                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0, s->rtnl ? 1 : 0) > 0;
+                     s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->update_battery, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0, s->rtnl ? 1 : 0) > 0;
     ok = fprintf(f,
                  "# freshness check with teddyCloud (new tonie versions, box settings): every n minutes while\n"
                  "# nothing plays and after a tonie was removed (at most every 15 minutes), 15-720\n"
@@ -440,6 +443,19 @@ void settings_load_ini(void)
             else
             {
                 ESP_LOGW(TAG, "Invalid update_hour '%s' (0 to 23, -1 off)", val);
+            }
+        }
+        else if (!strcmp(key, "update_battery"))
+        {
+            char *end;
+            long p = strtol(val, &end, 10);
+            if (*val && !*end && (p == -1 || (p >= 10 && p <= 100)))
+            {
+                settings.update_battery = p;
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid update_battery '%s' (10 to 100 %%, -1 only on the charger)", val);
             }
         }
         else if (!strcmp(key, "timezone"))

@@ -343,6 +343,7 @@ void app_main(void)
 {
     /* a timer wake is the charger check or the nightly update; everything
        else than a due update goes straight back to sleep */
+    maint_clock_wake();
     const bool maint_mode = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER && maint_due();
     audio_board_set_timer_wakeup(maint_sleep_us());
     audio_board_sleep_check(maint_mode);
@@ -876,6 +877,7 @@ shutdown:
     /* plan the nightly update (needs the clock, set from teddyCloud) */
     maint_schedule_next();
     audio_board_set_timer_wakeup(maint_sleep_us());
+    maint_clock_sleep();
     ledman_change("poweroff");
     audio_board_sdcard_unmount();
     rtc_checksum_update();
