@@ -66,11 +66,27 @@ flash, LIS3DH accelerometer) against teddyCloud.
 
 ## Setup page
 
-On the first boot (no `teddybox.ini` on the SD card yet), or when the big
-ear is held for 3 seconds while switching on, the box says the installation
-announcement, blinks blue/green and opens the WiFi hotspot `TeddyBox-XXXX`
-(no password, only while setup runs). Phones show the setup page
-automatically, otherwise open `http://192.168.4.1/`. Four tabs:
+On the first boot (no `teddybox.ini` on the SD card yet), when the big ear
+is held for 3 seconds while switching on, or with the Home Assistant button
+"Start setup", the box says the installation announcement and blinks
+blue/green.
+
+- **In the home network** (WiFi already set up): the box first connects to
+  the stored network (up to 20 s). The page is then at
+  `http://teddybox-xxxx.local/` (mDNS; `xxxx` as in the box's host name in
+  the router) or at the box's IP; the device page in Home Assistant links to
+  it ("Visit", it answers only in setup mode). Phone or PC stay in the home
+  network and keep their internet.
+- **Hotspot as the fallback** (no WiFi set up, or not reachable): WiFi
+  `TeddyBox-XXXX` (no password, only while setup runs). Phones show the
+  setup page automatically, otherwise open `http://192.168.4.1/`.
+
+The page has no password: while setup runs, anyone in the home network (or
+in range of the hotspot) can change the settings. Setup mode needs the ear
+at the box or the Home Assistant button, and ends after 15 minutes without
+use. Downloading the backup always needs the small ear at the box.
+
+Four tabs:
 
 ![Setup page: tabs Connection, Box, Tonies and System](docs/images/setup-light.png)
 
@@ -347,7 +363,7 @@ unfinished download, one after another.
 ## Home Assistant
 
 With `mqtt_host` set, the box registers itself via MQTT discovery as device
-"TeddyBox" (`<id>` = `teddybox_<mac>`, 34 entities):
+"TeddyBox" (`<id>` = `teddybox_<mac>`, 35 entities):
 
 | Entities | |
 |---|---|
@@ -361,6 +377,7 @@ With `mqtt_host` set, the box registers itself via MQTT discovery as device
 | LED-Helligkeit, Klapsen, Klapsen umgekehrt, Kippen, Lautsprecher-Klang | settings, applied at once and saved to the INI |
 | Stopp, Nächstes/Vorheriges Kapitel, Ausschalten | buttons |
 | Original-Firmware starten | button, disabled by default in Home Assistant |
+| Start setup / Einrichtung starten | button: restarts into setup mode (in the home network, see "Setup page") |
 | Schlaf-Timer | number in minutes (0 off, up to 240), shows the minutes left; see "Sleep timer" |
 | Diagnostics | free heap (now and minimum), start time, reason of the last start, firmware slot, last nightly update |
 

@@ -310,6 +310,14 @@ void wifi_get_last_ssid(char *ssid, size_t size)
     nvs_close(h);
 }
 
+int wifi_stored_networks(wifi_config_t *out, int max)
+{
+    wifi_load_nvs();
+    int n = creds_num < max ? creds_num : max;
+    memcpy(out, creds, n * sizeof(wifi_config_t));
+    return n;
+}
+
 void wifi_init(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);

@@ -469,7 +469,7 @@ const EN={
 'Bei großen Tonies dauert das über den Hotspot einige Minuten.':'For big tonies this takes a few minutes over the hotspot.',
 'Gespeichert: {n} Kapitel, Prüfsumme stimmt.':'Stored: {n} chapters, checksum correct.','Upload abgebrochen.':'Upload aborted.','für':'for',
 'tb_crash.txt: keine Abstürze aufgezeichnet.':'tb_crash.txt: no crashes recorded.','1 Absturz':'1 crash','{n} Abstürze':'{n} crashes',
-'Kopiert.':'Copied.','unverändert lassen':'leave unchanged','Text markiert, jetzt kopieren.':'Text selected, copy it now.','Absturzprotokoll löschen?':'Delete the crash log?'
+'Kopiert.':'Copied.','Im Heimnetz':'In the home network','unverändert lassen':'leave unchanged','Text markiert, jetzt kopieren.':'Text selected, copy it now.','Absturzprotokoll löschen?':'Delete the crash log?'
 };
 function T(s,v){let r=DE?s:(EN[s]??s);if(v)for(const k in v)r=r.split('{'+k+'}').join(v[k]);return r;}
 function num(x){return DE?String(x).replace('.',','):String(x);}
@@ -527,7 +527,7 @@ function chips(){
 async function load(){
   try{
     cfg=await (await fetch('/api/config')).json();
-    $('apinfo').textContent='Hotspot '+(cfg.ap_ssid||'TeddyBox')+' · '+location.hostname;
+    $('apinfo').textContent=cfg.net_mode==='lan'?T('Im Heimnetz')+' · '+cfg.mdns+' · '+cfg.lan_ip:'Hotspot '+(cfg.ap_ssid||'TeddyBox')+' · '+location.hostname;
     $('ssid').value=cfg.wifi_ssid||'';
     if(cfg.wifi_ssid)$('wpass').placeholder=T('unverändert lassen');
     $('chost').value=cfg.cloud_host||'';$('cport').value=cfg.cloud_port||443;$('cwport').value=cfg.tc_web_port??80;

@@ -99,6 +99,8 @@ static const ha_entity_t entities[] = {
     {"button", "original", "Start original firmware", "Original-Firmware starten",
      "\"command_topic\":\"%s/cmd/original\",\"icon\":\"mdi:swap-horizontal-bold\",\"entity_category\":\"config\","
      "\"enabled_by_default\":false"},
+    {"button", "setup", "Start setup", "Einrichtung starten",
+     "\"command_topic\":\"%s/cmd/setup\",\"icon\":\"mdi:cog-refresh\",\"entity_category\":\"config\""},
     {"number", "sleep_timer", "Sleep timer", "Schlaf-Timer",
      "\"value_template\":\"{{ value_json.sleep_timer }}\",\"command_topic\":\"%s/cmd/sleep_timer\",\"min\":0,\"max\":240,"
      "\"step\":5,\"unit_of_measurement\":\"min\",\"icon\":\"mdi:sleep\""},
@@ -209,16 +211,19 @@ int ha_discovery(const ha_ctx_t *ctx, int idx, char *topic, size_t topic_size, c
                  strncmp(e->object, "diag_", 5) ? "state" : "diag");
     }
 
+    bool has_url = ctx->config_url && ctx->config_url[0];
     /* default_entity_id replaces object_id, which Home Assistant dropped in 2026.4 */
     n = snprintf(payload, payload_size,
                  "{\"name\":\"%s\",\"unique_id\":\"%s_%s\",\"default_entity_id\":\"%s.%s_%s\",%s"
                  "\"availability_topic\":\"%s/availability\",%s,"
                  "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"TeddyBox\",\"manufacturer\":\"toniebox-reverse-engineering\","
-                 "\"model\":\"Toniebox ESP32 (TeddyBox)\",\"sw_version\":\"%s\"},"
+                 "\"model\":\"Toniebox ESP32 (TeddyBox)\",\"sw_version\":\"%s\"%s%s%s},"
                  "\"origin\":{\"name\":\"TeddyBox\",\"sw_version\":\"%s\",\"url\":\"https://github.com/toniebox-reverse-engineering/teddybox\"}}",
                  text_de ? e->name_de : e->name, ctx->device_id, e->object, e->component, ctx->device_id, e->object, state_topic,
                  ctx->base_topic, extra,
-                 ctx->device_id, ctx->sw_version, ctx->sw_version);
+                 ctx->device_id, ctx->sw_version,
+                 has_url ? ",\"configuration_url\":\"" : "", has_url ? ctx->config_url : "", has_url ? "\"" : "",
+                 ctx->sw_version);
     return (n < 0 || (size_t)n >= payload_size) ? -1 : n;
 }
 
@@ -356,6 +361,10 @@ ha_cmd_t ha_parse_command(const ha_ctx_t *ctx, const char *topic, int topic_len,
     if (IS("original"))
     {
         return HA_CMD_BOOT_ORIGINAL;
+    }
+    if (IS("setup"))
+    {
+        return HA_CMD_SETUP;
     }
     if (IS("slap_reverse"))
     {

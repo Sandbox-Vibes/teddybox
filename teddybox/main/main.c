@@ -172,6 +172,17 @@ void ctrl_request_boot_original(void)
 
 static void rtc_checksum_update(void);
 
+/* Home Assistant "Start setup": restart into setup mode; survives the
+   software reset, cleared when read */
+#define SETUP_REQUEST_MAGIC 0x53455455u /* "SETU" */
+static RTC_NOINIT_ATTR uint32_t setup_request_magic;
+static volatile bool ctrl_setup_request = false;
+
+void ctrl_request_setup(void)
+{
+    ctrl_setup_request = true;
+}
+
 /* feedback for the main loop (EG_RESTART_ARMED, EG_OFW_ARMED, EG_CANCELLED) */
 static volatile int ears_signal = EG_NONE;
 
@@ -379,6 +390,12 @@ void app_main(void)
         }
         setup_requested = held >= SETUP_EAR_HOLD_MS;
     }
+    /* or the Home Assistant button "Start setup" before the restart */
+    if (setup_request_magic == SETUP_REQUEST_MAGIC && esp_reset_reason() == ESP_RST_SW)
+    {
+        setup_requested = true;
+    }
+    setup_request_magic = 0;
 
     ESP_LOGI(TAG, "Mount sdcard");
     audio_board_sdcard_init(set, SD_MODE_4_LINE);
@@ -464,7 +481,7 @@ void app_main(void)
 
     if (setup_mode)
     {
-        ESP_LOGI(TAG, "Setup mode%s", setup_requested ? " (big ear held)" : " (no settings yet)");
+        ESP_LOGI(TAG, "Setup mode%s", setup_requested ? " (requested)" : " (no settings yet)");
         /* the setup mode must be visible even with the LED switched off */
         if (led_get_brightness() == 0)
         {
@@ -795,6 +812,16 @@ void app_main(void)
             {
                 ledman_change("idle");
             }
+        }
+        if (ctrl_setup_request)
+        {
+            ctrl_setup_request = false;
+            ESP_LOGW(TAG, "Restarting into setup mode (Home Assistant)");
+            pb_stop();
+            rtc_checksum_update();
+            setup_request_magic = SETUP_REQUEST_MAGIC;
+            vTaskDelay(pdMS_TO_TICKS(300));
+            esp_restart();
         }
         if (ctrl_boot_original_request)
         {

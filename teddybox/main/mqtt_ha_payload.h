@@ -26,6 +26,7 @@ typedef struct
     const char *prefix;      /* "homeassistant" */
     const char *sw_version;
     int volume_max;
+    const char *config_url;  /* setup page in the home network ("http://<ip>/"), NULL or "" = none */
 } ha_ctx_t;
 
 typedef struct
@@ -71,6 +72,7 @@ typedef enum
     HA_CMD_SLAP_REVERSE,
     HA_CMD_SLEEP_TIMER,
     HA_CMD_BOOT_ORIGINAL,
+    HA_CMD_SETUP,
 } ha_cmd_t;
 
 /* select labels, index = speaker_eq_t */

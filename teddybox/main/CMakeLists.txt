@@ -11,6 +11,7 @@ set(COMPONENT_REQUIRES toniebox lis3dh trf7962a audio_pipeline audio_stream audi
 
 # own task watchdog (taskwatch.h)
 list(APPEND COMPONENT_SRCS "taskwatch.c")
+list(APPEND COMPONENT_SRCS "mdns_min.c")
 
 register_component()
 # see tls_mfl.c; -u because nothing else references that file
