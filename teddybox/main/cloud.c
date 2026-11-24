@@ -26,6 +26,7 @@
 #include "memdiag.h"
 #include "mempeak.h"
 #include "cloud.h"
+#include "maint.h"
 #include "wifi.h"
 #include "playback.h"
 #include "settings.h"
@@ -339,6 +340,7 @@ esp_err_t cloud_set_time_cbr(void *ctx, uint8_t *data, size_t length)
         return ESP_FAIL;
     }
 
+    maint_clock_synced(unixTime);
     struct timeval tv = {
         .tv_sec = unixTime,
         .tv_usec = 0};

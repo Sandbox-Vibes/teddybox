@@ -52,6 +52,27 @@ int main(void)
     int ok = !strcmp(dir, "4656EA0E") && !strcmp(file, "500304E0");
     fails += !ok;
     printf("%s token E00403500EEA5646 -> TOKENS/%s/%s\n", ok ? "ok  " : "FAIL", dir, file);
+    /* deep sleep drift: the case seen (14.5 h, 9 min fast) and the conversions */
+    {
+        int64_t real = (14LL * 3600 + 30 * 60) * 1000000LL, box = real + 9LL * 60 * 1000000LL;
+        int32_t ppm = maint_drift_ppm(box, real);
+        int ok = ppm > 10300 && ppm < 10400;
+        fails += !ok;
+        printf("%s drift 9 min in 14.5 h = %ld ppm\n", ok ? "ok  " : "FAIL", (long)ppm);
+        int64_t back = maint_drift_box_to_real(box, ppm);
+        ok = llabs(back - real) < 2000000; /* ppm is rounded down */
+        fails += !ok;
+        printf("%s box -> real: %lld s off\n", ok ? "ok  " : "FAIL", (long long)((back - real) / 1000000));
+        int64_t sleep = maint_drift_real_to_box(real, ppm);
+        ok = llabs(sleep - box) < 2000000;
+        fails += !ok;
+        printf("%s real -> box (sleep timer): %lld s off\n", ok ? "ok  " : "FAIL", (long long)((sleep - box) / 1000000));
+        ok = maint_drift_ppm(real, real) == 0 && maint_drift_ppm(real - 36000000LL, real) < 0 &&
+             maint_drift_real_to_box(real, 0) == real && maint_drift_box_to_real(real, 0) == real &&
+             maint_drift_box_to_real(maint_drift_real_to_box(5000000000LL, -20000), -20000) - 5000000000LL < 2;
+        fails += !ok;
+        printf("%s no drift, slow clock, round trip\n", ok ? "ok  " : "FAIL");
+    }
     printf("%s\n", fails ? "FAILED" : "all ok");
     return fails;
 }

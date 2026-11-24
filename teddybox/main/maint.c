@@ -14,6 +14,8 @@
 #include "esp_timer.h"
 #include "esp_random.h"
 #include "nvs.h"
+#include <sys/time.h>
+#include "esp_sleep.h"
 
 #include "board.h"
 #include "battery.h"
@@ -62,6 +64,7 @@ static void rtc_check(void)
 }
 
 static void nvs_store(void);
+static int64_t clock_sleep_scale(int64_t real_us);
 
 static void stage_set(const char *fmt, unsigned long long a, int b, int c)
 {
@@ -156,7 +159,12 @@ uint64_t maint_sleep_us(void)
     {
         return 0;
     }
-    return rtc.next > now ? (uint64_t)(rtc.next - now) * 1000000ULL : 1000000ULL;
+    if (rtc.next <= now)
+    {
+        return 1000000ULL;
+    }
+    /* the sleep timer runs on the same drifting clock */
+    return (uint64_t)clock_sleep_scale((int64_t)(rtc.next - now) * 1000000LL);
 }
 
 /* the last result also in NVS: the RTC memory is lost on power loss and
@@ -195,12 +203,188 @@ static void nvs_restore(void)
     nvs_close(h);
 }
 
+/* ---------------------------------------------------------------------- */
+/* deep sleep clock drift                                                  */
+
+int32_t maint_drift_ppm(int64_t box_us, int64_t real_us)
+{
+    return real_us > 0 ? (int32_t)((box_us - real_us) * 1000000LL / real_us) : 0;
+}
+
+int64_t maint_drift_real_to_box(int64_t real_us, int32_t ppm)
+{
+    return real_us + real_us / 1000000LL * ppm + (real_us % 1000000LL) * ppm / 1000000LL;
+}
+
+int64_t maint_drift_box_to_real(int64_t box_us, int32_t ppm)
+{
+    /* box = real * (1e6 + ppm) / 1e6 */
+    int64_t d = 1000000LL + ppm;
+    return box_us / d * 1000000LL + (box_us % d) * 1000000LL / d;
+}
+
+/* sleeps shorter than this are not measured (time from teddyCloud is in seconds) */
+#define DRIFT_MIN_SLEEP_US (2LL * 3600 * 1000000)
+/* more than this is no drift but a wrong clock */
+#define DRIFT_MAX_PPM 50000
+
+typedef struct
+{
+    uint32_t magic;
+    int32_t ppm;       /* drift used for corrections */
+    bool known;        /* ppm measured at least once */
+    int64_t ref_us;    /* clock at the last sleep or correction, 0 = none */
+    int64_t start_us;  /* clock at sleep, if it was set from teddyCloud: measure from there */
+    int32_t start_ppm; /* drift corrected since start_us */
+    int32_t last_fix_s; /* last correction at wake (for the log) */
+} clock_rtc_t;
+#define CLOCK_MAGIC 0x434C4B31u /* "CLK1" */
+static RTC_NOINIT_ATTR clock_rtc_t crtc;
+/* the clock was set from teddyCloud in this boot */
+static bool synced_this_boot;
+
+static int64_t now_us(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (int64_t)tv.tv_sec * 1000000LL + tv.tv_usec;
+}
+
+static void clock_check(void)
+{
+    if (crtc.magic != CLOCK_MAGIC)
+    {
+        memset(&crtc, 0, sizeof(crtc));
+        crtc.magic = CLOCK_MAGIC;
+    }
+}
+
+static int64_t clock_sleep_scale(int64_t real_us)
+{
+    clock_check();
+    return crtc.known ? maint_drift_real_to_box(real_us, crtc.ppm) : real_us;
+}
+
+void maint_clock_wake(void)
+{
+    clock_check();
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    bool from_sleep = cause == ESP_SLEEP_WAKEUP_TIMER || cause == ESP_SLEEP_WAKEUP_EXT0 || cause == ESP_SLEEP_WAKEUP_EXT1;
+    int64_t now = now_us();
+    if (!from_sleep || !crtc.ref_us || now <= crtc.ref_us || now / 1000000 <= CLOCK_VALID)
+    {
+        return;
+    }
+    if (crtc.known && crtc.ppm)
+    {
+        int64_t real = crtc.ref_us + maint_drift_box_to_real(now - crtc.ref_us, crtc.ppm);
+        struct timeval tv = {.tv_sec = real / 1000000, .tv_usec = real % 1000000};
+        settimeofday(&tv, NULL);
+        crtc.last_fix_s = (int32_t)((real - now) / 1000000);
+        now = real;
+    }
+    /* the charger check sleeps again right away: correct only from here on */
+    crtc.ref_us = now;
+}
+
+void maint_clock_sleep(void)
+{
+    clock_check();
+    int64_t now = now_us();
+    if (now / 1000000 <= CLOCK_VALID)
+    {
+        crtc.ref_us = crtc.start_us = 0;
+        return;
+    }
+    crtc.ref_us = now;
+    /* measure only from an exact clock; else keep an earlier start (the
+       clock was corrected at the wakes since, as far as known) */
+    if (synced_this_boot)
+    {
+        crtc.start_us = now;
+        crtc.start_ppm = crtc.known ? crtc.ppm : 0;
+    }
+}
+
+int32_t maint_clock_drift_ppm(void)
+{
+    clock_check();
+    return crtc.known ? crtc.ppm : 0;
+}
+
+static void drift_nvs_store(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(MAINT_NVS, NVS_READWRITE, &h) == ESP_OK)
+    {
+        nvs_set_i32(h, "drift_ppm", crtc.ppm);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+static void drift_nvs_restore(void)
+{
+    clock_check();
+    nvs_handle_t h;
+    if (crtc.known || nvs_open(MAINT_NVS, NVS_READONLY, &h) != ESP_OK)
+    {
+        return;
+    }
+    int32_t ppm;
+    if (nvs_get_i32(h, "drift_ppm", &ppm) == ESP_OK && ppm > -DRIFT_MAX_PPM && ppm < DRIFT_MAX_PPM)
+    {
+        crtc.ppm = ppm;
+        crtc.known = true;
+    }
+    nvs_close(h);
+}
+
+void maint_clock_synced(time_t real)
+{
+    clock_check();
+    int64_t box = now_us();
+    int64_t real_us = (int64_t)real * 1000000LL;
+    synced_this_boot = true;
+    if (!crtc.start_us || real <= CLOCK_VALID)
+    {
+        return;
+    }
+    int64_t start = crtc.start_us;
+    crtc.start_us = 0; /* once per sleep */
+    int64_t passed = real_us - start;
+    if (passed < DRIFT_MIN_SLEEP_US)
+    {
+        return;
+    }
+    /* what is left after the corrections at the wakes, plus those */
+    int32_t measured = crtc.start_ppm + maint_drift_ppm(box - start, passed);
+    if (measured <= -DRIFT_MAX_PPM || measured >= DRIFT_MAX_PPM)
+    {
+        ESP_LOGW(TAG, "Clock: %+lld s after %lld min, not plausible as drift, ignored",
+                 (long long)((box - real_us) / 1000000), (long long)(passed / 60000000));
+        return;
+    }
+    int32_t old = crtc.ppm;
+    crtc.ppm = crtc.known ? (crtc.ppm + measured) / 2 : measured;
+    crtc.known = true;
+    ESP_LOGI(TAG, "Clock: %+lld s off after %lld min (corrected for %ld ppm): drift %ld ppm, now using %ld ppm (was %ld)",
+             (long long)((box - real_us) / 1000000), (long long)(passed / 60000000), (long)crtc.start_ppm,
+             (long)measured, (long)crtc.ppm, (long)old);
+    drift_nvs_store();
+}
+
 void maint_log_status(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
     rtc_check();
     nvs_restore();
+    drift_nvs_restore();
     check_unfinished();
+    if (crtc.known)
+    {
+        ESP_LOGI(TAG, "Clock: drift in deep sleep %ld ppm, last correction at wake %+ld s", (long)crtc.ppm, (long)crtc.last_fix_s);
+    }
     char last[24] = "none yet", next[24] = "none";
     struct tm tm;
     if (rtc.last > CLOCK_VALID)
@@ -313,7 +497,8 @@ static bool battery_ok(int *percent)
         return true;
     }
     *percent = ha_battery_percent(battery_get_rest_mv(), settings_get()->bat_critical_mv);
-    return *percent >= MAINT_MIN_BATTERY_PERCENT;
+    int min = settings_get()->update_battery;
+    return min >= 0 && *percent >= min;
 }
 
 /* downloads one tonie; true if it is complete afterwards */
@@ -490,8 +675,17 @@ void maint_run(void)
     int percent;
     if (!battery_ok(&percent))
     {
-        ESP_LOGI(TAG, "Battery at %d %%, below %d %%: not today", percent, MAINT_MIN_BATTERY_PERCENT);
-        finish(L("skipped (battery %d %%)", "übersprungen (Akku %d %%)"), percent, 0);
+        int min = settings_get()->update_battery;
+        if (min < 0)
+        {
+            ESP_LOGI(TAG, "Not on the charger, update_battery = -1: not today");
+            finish(L("skipped (not on the charger)", "übersprungen (nicht am Ladegerät)"), 0, 0);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Battery at %d %%, below %d %%: not today", percent, min);
+            finish(L("skipped (battery %d %%, min. %d %%)", "übersprungen (Akku %d %%, mind. %d %%)"), percent, min);
+        }
         return;
     }
     ESP_LOGI(TAG, "Update started (%s)", percent < 0 ? "on the charger" : "on battery");
@@ -592,6 +786,7 @@ static void guard_task(void *arg)
     nvs_store();
     maint_schedule_next();
     audio_board_set_timer_wakeup(maint_sleep_us());
+    maint_clock_sleep();
     vTaskDelay(pdMS_TO_TICKS(200));
     audio_board_poweroff();
     vTaskDelete(NULL);

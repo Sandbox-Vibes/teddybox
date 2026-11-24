@@ -67,6 +67,51 @@ void app_main(void)
     ESP_LOGI(TAG, "result: '%s'", r);
     check("3 German result", !strcmp(r, "kein teddyCloud eingerichtet"));
 
+    /* 5: clock drift: synced, sleep 14.5 h, the clock gained 9 min. The
+       time from teddyCloud measures it, NVS keeps it, the sleep timer is
+       scaled with it. (No real deep sleep in QEMU: the clock is moved.) */
+    settings_get_mutable()->update_hour = 3;
+    maint_clock_synced(time(NULL));
+    maint_clock_sleep();
+    time_t real = time(NULL) + 14 * 3600 + 30 * 60;
+    tv.tv_sec = real + 9 * 60;
+    settimeofday(&tv, NULL);
+    maint_clock_synced(real); /* logs the measurement */
+    tv.tv_sec = real;
+    settimeofday(&tv, NULL);
+    maint_schedule_next();
+    uint64_t scaled = maint_sleep_us();
+    maint_log_status(); /* drift from NVS/RTC in the log */
+    check("5a drift measured: 9 min in 14.5 h = 10344 ppm", maint_clock_drift_ppm() == 10344);
+    /* the timer for the time to the next run, about 1.0344 times longer */
+    uint64_t want_real = scaled * 1000000ULL / 1010344ULL;
+    ESP_LOGI(TAG, "sleep timer %llu s for %llu s", scaled / 1000000ULL, want_real / 1000000ULL);
+    check("5b sleep timer lengthened by the drift", scaled > want_real && scaled - want_real > want_real / 100);
+    /* second sleep of 3 h, corrected at the wake: right on time, the
+       residual is 0: measured again 10344, average unchanged */
+    maint_clock_synced(time(NULL));
+    maint_clock_sleep();
+    real = time(NULL) + 3 * 3600;
+    tv.tv_sec = real;
+    settimeofday(&tv, NULL);
+    maint_clock_synced(real);
+    check("5c corrected clock keeps the drift", maint_clock_drift_ppm() == 10344);
+    /* third sleep, 1 h with 1 min off: too short, not measured */
+    maint_clock_sleep();
+    tv.tv_sec = real + 3600 + 60;
+    settimeofday(&tv, NULL);
+    maint_clock_synced(real + 3600);
+    check("5d sleep under 2 h not measured", maint_clock_drift_ppm() == 10344);
+    /* fourth: a jump of 2 h in 3 h is no drift */
+    tv.tv_sec = real + 3600;
+    settimeofday(&tv, NULL);
+    maint_clock_synced(real + 3600);
+    maint_clock_sleep();
+    tv.tv_sec = real + 3600 + 5 * 3600;
+    settimeofday(&tv, NULL);
+    maint_clock_synced(real + 3600 + 3 * 3600);
+    check("5e implausible jump ignored", maint_clock_drift_ppm() == 10344);
+
     ESP_LOGI(TAG, "%s", fails ? "FAILED" : "ALL OK");
     vTaskDelay(portMAX_DELAY);
 }
