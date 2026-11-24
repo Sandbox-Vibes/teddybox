@@ -49,6 +49,16 @@ void app_main(void)
     ESP_LOGI(TAG, "result: '%s'", r);
     check("2 normal end keeps the result", !strcmp(r, "no teddyCloud set up"));
 
+    /* 4: a changed update_hour plans again (it used to keep the old plan) */
+    settings_get_mutable()->update_hour = 3;
+    maint_schedule_next();
+    uint64_t a = maint_sleep_us();
+    settings_get_mutable()->update_hour = (localtime(&(time_t){time(NULL)})->tm_hour + 2) % 24;
+    maint_schedule_next();
+    uint64_t b = maint_sleep_us();
+    ESP_LOGI(TAG, "planned in %llu min, after the change in %llu min", a / 60000000ULL, b / 60000000ULL);
+    check("4 changed hour planned again", a != b && b < 3ULL * 3600 * 1000000ULL);
+
     /* 3: German texts with text_language = de */
     settings_get_mutable()->text_de = true;
     maint_run();
