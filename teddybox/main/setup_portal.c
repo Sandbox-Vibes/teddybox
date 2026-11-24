@@ -49,8 +49,8 @@ static char mdns_host[24] = ""; /* "teddybox-xxxx" */
 #define MAX_BODY 4096
 #define MAX_SCAN 20
 
-extern const uint8_t setup_html_start[] asm("_binary_setup_html_start");
-extern const uint8_t setup_html_end[] asm("_binary_setup_html_end");
+extern const uint8_t setup_html_start[] asm("_binary_setup_html_gz_start");
+extern const uint8_t setup_html_end[] asm("_binary_setup_html_gz_end");
 
 static volatile int64_t last_activity = 0;
 static volatile bool saved = false;
@@ -138,8 +138,9 @@ static esp_err_t page_handler(httpd_req_t *req)
     touch();
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    /* EMBED_TXTFILES appends a NUL byte */
-    return httpd_resp_send(req, (const char *)setup_html_start, setup_html_end - setup_html_start - 1);
+    /* stored gzip compressed (CMakeLists.txt): every browser takes that */
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    return httpd_resp_send(req, (const char *)setup_html_start, setup_html_end - setup_html_start);
 }
 
 static esp_err_t config_handler(httpd_req_t *req)
@@ -903,7 +904,7 @@ void setup_portal_run(void)
     hc.stack_size = 8192;          /* cJSON and certificate parsing */
     hc.max_open_sockets = 5;       /* phones open many connections */
     hc.lru_purge_enable = true;
-    hc.max_uri_handlers = 26;      /* setup + backup + tonies + crash log + online update */
+    hc.max_uri_handlers = 28;      /* setup + backup + tonies (+ TAF encoder) + crash log + online update */
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &hc) != ESP_OK || setup_portal_register(server) != ESP_OK)
     {

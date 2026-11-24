@@ -101,7 +101,7 @@ Four tabs:
 - **Box**: volume, language, power off time, speaker sound, LED, slap and
   tilt, gestures, nightly update, freshness check, and (sections) decoder,
   CPU clock, download speed while playing, read-ahead, RTNL
-- **Tonies**: the tonie files on the SD card and uploading TAF files, see
+- **Tonies**: the tonie files on the SD card, uploading TAF files or converting audio files to a tonie, see
   below
 - **System**: backup, crash log (see "Crash dumps"), firmware update,
   start the original firmware
@@ -149,9 +149,40 @@ default content folder of teddyCloud is asked (no per-box overlay). QEMU
 test `tests/qemu/mkqnames.sh run`.
 
 A tonie that is not on the card yet: pick it from "zuletzt aufgelegt" (the
-last 8 tags placed on the box, kept in NVS) or type its UID. Only TAF files,
-no MP3 (convert with teddyCloud or TonieToolbox). A large tonie can take a
-few minutes over the hotspot. QEMU test `tests/qemu/mkqtonies.sh run`.
+last 8 tags placed on the box, kept in NVS) or type its UID. A large tonie
+can take a few minutes over the hotspot. QEMU test
+`tests/qemu/mkqtonies.sh run`.
+
+**Audio files to a tonie** ("Oder: Audiodateien umwandeln"): choose MP3,
+M4A, WAV, OGG, FLAC … (whatever the browser can decode), each file becomes
+a chapter (sorted by name, order can be changed). The conversion runs in
+the browser, the box only gets the finished TAF through the normal upload
+(checked and protected like any upload). Works in hotspot mode too, no
+internet needed:
+
+- The browser decodes each file (Web Audio, resampled to 48 kHz) and hands
+  it to a Web Worker (`main/www/taf_worker.js`) with libopus as WebAssembly
+  (`main/www/opusenc.js` from [opus-recorder](https://github.com/chris-rudmin/opus-recorder)
+  8.0.5, MIT; libopus 1.3.1, BSD). WebCodecs or `crypto.subtle` would need
+  HTTPS, the setup page is plain HTTP; SHA-1 is computed in the worker.
+- Opus like original tonies: CELT only (the box decodes nothing else),
+  60 ms frames, 48 kHz stereo, 96 kbit/s VBR.
+- TAF layout: 4 KB protobuf header (SHA-1, length, audio id = current time,
+  chapter pages), OpusHead and OpusTags filling the first 4 KB of the
+  stream, then Ogg pages of exactly 4096 bytes with whole packets (the gap
+  filled with Opus padding in the packets), each chapter on a new page.
+- Served from flash gzip compressed (encoder 180 KB, worker 5 KB; the setup
+  page itself is now gzip compressed too, 23 KB instead of 80 KB), cached
+  by the browser per firmware version. The page keeps the box awake during
+  long conversions.
+- Speed: about 50 times real time on a PC (one hour in about a minute),
+  slower on phones. A long single file is decoded completely into memory
+  (about 1.4 GB for 60 minutes): on phones better in chapters.
+- Tests: `tests/web/run.sh` (encodes test signals in Chrome, checks the
+  layout, decodes with the box's own CELT decoder and Ogg demuxer, checks
+  frequencies and levels, also short chapters and 5 minutes in one), and
+  `tests/qemu/mkqtonies.sh run` (box serves encoder and worker, accepts a
+  TAF made in the browser).
 
 ### Backup (setup page)
 

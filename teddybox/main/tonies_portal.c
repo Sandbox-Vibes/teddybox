@@ -521,6 +521,43 @@ static esp_err_t upload_handler(httpd_req_t *req)
     return send_msg(req, ok, ok ? NULL : L("Renaming failed", "Umbenennen fehlgeschlagen"), extra);
 }
 
+/* TAF conversion in the browser: the worker and libopus from flash (gzip).
+   The page asks for them with ?v=<firmware version>: cached for long. */
+extern const uint8_t taf_worker_js_start[] asm("_binary_taf_worker_js_gz_start");
+extern const uint8_t taf_worker_js_end[] asm("_binary_taf_worker_js_gz_end");
+extern const uint8_t opusenc_js_gz_start[] asm("_binary_opusenc_js_gz_start");
+extern const uint8_t opusenc_js_gz_end[] asm("_binary_opusenc_js_gz_end");
+
+static esp_err_t send_static(httpd_req_t *req, const uint8_t *data, size_t len)
+{
+    touch();
+    httpd_resp_set_type(req, "text/javascript");
+    httpd_resp_set_hdr(req, "Cache-Control", "max-age=31536000, immutable");
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    /* in pieces: the send buffer of the server is small */
+    for (size_t o = 0; o < len; o += 8192)
+    {
+        size_t n = len - o < 8192 ? len - o : 8192;
+        if (httpd_resp_send_chunk(req, (const char *)data + o, n) != ESP_OK)
+        {
+            httpd_resp_send_chunk(req, NULL, 0);
+            return ESP_FAIL;
+        }
+        touch();
+    }
+    return httpd_resp_send_chunk(req, NULL, 0);
+}
+
+static esp_err_t worker_handler(httpd_req_t *req)
+{
+    return send_static(req, taf_worker_js_start, taf_worker_js_end - taf_worker_js_start);
+}
+
+static esp_err_t opusenc_handler(httpd_req_t *req)
+{
+    return send_static(req, opusenc_js_gz_start, opusenc_js_gz_end - opusenc_js_gz_start);
+}
+
 esp_err_t tonies_portal_register(httpd_handle_t server, void (*touch_fn)(void))
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -531,6 +568,8 @@ esp_err_t tonies_portal_register(httpd_handle_t server, void (*touch_fn)(void))
         {.uri = "/api/tonie/delete", .method = HTTP_POST, .handler = delete_handler},
         {.uri = "/api/tonie/own", .method = HTTP_POST, .handler = own_handler},
         {.uri = "/api/tonie/alias", .method = HTTP_POST, .handler = alias_handler},
+        {.uri = "/taf_worker.js", .method = HTTP_GET, .handler = worker_handler},
+        {.uri = "/opusenc.js", .method = HTTP_GET, .handler = opusenc_handler},
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++)
     {
