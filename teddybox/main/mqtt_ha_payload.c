@@ -82,7 +82,7 @@ static const ha_entity_t entities[] = {
     {"sensor", "diag_reset", "Reason of the last start", "Grund des letzten Starts",
      "\"value_template\":\"{{ value_json.reset }}\",\"icon\":\"mdi:restart-alert\",\"entity_category\":\"diagnostic\""},
     {"sensor", "diag_update", "Last nightly update", "Letzte nächtliche Aktualisierung",
-     "\"value_template\":\"{{ value_json.update if value_json.update else None }}\",\"icon\":\"mdi:cloud-download\",\"entity_category\":\"diagnostic\""},
+     "\"value_template\":\"{{ value_json['update'] if value_json['update'] else None }}\",\"icon\":\"mdi:cloud-download\",\"entity_category\":\"diagnostic\""},
     {"sensor", "diag_slot", "Firmware slot", "Firmware-Slot",
      "\"value_template\":\"{{ value_json.slot }}\",\"icon\":\"mdi:chip\",\"entity_category\":\"diagnostic\""},
     {"select", "speaker_eq", "Speaker sound", "Lautsprecher-Klang",
