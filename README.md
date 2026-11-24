@@ -343,19 +343,21 @@ unfinished download, one after another.
   this version are skipped. **The tokens give access to the tonie's content in
   the cloud: whoever has the SD card has them.** Delete the `TOKENS` folder to
   remove them.
+- Planned when the box goes to sleep, at least one hour after the last run.
+  Changing `update_hour` (setup page) plans it again for the new hour.
 - Needs a valid clock (set from teddyCloud on every connection; kept in deep
   sleep, lost when the battery is removed: then the next normal start plans
   it again).
 - The result (also "skipped (battery x %)") is kept in NVS, so it survives
   power loss and flashing. After a run the box waits up to 30 s for MQTT, so
-  Home Assistant gets it right away (diagnostic sensor "Letzte nächtliche
-  Aktualisierung"). Every start logs
+  Home Assistant gets it right away (diagnostic sensor "Last nightly
+  update"). Every start logs
   `Maint: Nightly update: last <date>: <result>, next planned <date>`.
 - The run notes the step it is in (`Maint: Step: …`). If it does not end
   normally (hangs, crash, power loss), the next start reports it as its
-  result: "unterbrochen bei: <step>" or "<result>, danach: <step>". If the
+  result: "interrupted at: <step>" or "<result>, then: <step>". If the
   run is still going 50 minutes after it started (45 minutes plus 5 for
-  sending the result), a guard notes "hing bei: <step>" and switches the box
+  sending the result), a guard notes "hung at: <step>" and switches the box
   off, silently, as after a normal run.
 
 ## Home Assistant

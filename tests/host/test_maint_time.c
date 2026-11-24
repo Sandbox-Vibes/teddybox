@@ -33,6 +33,10 @@ int main(void)
     check("evening -> 03:10 next day", maint_next_time(local(2026, 11, 20, 20, 15), 3, 10, 0, 12 * 3600), local(2026, 11, 21, 3, 10));
     check("01:00 -> 03:10 same night", maint_next_time(local(2026, 11, 21, 1, 0), 3, 10, 0, 12 * 3600), local(2026, 11, 21, 3, 10));
     check("01:00, ran at 00:30 -> next night (12 h gap)", maint_next_time(local(2026, 11, 21, 1, 0), 3, 10, local(2026, 11, 21, 0, 30), 12 * 3600), local(2026, 11, 22, 3, 10));
+    check("hour changed to 13 at 12:56, last run 07:44 -> 13:10 the same day (1 h gap)",
+          maint_next_time(local(2026, 11, 23, 12, 56), 13, 10, local(2026, 11, 23, 7, 44), 3600), local(2026, 11, 23, 13, 10));
+    check("ran at 13:05, now 13:50 -> next day (1 h gap)",
+          maint_next_time(local(2026, 11, 23, 13, 50), 13, 0, local(2026, 11, 23, 13, 5), 3600), local(2026, 11, 24, 13, 0));
     check("right at 03:10 -> next day", maint_next_time(local(2026, 11, 21, 3, 10), 3, 10, 0, 12 * 3600), local(2026, 11, 22, 3, 10));
     check("month end", maint_next_time(local(2026, 11, 30, 22, 0), 3, 0, 0, 12 * 3600), local(2026, 12, 1, 3, 0));
     check("year end", maint_next_time(local(2026, 12, 31, 23, 0), 3, 0, 0, 12 * 3600), local(2027, 1, 1, 3, 0));
