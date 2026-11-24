@@ -67,7 +67,7 @@ h3{margin:0;font-size:16px;font-weight:600;overflow-wrap:anywhere}
 .drop{position:relative;min-height:76px;border:1.5px dashed var(--dash);border-radius:14px;background:var(--soft2);display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
 .drop input{position:absolute;opacity:0;width:1px;height:1px}
 .drop .tile{width:40px;height:40px;border-radius:12px;background:var(--soft);color:var(--label);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.drop .t{display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1}
+.drop .t{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 0}
 .drop .t b{font-size:14px;overflow-wrap:anywhere}.drop .t span{font-size:12px;color:var(--muted)}
 .drop progress,#olprog{width:100%;height:8px;accent-color:var(--accent)}
 .val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
@@ -105,6 +105,13 @@ details.more .body{padding:0 18px 18px;display:flex;flex-direction:column;gap:14
 .badge.good{background:var(--okbg);color:var(--oktx)}.badge.warn{background:var(--warnbg);color:var(--warntx)}.badge.own{background:var(--ownbg);color:var(--owntx)}
 .badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
 .tlist{display:flex;flex-direction:column;gap:14px}
+.aulist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;counter-reset:au}
+.aulist li{display:flex;align-items:center;gap:6px;padding:6px 6px 6px 10px;border:1px solid var(--line);border-radius:11px;background:var(--card);font-size:13px;counter-increment:au}
+.aulist li::before{content:counter(au);min-width:20px;font-weight:700;color:var(--muted)}
+.aulist .n{flex-grow:1;min-width:0;overflow-wrap:anywhere}.aulist .n small{display:block;color:var(--muted);font-size:11px}
+.aulist button{width:34px;height:34px;border:1px solid var(--line);border-radius:9px;background:var(--soft2);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.aulist button:disabled{opacity:.35;cursor:default}
+.aulist .up svg{transform:rotate(180deg)}
 .tonie{gap:12px;padding:16px}
 .trow{display:flex;gap:12px;align-items:flex-start}
 .av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:18px;background:var(--soft);color:var(--muted)}
@@ -326,6 +333,16 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 <input id="tnfile" type="file" accept=".taf,application/octet-stream"></label>
 <p class="status" id="tnstatus"></p></div>
 <button class="primary m" id="tnbtn" type="button">Hochladen</button>
+<div class="f" style="margin-top:18px"><span class="lb">Oder: Audiodateien umwandeln</span>
+<label class="drop" style="flex-wrap:wrap"><span class="tile"><svg class="ic"><use href="#i-file"/></svg></span>
+<span class="t"><b id="auname">Dateien wählen</b><span id="ausub">MP3, M4A, WAV, OGG … – jede Datei wird ein Kapitel</span></span>
+<span class="val" id="aupct"></span>
+<progress id="auprog" max="100" value="0" hidden aria-label="Fortschritt der Umwandlung"></progress>
+<input id="aufile" type="file" multiple accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.ogg,.oga,.opus,.flac"></label>
+<ol class="aulist" id="aulist"></ol>
+<p class="status" id="austatus"></p>
+<p class="hint">Die Umwandlung läuft hier im Browser (Opus 96 kbit/s, wie bei Original-Tonies), die Box bekommt nur die fertige TAF-Datei. Eine Stunde Audio dauert am PC etwa eine Minute, am Handy einige Minuten. Sehr lange Einzeldateien (ab etwa 45 Minuten) können am Handy am Speicher scheitern – besser in Kapiteln.</p></div>
+<button class="primary m" id="aubtn" type="button">Umwandeln und hochladen</button>
 </section>
 </div>
 
@@ -440,6 +457,11 @@ const EN={
 'Enthält Version, betroffenen Task und Adressen, keine Zugangsdaten – du kannst den Text zur Fehlersuche weitergeben.':'Contains version, affected task and addresses, no credentials – you can share the text for troubleshooting.',
 'Kopieren':'Copy','Protokoll löschen':'Delete log',
 'Ohne Ladegerät':'Without the charger','nur am Ladegerät':'only on the charger','ab 20 % Akku':'from 20 % battery','ab 30 % Akku (Standard)':'from 30 % battery (default)','ab 50 % Akku':'from 50 % battery','ab 70 % Akku':'from 70 % battery',
+'Oder: Audiodateien umwandeln':'Or: convert audio files','Dateien wählen':'Choose files','MP3, M4A, WAV, OGG … – jede Datei wird ein Kapitel':'MP3, M4A, WAV, OGG … – each file becomes a chapter','Fortschritt der Umwandlung':'Conversion progress',
+'Die Umwandlung läuft hier im Browser (Opus 96 kbit/s, wie bei Original-Tonies), die Box bekommt nur die fertige TAF-Datei. Eine Stunde Audio dauert am PC etwa eine Minute, am Handy einige Minuten. Sehr lange Einzeldateien (ab etwa 45 Minuten) können am Handy am Speicher scheitern – besser in Kapiteln.':'The conversion runs here in the browser (Opus 96 kbit/s, like original tonies), the box only gets the finished TAF file. One hour of audio takes about a minute on a PC, a few minutes on a phone. Very long single files (from about 45 minutes) can run out of memory on a phone – better in chapters.',
+'Umwandeln und hochladen':'Convert and upload','{n} Dateien':'{n} files','Nach oben':'Move up','Nach unten':'Move down','Entfernen':'Remove','Bitte Audiodateien auswählen.':'Please choose audio files.',
+'Lade den Encoder …':'Loading the encoder …','Der Encoder konnte nicht geladen werden.':'The encoder could not be loaded.','Kapitel {i}/{n}: lese {s} …':'Chapter {i}/{n}: reading {s} …','Kapitel {i}/{n} wird umgewandelt …':'Chapter {i}/{n} is being converted …',
+'{s}: Dieses Format kann der Browser nicht lesen.':'{s}: the browser cannot read this format.','Gespeichert: {n} Kapitel, {t}, Prüfsumme stimmt.':'Stored: {n} chapters, {t}, checksum correct.','Umwandlung abgebrochen: {s}':'Conversion aborted: {s}','Wird umgewandelt …':'Converting …',
 'Firmware':'Firmware','Online-Update':'Online update','Suche nach einer neuen Version …':'Looking for a new version …','Update-Fortschritt':'Update progress','Installieren':'Install',
 '{v} installieren':'Install {v}','Neue Version {v} verfügbar.':'New version {v} available.','Du hast die neueste Version ({v}).':'You have the latest version ({v}).','Entwicklungsstand – letzte Version ist {v}.':'Development build – the latest release is {v}.','GitHub nicht erreichbar.':'GitHub not reachable.','Versionshinweise':'Release notes',
 'Die Box lädt {v} von GitHub …':'The box is downloading {v} from GitHub …','Lädt {v} … {p} %':'Downloading {v} … {p} %','Prüft und installiert …':'Checking and installing …',
@@ -741,8 +763,9 @@ $('tnreload').onclick=tnLoad;
 $('tnseen').onchange=()=>{if($('tnseen').value)$('tnuid').value=$('tnseen').value;};
 $('tnfile').onchange=()=>{const f=$('tnfile').files[0];$('tnname').textContent=f?f.name:T('Datei wählen');$('tnpct').textContent='';
   $('tnsub').textContent=f?num((f.size/1048576).toFixed(1))+' MB'+($('tnuid').value?' '+T('für')+' '+$('tnuid').value.toUpperCase():''):T('.taf aus teddyCloud oder TonieToolbox');setStatus($('tnstatus'),'');};
+const tnUid=()=>$('tnuid').value.trim().toUpperCase().replace(/[^0-9A-F]/g,'');
 $('tnbtn').onclick=()=>{
-  const uid=$('tnuid').value.trim().toUpperCase().replace(/[^0-9A-F]/g,'');
+  const uid=tnUid();
   const f=$('tnfile').files[0];
   if(uid.length!==16){setStatus($('tnstatus'),T('Bitte einen Tonie wählen oder die 16-stellige UID eingeben.'),'err');return;}
   if(!f){setStatus($('tnstatus'),T('Bitte eine TAF-Datei auswählen.'),'err');return;}
@@ -760,6 +783,91 @@ $('tnbtn').onclick=()=>{
   };
   x.onerror=()=>{done();setStatus($('tnstatus'),T('Upload abgebrochen.'),'err');};
   setStatus($('tnstatus'),'');x.send(f);
+};
+/* audio files -> TAF in the browser (taf_worker.js, libopus from the box) */
+let auFiles=[];
+const natCmp=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}).compare;
+function auShow(){
+  const ol=$('aulist');ol.textContent='';
+  auFiles.forEach((f,i)=>{
+    const li=document.createElement('li'),n=document.createElement('span');n.className='n';
+    n.innerHTML=esc(f.name)+'<small>'+num((f.size/1048576).toFixed(1))+' MB</small>';li.append(n);
+    const mv=(d)=>{const j=i+d;[auFiles[i],auFiles[j]]=[auFiles[j],auFiles[i]];auShow();};
+    const b1=btn('up',ic('chev',1),T('Nach oben'),()=>mv(-1));b1.disabled=!i;
+    const b2=btn('dn',ic('chev',1),T('Nach unten'),()=>mv(1));b2.disabled=i===auFiles.length-1;
+    const b3=btn('',ic('trash',1),T('Entfernen'),()=>{auFiles.splice(i,1);auShow();});
+    li.append(b1,b2,b3);ol.append(li);
+  });
+  $('auname').textContent=auFiles.length?(auFiles.length===1?auFiles[0].name:T('{n} Dateien',{n:auFiles.length})):T('Dateien wählen');
+  const mb=auFiles.reduce((a,f)=>a+f.size,0)/1048576;
+  $('ausub').textContent=auFiles.length?num(mb.toFixed(1))+' MB':T('MP3, M4A, WAV, OGG … – jede Datei wird ein Kapitel');
+}
+$('aufile').onchange=()=>{auFiles=auFiles.concat([...$('aufile').files]).sort((a,b)=>natCmp(a.name,b.name));$('aufile').value='';setStatus($('austatus'),'');auShow();};
+function auWorker(){
+  return new Promise((res,rej)=>{
+    const w=new Worker('/taf_worker.js?v='+encodeURIComponent(cfg.fw_version||''));
+    const to=setTimeout(()=>{w.terminate();rej(new Error(T('Der Encoder konnte nicht geladen werden.')));},30000);
+    w.onerror=()=>{clearTimeout(to);w.terminate();rej(new Error(T('Der Encoder konnte nicht geladen werden.')));};
+    w.onmessage=e=>{if(e.data.type==='ready'){clearTimeout(to);w.onerror=null;res(w);}};
+  });
+}
+function auNext(w,type,onProgress){
+  return new Promise((res,rej)=>{
+    w.onmessage=e=>{const d=e.data;
+      if(d.type==='progress'){if(onProgress)onProgress(d.done/d.total);}
+      else if(d.type==='error')rej(new Error(d.message));
+      else if(d.type===type)res(d);};
+    w.onerror=e=>rej(new Error(e.message||'worker'));
+  });
+}
+const mmss=s=>{s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0');};
+$('aubtn').onclick=async()=>{
+  const uid=tnUid(),n=auFiles.length;
+  if(uid.length!==16){setStatus($('austatus'),T('Bitte einen Tonie wählen oder die 16-stellige UID eingeben.'),'err');return;}
+  if(!n){setStatus($('austatus'),T('Bitte Audiodateien auswählen.'),'err');return;}
+  if(tnHave[uid]&&tnHave[uid].size>=0&&!confirm(T('Die vorhandene Datei von {u} wird ersetzt. Weiter?',{u:uidFmt(uid)})))return;
+  const prog=$('auprog'),pct=$('aupct'),st=$('austatus'),set=p=>{prog.value=p;pct.textContent=Math.floor(p)+' %';};
+  $('aubtn').disabled=$('tnbtn').disabled=true;$('aubtn').textContent=T('Wird umgewandelt …');prog.hidden=false;set(0);
+  /* the box switches itself off after 15 minutes without requests */
+  const keep=setInterval(()=>fetch('/api/config',{cache:'no-store'}).catch(()=>{}),60000);
+  let w=null;
+  try{
+    setStatus(st,T('Lade den Encoder …'));
+    w=await auWorker();
+    w.postMessage({cmd:'start',bitrate:96000,audioId:Math.floor(Date.now()/1000)});
+    for(let i=0;i<n;i++){
+      const f=auFiles[i];
+      setStatus(st,T('Kapitel {i}/{n}: lese {s} …',{i:i+1,n,s:f.name}));
+      let buf;
+      try{buf=await new OfflineAudioContext(2,1,48000).decodeAudioData(await f.arrayBuffer());}
+      catch(e){throw new Error(T('{s}: Dieses Format kann der Browser nicht lesen.',{s:f.name}));}
+      const l=new Float32Array(buf.length),r=buf.numberOfChannels>1?new Float32Array(buf.length):null;
+      buf.copyFromChannel(l,0);if(r)buf.copyFromChannel(r,1);buf=null;
+      setStatus(st,T('Kapitel {i}/{n} wird umgewandelt …',{i:i+1,n}));
+      const done=auNext(w,'chapter',p=>set((i+p)/n*90));
+      w.postMessage({cmd:'chapter',l,r:r||undefined},r?[l.buffer,r.buffer]:[l.buffer]);
+      await done;
+    }
+    const fin=auNext(w,'done');w.postMessage({cmd:'finish'});
+    const d=await fin;w.terminate();w=null;
+    setStatus(st,T('Wird hochgeladen …'));
+    const j=await new Promise((res,rej)=>{
+      const x=new XMLHttpRequest();x.open('POST','/api/tonie/upload?uid='+uid);
+      x.upload.onprogress=e=>{if(e.lengthComputable)set(90+e.loaded/e.total*10);};
+      x.onload=()=>{try{res(JSON.parse(x.responseText));}catch(e){res({});}};
+      x.onerror=()=>rej(new Error(T('Upload abgebrochen.')));
+      x.send(d.blob);
+    });
+    if(!j.ok)throw new Error(j.error||T('unbekannt'));
+    set(100);setStatus(st,T('Gespeichert: {n} Kapitel, {t}, Prüfsumme stimmt.',{n:j.chapters,t:mmss(d.seconds)}),'ok');
+    auFiles=[];auShow();tnLoad();
+  }catch(e){
+    setStatus(st,T('Umwandlung abgebrochen: {s}',{s:e.message||e}),'err');
+  }finally{
+    if(w)w.terminate();
+    clearInterval(keep);prog.hidden=true;pct.textContent='';
+    $('aubtn').disabled=$('tnbtn').disabled=false;$('aubtn').textContent=T('Umwandeln und hochladen');
+  }
 };
 /* crash log */
 async function crLoad(){

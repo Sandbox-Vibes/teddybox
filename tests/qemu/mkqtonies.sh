@@ -58,9 +58,17 @@ curl -s -m 30 -X POST --data-binary '' "$B/api/tonie/alias?uid=E004035011223344"
 t "alias removed" '[[ "$L" != *"Neuer Tonie"* && "$L" == *Nacht* ]]'
 curl -s -m 30 -X POST "$B/api/tonie/own?uid=$U&on=0" > /dev/null; L=$(list)
 t "protection off" '[[ "$L" == *"\"own\":false"* ]]'
+W=$T/../../teddybox/main/www
+H=$(curl -s -m 60 -D - -o "$D/opusenc.js" --compressed "$B/opusenc.js?v=1")
+t "encoder served gzip compressed, unchanged" '[[ "$H" == *"ontent-Encoding: gzip"* ]] && cmp -s "$D/opusenc.js" "$W/opusenc.js"'
+curl -s -m 30 -o "$D/taf_worker.js" --compressed "$B/taf_worker.js?v=1"
+t "TAF worker served" 'cmp -s "$D/taf_worker.js" "$W/taf_worker.js"'
+cp "$T/../web/sample_browser.taf" "$D/"
+R=$(up sample_browser.taf E00403501234ABCE); echo "$R"
+t "TAF made in the browser accepted, 3 chapters" '[[ "$R" == *"\"ok\":true"* && "$R" == *"\"chapters\":3"* ]]'
 R=$(curl -s -m 30 -X POST "$B/api/tonie/upload?uid=XYZ"); 
 t "invalid UID refused" '[[ "$R" == *"\"ok\":false"* ]]'
-curl -s -m 30 -X POST "$B/api/tonie/delete?uid=$U" > /dev/null; L=$(list)
+curl -s -m 30 -X POST "$B/api/tonie/delete?uid=$U" > /dev/null; curl -s -m 30 -X POST "$B/api/tonie/delete?uid=E00403501234ABCE" > /dev/null; L=$(list)
 t "deleted" '[[ "$L" == *"\"tonies\":[]"* ]]'
 kill $PID 2>/dev/null
 grep -a "Tonies:" "$LOG" | tail -6
