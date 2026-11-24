@@ -69,7 +69,7 @@ h3{margin:0;font-size:16px;font-weight:600;overflow-wrap:anywhere}
 .drop .tile{width:40px;height:40px;border-radius:12px;background:var(--soft);color:var(--label);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .drop .t{display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1}
 .drop .t b{font-size:14px;overflow-wrap:anywhere}.drop .t span{font-size:12px;color:var(--muted)}
-.drop progress{width:100%;height:8px;accent-color:var(--accent)}
+.drop progress,#olprog{width:100%;height:8px;accent-color:var(--accent)}
 .val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
 .vh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .rng{width:100%;accent-color:var(--accent);height:28px;margin:0}
@@ -353,6 +353,12 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 
 <section>
 <div class="hd"><h2 class="rd">Firmware</h2><span class="mono hint" id="fwinfo" style="font-size:12px;text-align:right"></span></div>
+<div id="online" hidden class="f"><span class="lb">Online-Update</span>
+<p class="hint" id="olinfo">Suche nach einer neuen Version …</p>
+<progress id="olprog" max="100" value="0" hidden aria-label="Update-Fortschritt"></progress>
+<p class="status" id="olstatus"></p>
+<button class="primary m" id="olbtn" type="button" hidden>Installieren</button>
+</div>
 <div class="f"><span class="lb">Neue TeddyBox-Firmware</span>
 <label class="drop"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
 <span class="t"><b id="fwname">teddybox.bin wählen</b><span>Startet auf Probe, sonst zurück zur bisherigen</span></span>
@@ -431,7 +437,10 @@ const EN={
 'Absturzprotokoll':'Crash log','leer':'empty',
 'Enthält Version, betroffenen Task und Adressen, keine Zugangsdaten – du kannst den Text zur Fehlersuche weitergeben.':'Contains version, affected task and addresses, no credentials – you can share the text for troubleshooting.',
 'Kopieren':'Copy','Protokoll löschen':'Delete log',
-'Firmware':'Firmware','Neue TeddyBox-Firmware':'New TeddyBox firmware','teddybox.bin wählen':'Choose teddybox.bin','Startet auf Probe, sonst zurück zur bisherigen':'Boots on probation, otherwise back to the previous one',
+'Firmware':'Firmware','Online-Update':'Online update','Suche nach einer neuen Version …':'Looking for a new version …','Update-Fortschritt':'Update progress','Installieren':'Install',
+'{v} installieren':'Install {v}','Neue Version {v} verfügbar.':'New version {v} available.','Du hast die neueste Version ({v}).':'You have the latest version ({v}).','Entwicklungsstand – letzte Version ist {v}.':'Development build – the latest release is {v}.','GitHub nicht erreichbar.':'GitHub not reachable.','Versionshinweise':'Release notes',
+'Die Box lädt {v} von GitHub …':'The box is downloading {v} from GitHub …','Lädt {v} … {p} %':'Downloading {v} … {p} %','Prüft und installiert …':'Checking and installing …',
+'{v} jetzt von GitHub laden und installieren?\n\nDie Box startet danach neu.':'Download and install {v} from GitHub now?\n\nThe box restarts afterwards.','Neue TeddyBox-Firmware':'New TeddyBox firmware','teddybox.bin wählen':'Choose teddybox.bin','Startet auf Probe, sonst zurück zur bisherigen':'Boots on probation, otherwise back to the previous one',
 'Für das erste Update wird der Slot der Notfall-App (PD) gebraucht. Die normale Original-Firmware bleibt erhalten, die PD-App ist in deinem Flash-Dump gesichert.':'The first update needs the slot of the emergency app (PD). The regular original firmware stays, the PD app is saved in your flash dump.',
 'Notfall-App (PD) dafür überschreiben':'Overwrite the emergency app (PD) for it','Firmware hochladen':'Upload firmware',
 'Original-Firmware':'Original firmware',
@@ -547,7 +556,7 @@ async function load(){
     if(cfg.box_id){$('bkcname').textContent='toniebox-'+cfg.box_id+'-certs.zip';$('bksize').textContent='toniebox-'+cfg.box_id+'-flash.bin';}
     chips();
   }catch(e){setStatus($('status'),T('Einstellungen konnten nicht geladen werden.'),'err');}
-  rngShow();advSum();scan();
+  rngShow();advSum();scan();online();
 }
 $('rescan').onclick=scan;
 $('cafile').onchange=async()=>{
@@ -558,6 +567,50 @@ $('cafile').onchange=async()=>{
     setStatus($('castatus'),j.ok?T('Zertifikat gespeichert: {s}',{s:j.subject}):T('Fehler: {s}',{s:j.error}),j.ok?'ok':'err');
     if(j.ok){cfg.ca_custom=true;chips();}
   }catch(e){setStatus($('castatus'),T('Upload fehlgeschlagen.'),'err');}
+};
+// online update: only in the home network; the page asks GitHub for the
+// latest release, the box downloads and checks it itself
+const ver=v=>{const m=/^v?(\d+)\.(\d+)\.(\d+)(-\d+-g)?/.exec(v||'');return m?{n:[+m[1],+m[2],+m[3]],dev:!!m[4]}:null;};
+const cmpv=(a,b)=>{for(let i=0;i<3;i++)if(a.n[i]!==b.n[i])return a.n[i]-b.n[i];return 0;};
+let olTag='';
+async function online(){
+  if(cfg.net_mode!=='lan'||!cfg.update_repo)return;
+  $('online').hidden=false;
+  try{
+    const r=await fetch('https://api.github.com/repos/'+cfg.update_repo+'/releases/latest',{cache:'no-store'});
+    const rel=await r.json();const lv=ver(rel.tag_name),cv=ver(cfg.fw_version);
+    if(!r.ok||!lv)throw 0;
+    const notes=/^https:\/\/github\.com\//.test(rel.html_url||'')?' <a href="'+esc(rel.html_url)+'" target="_blank" rel="noopener">'+T('Versionshinweise')+'</a>':'';
+    const newer=!cv||cmpv(lv,cv)>0, dev=cv&&cv.dev&&cmpv(lv,cv)===0;
+    olTag=rel.tag_name;
+    if(newer){$('olinfo').innerHTML=T('Neue Version {v} verfügbar.',{v:esc(olTag)})+notes;}
+    else if(dev){$('olinfo').innerHTML=T('Entwicklungsstand – letzte Version ist {v}.',{v:esc(olTag)})+notes;}
+    else{$('olinfo').textContent=T('Du hast die neueste Version ({v}).',{v:olTag});return;}
+    $('olbtn').textContent=T('{v} installieren',{v:olTag});$('olbtn').hidden=false;
+  }catch(e){$('olinfo').textContent=T('GitHub nicht erreichbar.');}
+}
+$('olbtn').onclick=async()=>{
+  if(!olTag||!confirm(T('{v} jetzt von GitHub laden und installieren?\n\nDie Box startet danach neu.',{v:olTag})))return;
+  $('olbtn').disabled=true;$('fwbtn').disabled=true;
+  try{
+    const j=await (await fetch('/api/firmware/fetch?tag='+encodeURIComponent(olTag)+($('pdok').checked?'&pd=1':''),{method:'POST'})).json();
+    if(!j.ok)throw new Error(j.error);
+  }catch(e){setStatus($('olstatus'),T('Fehler: {s}',{s:e.message||T('unbekannt')}),'err');$('olbtn').disabled=false;$('fwbtn').disabled=false;return;}
+  setStatus($('olstatus'),T('Die Box lädt {v} von GitHub …',{v:olTag}));$('olprog').hidden=false;
+  const poll=async()=>{
+    let s;try{s=await (await fetch('/api/firmware/fetch/status',{cache:'no-store'})).json();}catch(e){return setTimeout(poll,1500);}
+    if(s.state==='running'){
+      const p=s.total?Math.floor(s.received*100/s.total):0;$('olprog').value=p;
+      setStatus($('olstatus'),p>=100?T('Prüft und installiert …'):T('Lädt {v} … {p} %',{v:olTag,p:p}));
+      return setTimeout(poll,1000);
+    }
+    $('olprog').hidden=true;
+    if(s.state==='done'){setStatus($('olstatus'),T('Installiert. Die Box startet mit der neuen Version neu.'),'ok');$('save').disabled=true;return;}
+    setStatus($('olstatus'),T('Fehler: {s}',{s:s.error||T('unbekannt')}),'err');
+    if(s.needs_pd)$('pdask').hidden=false;
+    $('olbtn').disabled=false;$('fwbtn').disabled=false;
+  };
+  setTimeout(poll,1000);
 };
 $('fwfile').onchange=()=>{const f=$('fwfile').files[0];$('fwname').textContent=f?f.name:T('teddybox.bin wählen');};
 $('fwbtn').onclick=()=>{

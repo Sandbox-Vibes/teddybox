@@ -27,6 +27,7 @@
 #include "settings.h"
 #include "wifi.h"
 #include "mdns_min.h"
+#include "fw_fetch.h"
 #include "ledman.h"
 #include "playback.h"
 #include "ota.h"
@@ -53,6 +54,11 @@ extern const uint8_t setup_html_end[] asm("_binary_setup_html_end");
 
 static volatile int64_t last_activity = 0;
 static volatile bool saved = false;
+
+static void fetch_finished(void)
+{
+    saved = true; /* restarts into the new firmware */
+}
 
 bool setup_portal_saved(void)
 {
@@ -188,6 +194,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     snprintf(buf, sizeof(buf), "TeddyBox-%02X%02X", mac[4], mac[5]);
     cJSON_AddStringToObject(j, "ap_ssid", buf);
     cJSON_AddStringToObject(j, "net_mode", in_home_net ? "lan" : "ap");
+    cJSON_AddStringToObject(j, "update_repo", TEDDYBOX_REPO);
     if (in_home_net)
     {
         cJSON_AddStringToObject(j, "lan_ip", lan_ip);
@@ -680,6 +687,10 @@ esp_err_t setup_portal_register(httpd_handle_t server)
     {
         err = crashlog_register(server, touch);
     }
+    if (err == ESP_OK)
+    {
+        err = fw_fetch_register(server, touch, fetch_finished);
+    }
     if (err != ESP_OK)
     {
         return err;
@@ -887,7 +898,7 @@ void setup_portal_run(void)
     hc.stack_size = 8192;          /* cJSON and certificate parsing */
     hc.max_open_sockets = 5;       /* phones open many connections */
     hc.lru_purge_enable = true;
-    hc.max_uri_handlers = 24;      /* setup + backup + tonies + crash log */
+    hc.max_uri_handlers = 26;      /* setup + backup + tonies + crash log + online update */
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &hc) != ESP_OK || setup_portal_register(server) != ESP_OK)
     {
