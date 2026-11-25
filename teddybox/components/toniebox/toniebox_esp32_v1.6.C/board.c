@@ -32,6 +32,7 @@
 #include "esp_sleep.h"
 
 #include "driver/rtc_io.h"
+#include "esp_adc/adc_oneshot.h"
 #include "esp_rom_sys.h"
 #include "soc/rtc.h"
 #include "esp_sleep.h"
@@ -331,11 +332,44 @@ void audio_board_set_timer_wakeup(uint64_t us)
     extra_wake_us = us;
 }
 
+/* The charging station also gives the 5 V rail (GPIO8, ADC1 channel 7, 1:2
+   divider: 2.5 V at the pin, 0 V on battery). On the station the wake line
+   is not always held low: seen as wakes every few minutes while charging,
+   the line only low for a moment. So the station is detected here too. */
+static int charger_hint = -1; /* from the battery monitor before sleep, -1 unknown */
+
+void audio_board_set_charger(bool present)
+{
+    charger_hint = present;
+}
+
+static bool charger_present(void)
+{
+    adc_oneshot_unit_handle_t unit;
+    adc_oneshot_unit_init_cfg_t ucfg = {.unit_id = ADC_UNIT_1};
+    if (adc_oneshot_new_unit(&ucfg, &unit) != ESP_OK)
+    {
+        /* in use by the battery monitor: its last reading */
+        return charger_hint == 1;
+    }
+    adc_oneshot_chan_cfg_t ccfg = {.atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_12};
+    int raw = 0;
+    bool present = false;
+    if (adc_oneshot_config_channel(unit, ADC_CHANNEL_7, &ccfg) == ESP_OK &&
+        adc_oneshot_read(unit, ADC_CHANNEL_7, &raw) == ESP_OK)
+    {
+        /* about 3300 on the station; 2400 = about 1.8 V at the pin, 3.6 V rail */
+        present = raw > 2400;
+    }
+    adc_oneshot_del_unit(unit);
+    return present;
+}
+
 static bool sleep_pin_low(gpio_num_t pin);
 
 void audio_board_deep_sleep(void)
 {
-    if (!sleep_pin_low(WAKEUP_GPIO))
+    if (!sleep_pin_low(WAKEUP_GPIO) && !charger_present())
     {
         sleep_mode = SLEEP_MODE_LINE;
         esp_sleep_enable_ext0_wakeup(WAKEUP_GPIO, 0);
@@ -347,7 +381,7 @@ void audio_board_deep_sleep(void)
     else
     {
         sleep_mode = SLEEP_MODE_EARS;
-        ESP_LOGI(TAG, "Wake line held low (charger?): wake on the ears, check again in %llu s", CHARGER_CHECK_US / 1000000);
+        ESP_LOGI(TAG, "On the charger: wake on the ears, check again in %llu s", CHARGER_CHECK_US / 1000000);
         esp_sleep_enable_ext1_wakeup(BIT64(EAR_BIG_GPIO) | BIT64(EAR_SMALL_GPIO), ESP_EXT1_WAKEUP_ANY_LOW);
         /* keep the pull-ups of the (active low) ears in deep sleep */
         esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
@@ -382,23 +416,26 @@ const char *audio_board_wake_info(void)
 void audio_board_sleep_check(bool stay_awake_on_timer)
 {
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-    bool line = false, big = false, small = false;
+    bool line = false, big = false, small = false, station = false;
     if (cause == ESP_SLEEP_WAKEUP_EXT0 || cause == ESP_SLEEP_WAKEUP_EXT1)
     {
         line = sleep_pin_low(WAKEUP_GPIO);
         big = sleep_pin_low(EAR_BIG_GPIO);
         small = sleep_pin_low(EAR_SMALL_GPIO);
-        snprintf(wake_info, sizeof(wake_info), "%s; then line %s, ear %s",
+        station = charger_present();
+        snprintf(wake_info, sizeof(wake_info), "%s; then line %s, ear %s, charger %s",
                  cause == ESP_SLEEP_WAKEUP_EXT0 ? "wake line" : "ear (on the charger)",
-                 line ? "low" : "high", big ? (small ? "both" : "big") : (small ? "small" : "none"));
+                 line ? "low" : "high", big ? (small ? "both" : "big") : (small ? "small" : "none"),
+                 station ? "yes" : "no");
     }
     else if (cause == ESP_SLEEP_WAKEUP_TIMER)
     {
         snprintf(wake_info, sizeof(wake_info), "timer%s", stay_awake_on_timer ? " (nightly update)" : "");
     }
-    /* woken by the wake line while it stays low and no ear is pressed: the box
-       was put on the charger. Do not start, sleep on (waking on the ears). */
-    bool put_on_charger = cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE && line && !big && !small;
+    /* woken by the wake line with no ear pressed, while it stays low or the
+       station is there: the box was put on the charger (or the line moved
+       while charging). Do not start, sleep on (waking on the ears). */
+    bool put_on_charger = cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE && (line || station) && !big && !small;
     if ((cause == ESP_SLEEP_WAKEUP_TIMER && !stay_awake_on_timer) || put_on_charger)
     {
         /* only the charger check: straight back to sleep, peripherals stay off

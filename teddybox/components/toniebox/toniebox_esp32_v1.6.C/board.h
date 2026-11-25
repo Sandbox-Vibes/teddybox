@@ -150,6 +150,8 @@ void audio_board_poweroff(void);
 /* what woke the box from deep sleep, with the line and ear levels right
    after the wake ("" after a reset) */
 const char *audio_board_wake_info(void);
+/* charger state from the battery monitor, for the wake sources of the next sleep */
+void audio_board_set_charger(bool present);
 /* deep sleep with the right wake sources (wake line, or ears while on the charger) */
 void audio_board_deep_sleep(void);
 /* call first in app_main: a timer wake (charger check) goes straight back to
