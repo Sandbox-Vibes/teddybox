@@ -147,6 +147,9 @@ bool audio_board_ear_small(void);
 bool board_headset_irq(void);
 void audio_board_power(bool state);
 void audio_board_poweroff(void);
+/* what woke the box from deep sleep, with the line and ear levels right
+   after the wake ("" after a reset) */
+const char *audio_board_wake_info(void);
 /* deep sleep with the right wake sources (wake line, or ears while on the charger) */
 void audio_board_deep_sleep(void);
 /* call first in app_main: a timer wake (charger check) goes straight back to

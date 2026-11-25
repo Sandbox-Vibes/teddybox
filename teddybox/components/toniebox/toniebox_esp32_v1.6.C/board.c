@@ -370,13 +370,35 @@ static bool sleep_pin_low(gpio_num_t pin)
     return gpio_get_level(pin) == 0;
 }
 
+/* what woke the box and how the lines were right after the wake (for the
+   diagnosis of unexpected wakes, shown in Home Assistant) */
+static char wake_info[64];
+
+const char *audio_board_wake_info(void)
+{
+    return wake_info;
+}
+
 void audio_board_sleep_check(bool stay_awake_on_timer)
 {
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    bool line = false, big = false, small = false;
+    if (cause == ESP_SLEEP_WAKEUP_EXT0 || cause == ESP_SLEEP_WAKEUP_EXT1)
+    {
+        line = sleep_pin_low(WAKEUP_GPIO);
+        big = sleep_pin_low(EAR_BIG_GPIO);
+        small = sleep_pin_low(EAR_SMALL_GPIO);
+        snprintf(wake_info, sizeof(wake_info), "%s; then line %s, ear %s",
+                 cause == ESP_SLEEP_WAKEUP_EXT0 ? "wake line" : "ear (on the charger)",
+                 line ? "low" : "high", big ? (small ? "both" : "big") : (small ? "small" : "none"));
+    }
+    else if (cause == ESP_SLEEP_WAKEUP_TIMER)
+    {
+        snprintf(wake_info, sizeof(wake_info), "timer%s", stay_awake_on_timer ? " (nightly update)" : "");
+    }
     /* woken by the wake line while it stays low and no ear is pressed: the box
        was put on the charger. Do not start, sleep on (waking on the ears). */
-    bool put_on_charger = cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE &&
-                          sleep_pin_low(WAKEUP_GPIO) && !sleep_pin_low(EAR_BIG_GPIO) && !sleep_pin_low(EAR_SMALL_GPIO);
+    bool put_on_charger = cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE && line && !big && !small;
     if ((cause == ESP_SLEEP_WAKEUP_TIMER && !stay_awake_on_timer) || put_on_charger)
     {
         /* only the charger check: straight back to sleep, peripherals stay off
