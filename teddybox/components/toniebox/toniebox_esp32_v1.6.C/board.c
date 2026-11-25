@@ -337,6 +337,7 @@ void audio_board_set_timer_wakeup(uint64_t us)
    is not always held low: seen as wakes every few minutes while charging,
    the line only low for a moment. So the station is detected here too. */
 static int charger_hint = -1; /* from the battery monitor before sleep, -1 unknown */
+static int charger_raw = -1;  /* last direct reading (diagnosis) */
 
 void audio_board_set_charger(bool present)
 {
@@ -360,6 +361,7 @@ static bool charger_present(void)
     {
         /* about 3300 on the station; 2400 = about 1.8 V at the pin, 3.6 V rail */
         present = raw > 2400;
+        charger_raw = raw;
     }
     adc_oneshot_del_unit(unit);
     return present;
@@ -406,7 +408,7 @@ static bool sleep_pin_low(gpio_num_t pin)
 
 /* what woke the box and how the lines were right after the wake (for the
    diagnosis of unexpected wakes, shown in Home Assistant) */
-static char wake_info[64];
+static char wake_info[80];
 
 const char *audio_board_wake_info(void)
 {
@@ -423,10 +425,10 @@ void audio_board_sleep_check(bool stay_awake_on_timer)
         big = sleep_pin_low(EAR_BIG_GPIO);
         small = sleep_pin_low(EAR_SMALL_GPIO);
         station = charger_present();
-        snprintf(wake_info, sizeof(wake_info), "%s; then line %s, ear %s, charger %s",
+        snprintf(wake_info, sizeof(wake_info), "%s; then line %s, ear %s, charger %s (%d)",
                  cause == ESP_SLEEP_WAKEUP_EXT0 ? "wake line" : "ear (on the charger)",
                  line ? "low" : "high", big ? (small ? "both" : "big") : (small ? "small" : "none"),
-                 station ? "yes" : "no");
+                 station ? "yes" : "no", charger_raw);
     }
     else if (cause == ESP_SLEEP_WAKEUP_TIMER)
     {
