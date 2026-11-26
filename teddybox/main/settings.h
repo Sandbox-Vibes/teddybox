@@ -49,6 +49,8 @@ typedef struct
     uint8_t volume_max;
     /* with headphones plugged in */
     uint8_t volume_max_hdp;
+    /* lowest volume step in dB: -20 (original) down to -63, -64 = silent */
+    int8_t volume_min_db;
     /* take over box settings changed in teddyCloud (max volume, LED, slap) */
     bool tc_box_settings;
     uint8_t volume_default;

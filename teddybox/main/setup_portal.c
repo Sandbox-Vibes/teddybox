@@ -165,6 +165,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(j, "lang_id", s->lang_id);
     cJSON_AddNumberToObject(j, "volume_max", s->volume_max);
     cJSON_AddNumberToObject(j, "volume_max_hdp", s->volume_max_hdp);
+    cJSON_AddNumberToObject(j, "volume_min_db", s->volume_min_db);
     cJSON_AddBoolToObject(j, "tc_box_settings", s->tc_box_settings);
     cJSON_AddNumberToObject(j, "idle_timeout", s->idle_timeout_s);
     cJSON_AddStringToObject(j, "speaker_eq", speaker_eq_name(s->speaker_eq));
@@ -437,6 +438,10 @@ static esp_err_t save_handler(httpd_req_t *req)
     if (get_int(o, "volume_max_hdp", 10, 100, &v))
     {
         s->volume_max_hdp = v;
+    }
+    if (get_int(o, "volume_min_db", -64, -20, &v))
+    {
+        s->volume_min_db = v;
     }
     if (s->volume_default > s->volume_max)
     {
