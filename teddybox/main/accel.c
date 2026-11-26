@@ -250,90 +250,93 @@ static int accel_slap_direction(lis3dh_t lis)
     return dir;
 }
 
-void accel_mainthread(void *arg)
+/* driven by the I/O task (main.c) every ACCEL_LOOP_MS: accel_wait() for
+   slaps until the next tick, then accel_sample() for the tilt */
+static lis3dh_t lis;
+static int slap_level = -1;
+static int64_t last_slap_us;
+
+void accel_wait(int ms)
 {
-    audio_board_handle_t board = (audio_board_handle_t)arg;
-    lis3dh_t lis = board->lis3dh;
-    float accel[3];
-    int slap_level = -1;
-    int64_t last_slap_us = 0;
-
-    click_sem = xSemaphoreCreateBinary();
-    gpio_set_intr_type(LIS3DH_IRQ_GPIO, GPIO_INTR_POSEDGE);
-    gpio_isr_handler_add(LIS3DH_IRQ_GPIO, click_isr, NULL);
-
-    while (1)
+    if (!lis)
     {
-        /* settings can change at any time (Home Assistant, setup page) */
-        const settings_t *s = settings_get();
-        int level = s->slap_level < ACCEL_LEVELS ? s->slap_level : 3;
-        if (level != slap_level)
+        vTaskDelay(pdMS_TO_TICKS(ms));
+        return;
+    }
+    /* settings can change at any time (Home Assistant, setup page) */
+    const settings_t *s = settings_get();
+    int level = s->slap_level < ACCEL_LEVELS ? s->slap_level : 3;
+    if (level != slap_level)
+    {
+        slap_level = level;
+        if (lis3dh_setup_click(lis, slap_threshold[level]) != ESP_OK)
         {
-            slap_level = level;
-            if (lis3dh_setup_click(lis, slap_threshold[level]) != ESP_OK)
-            {
-                ESP_LOGW(TAG, "Sensor setup failed");
-            }
-            ESP_LOGI(TAG, "Slap %s (threshold %d), tilt level %d", level ? "on" : "off", slap_threshold[level], s->tilt_level);
-            uint8_t dummy;
-            lis3dh_get_reg(lis, LIS3DH_CLICK_SRC, &dummy);
-            xSemaphoreTake(click_sem, 0);
+            ESP_LOGW(TAG, "Sensor setup failed");
         }
+        ESP_LOGI(TAG, "Slap %s (threshold %d), tilt level %d", level ? "on" : "off", slap_threshold[level], s->tilt_level);
+        uint8_t dummy;
+        lis3dh_get_reg(lis, LIS3DH_CLICK_SRC, &dummy);
+        xSemaphoreTake(click_sem, 0);
+    }
 
-        /* wait for a click or the next tilt sample */
-        if (xSemaphoreTake(click_sem, pdMS_TO_TICKS(ACCEL_LOOP_MS)) == pdTRUE)
+    /* wait for a click until the next tilt sample */
+    if (xSemaphoreTake(click_sem, pdMS_TO_TICKS(ms)) != pdTRUE)
+    {
+        return;
+    }
+    int dir = slap_level ? accel_slap_direction(lis) : 0;
+    /* the box swings after a slap: one chapter per slap */
+    if (dir && esp_timer_get_time() - last_slap_us > ACCEL_SLAP_PAUSE_MS * 1000LL)
+    {
+        last_slap_us = esp_timer_get_time();
+        if (upside_down)
         {
-            int dir = slap_level ? accel_slap_direction(lis) : 0;
-            /* the box swings after a slap: one chapter per slap */
-            if (dir && esp_timer_get_time() - last_slap_us > ACCEL_SLAP_PAUSE_MS * 1000LL)
-            {
-                last_slap_us = esp_timer_get_time();
-                if (upside_down)
-                {
-                    /* upside down, either side: start over (as Hackiebox CFW) */
-                    ESP_LOGI(TAG, "emit START OVER (slap upside down)");
-                    rtnl_event(RTNL3_KNOCK_BACKWARD);
-                    pb_set_chapter(0);
-                    continue;
-                }
-                if (s->slap_reverse)
-                {
-                    dir = -dir;
-                }
-                ESP_LOGI(TAG, "emit CHAPTER %s (slap)", dir > 0 ? "+" : "-");
-                rtnl_event(dir > 0 ? RTNL3_KNOCK_FORWARD : RTNL3_KNOCK_BACKWARD);
-                pb_seek_chapter(dir);
-            }
-            continue;
+            /* upside down, either side: start over (as Hackiebox CFW) */
+            ESP_LOGI(TAG, "emit START OVER (slap upside down)");
+            rtnl_event(RTNL3_KNOCK_BACKWARD);
+            pb_set_chapter(0);
+            return;
         }
-
-        esp_err_t err = lis->fetch(lis, accel);
-        if (err != ESP_OK)
+        if (s->slap_reverse)
         {
-            continue;
+            dir = -dir;
         }
-        float x = accel[2];
-        float y = accel[1];
-        float z = -accel[0];
+        ESP_LOGI(TAG, "emit CHAPTER %s (slap)", dir > 0 ? "+" : "-");
+        rtnl_event(dir > 0 ? RTNL3_KNOCK_FORWARD : RTNL3_KNOCK_BACKWARD);
+        pb_seek_chapter(dir);
+    }
+}
 
-        float roll = getRoll(x, y, z);
-        float pitch = getPitch(x, y, z);
-        upside_down = accel_within(roll, ACCEL_ANGLE_FLIP, ACCEL_UPSIDE_DOWN_LIMIT) &&
-                      accel_within(pitch, ACCEL_ANGLE_STABLE, ACCEL_UPSIDE_DOWN_LIMIT);
-        last_sample_us = esp_timer_get_time();
+void accel_sample(void)
+{
+    float accel[3];
+    if (!lis || lis->fetch(lis, accel) != ESP_OK)
+    {
+        return;
+    }
+    float x = accel[2];
+    float y = accel[1];
+    float z = -accel[0];
 
-        int tilt = s->tilt_level < ACCEL_LEVELS ? s->tilt_level : 3;
-        if (tilt)
-        {
-            accel_handle_angle(roll, pitch, tilt_angle[tilt]);
-        }
+    float roll = getRoll(x, y, z);
+    float pitch = getPitch(x, y, z);
+    upside_down = accel_within(roll, ACCEL_ANGLE_FLIP, ACCEL_UPSIDE_DOWN_LIMIT) &&
+                  accel_within(pitch, ACCEL_ANGLE_STABLE, ACCEL_UPSIDE_DOWN_LIMIT);
+    last_sample_us = esp_timer_get_time();
+
+    const settings_t *s = settings_get();
+    int tilt = s->tilt_level < ACCEL_LEVELS ? s->tilt_level : 3;
+    if (tilt)
+    {
+        accel_handle_angle(roll, pitch, tilt_angle[tilt]);
     }
 }
 
 void accel_init(audio_board_handle_t board)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
-
-    /* 2048 left only 200 bytes on the box after the first tilt (log output) */
-    xTaskCreatePinnedToCore(accel_mainthread, "[TB] accel", 3072, (void *)board, ACCEL_TASK_PRIO, NULL, tskNO_AFFINITY);
+    click_sem = xSemaphoreCreateBinary();
+    gpio_set_intr_type(LIS3DH_IRQ_GPIO, GPIO_INTR_POSEDGE);
+    gpio_isr_handler_add(LIS3DH_IRQ_GPIO, click_isr, NULL);
+    lis = board->lis3dh;
 }

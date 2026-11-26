@@ -31,7 +31,6 @@ static const char *TAG = "Battery";
 #define VCHG_RATIO_X1000 2000
 
 #define CHARGER_PRESENT_MV 4000
-#define SAMPLE_INTERVAL_MS 2000
 #define SAMPLES_PER_READ 16
 /* consecutive readings below critical before we report it, filters load peaks */
 #define CRITICAL_CONFIRM 3
@@ -140,13 +139,13 @@ static adc_cali_handle_t battery_cali(adc_channel_t ch, adc_atten_t atten)
     return h;
 }
 
-static void battery_task(void *arg)
+/* one sample, every BATTERY_POLL_MS from the I/O task (main.c) */
+static int below_critical;
+static uint32_t filtered;
+
+void battery_poll(void)
 {
     const settings_t *s = settings_get();
-    int below_critical = 0;
-    uint32_t filtered = 0;
-
-    while (true)
     {
         uint32_t mv = read_mv(VBAT_CHANNEL, cal_vbat, 1750, VBAT_RATIO_X1000);
         uint32_t chg = read_mv(VCHG_CHANNEL, cal_vchg, 3100, VCHG_RATIO_X1000);
@@ -208,7 +207,6 @@ static void battery_task(void *arg)
             ESP_LOGI(TAG, "%s -> %s at %lu mV", battery_state_name(prev), battery_state_name(state), (unsigned long)filtered);
         }
 
-        vTaskDelay(SAMPLE_INTERVAL_MS / portTICK_PERIOD_MS);
     }
 }
 
@@ -228,7 +226,6 @@ void battery_init(void)
     cal_vbat = battery_cali(VBAT_CHANNEL, ADC_ATTEN_DB_6);
     cal_vchg = battery_cali(VCHG_CHANNEL, ADC_ATTEN_DB_12);
 
-    xTaskCreate(&battery_task, "[TB] battery", 2560, NULL, 4, NULL);
 }
 
 uint32_t battery_get_mv(void)

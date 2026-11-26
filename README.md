@@ -538,8 +538,8 @@ Some SD cards stop answering for about 1 s now and then (`sdmmc ... 0x107`),
 often right after a long download.
 
 - **Read-ahead** (`main/readahead.c`, like the original's separate SD task):
-  an own task reads the next 8 blocks (32 KiB, about 2.7 s of audio) of a
-  tonie, so a hanging card does not interrupt the sound. At the end of a
+  an own task reads the next 8 blocks (32 KiB, about 2.7 s of audio, kept
+  in a pool between tonies) of a tonie, so a hanging card does not interrupt the sound. At the end of a
   tonie the log shows `Read-ahead: <n> blocks from the buffer, <m> read
   directly`. QEMU test `tests/qemu/qemu_ra_test.c` (simulated hangs, seek, a
   file that grows while it is read, ending while the task hangs).
@@ -765,6 +765,13 @@ Notes on the IDF 5 port:
 - WiFi, lwIP, heap and FreeRTOS functions stay in flash, not IRAM: about
   70 KiB more heap at start (330 instead of 260 KiB).
 - Task watchdog panics (reboot) if an idle task is starved for 5 s.
+- Memory while a tonie plays and downloads is the tight spot (8-15 KB free
+  before). The big buffers are taken once and kept: the cloud task's
+  request, receive, header and SD write buffers (7.7 KB, at the first
+  request), the read-ahead blocks (pool of 8 x 4 KB) and the CELT decoder
+  buffers (about 25 KB, from the first tonie on). Ears, accelerometer and
+  battery share one task (`[TB] io`, 50 ms tick, 4 KB stack) instead of
+  three (8.5 KB).
 
 ## Tests
 

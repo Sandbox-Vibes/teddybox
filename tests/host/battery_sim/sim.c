@@ -10,7 +10,7 @@ bool pb_is_playing(void) { return playing_now; }
 #include "battery_copy.c"
 int fails;
 static uint32_t filt;
-/* like battery_task: IIR (3 old + 1 new) / 4 */
+/* like battery_poll: IIR (3 old + 1 new) / 4 */
 static void step(bool play, uint32_t mv, int n) { playing_now = play; for (int i = 0; i < n; i++) { filt = filt ? (filt * 3 + mv) / 4 : mv; update_rest(filt); } }
 static void expect(const char *what, uint32_t want)
 {

@@ -1,7 +1,6 @@
 #pragma once
 #include "board.h"
 
-#define ACCEL_TASK_PRIO 5
 
 #define ACCEL_SEEK_BLOCKS 5 /* blocks to seek when tilted */
 #define ACCEL_SEEK_REPEAT 10 /* number of ACCEL_LOOP_MS until to seek again */
@@ -20,6 +19,9 @@
 #define ACCEL_ANGLE_FLIP 180
 
 void accel_init(audio_board_handle_t board);
+/* I/O task: wait up to ms for a slap (and act on it), then take a tilt sample */
+void accel_wait(int ms);
+void accel_sample(void);
 /* box upside down (ears down): roll within 45 degrees of 180, pitch within 45 */
 #define ACCEL_UPSIDE_DOWN_LIMIT 45
 bool accel_upside_down(void);

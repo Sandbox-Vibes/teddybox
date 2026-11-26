@@ -12,6 +12,9 @@ typedef enum
 } battery_state_t;
 
 void battery_init(void);
+/* one measurement; the I/O task calls it every BATTERY_POLL_MS */
+#define BATTERY_POLL_MS 2000
+void battery_poll(void);
 
 /* filtered battery voltage in mV, 0 if not measured yet */
 uint32_t battery_get_mv(void);
