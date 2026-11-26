@@ -97,5 +97,9 @@ struct esp_tls *cloud_connect_teddycloud(void);
 esp_err_t cloud_post(const char *path, const uint8_t *body, size_t body_len, uint8_t *resp, size_t resp_size, size_t *resp_len);
 esp_err_t cloud_set_time(void);
 cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc_token);
+/* downloads configured at all (teddyCloud or the Boxine fallback) */
+bool cloud_is_enabled(void);
+/* WiFi connected and a backend reachable: a download can start now */
+bool cloud_is_ready(void);
 cloud_content_state_t cloud_content_get_state(cloud_content_req_t *req);
 void cloud_content_cleanup(cloud_content_req_t *req);

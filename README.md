@@ -355,7 +355,13 @@ QEMU test `tests/qemu/mkqrtnl.sh run` (checks teddyCloud's `/api/sse`).
   playback ends) and downloaded again next time
   (`tests/qemu/qemu_verify_test.c`).
 - A failed download (teddyCloud unreachable or without the content) plays
-  the original's network error sound.
+  the original's network error sound. A tonie that needs a download first
+  waits up to 30 s for WiFi and teddyCloud (right after power on they need
+  a few seconds) instead of failing at once; taken off meanwhile, nothing
+  happens.
+- The start jingle plays to the end, as on the original: a tonie on the box
+  at power on (or placed during the jingle) starts after it, at most 10 s
+  later.
 
 ## Nightly update
 
