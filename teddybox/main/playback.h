@@ -144,7 +144,9 @@ bool pb_file_is_stream(const char *filename);
 bool pb_file_is_own(const char *filename);
 uint32_t pb_get_play_position();
 uint64_t pb_get_current_uid();
-void pb_set_last(uint64_t nfc_uid, uint32_t play_position);
+void pb_set_last(uint64_t nfc_uid, uint32_t play_position, uint32_t audio_id);
+/* audio ID of the content the resume position belongs to */
+uint32_t pb_get_resume_audio_id(void);
 
 /* playback and download progress, -1 = unknown / nothing playing */
 typedef struct

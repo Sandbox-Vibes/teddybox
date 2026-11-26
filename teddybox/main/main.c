@@ -65,6 +65,7 @@ typedef struct
     uint32_t volume;
     uint64_t nfc_uid;
     uint32_t play_position;
+    uint32_t audio_id; /* content of play_position (a new episode starts over) */
     uint32_t rtc_check;
 } rtc_mem_t;
 
@@ -469,7 +470,7 @@ void app_main(void)
     else if (rtc_storage.nfc_uid)
     {
         ESP_LOGI(TAG, "Inform playback handler UID %16llX / %d", rtc_storage.nfc_uid, rtc_storage.play_position);
-        pb_set_last(rtc_storage.nfc_uid, rtc_storage.play_position);
+        pb_set_last(rtc_storage.nfc_uid, rtc_storage.play_position, rtc_storage.audio_id);
     }
 
     if (rtc_storage.volume > ctrl_volume_max())
@@ -786,6 +787,7 @@ void app_main(void)
         {
             rtc_storage.nfc_uid = pb_get_current_uid();
             rtc_storage.play_position = pb_get_resume_position();
+            rtc_storage.audio_id = pb_get_resume_audio_id();
         }
 
         /* feedback for the gestures with both ears; they are evaluated by
