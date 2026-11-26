@@ -34,13 +34,82 @@ struct readahead
     void (*ctx_free)(void *ctx);
 };
 
+/* Block buffers are kept between tonies in a small pool instead of being
+   freed: allocated while the heap is still in one piece (first tonie), they
+   do not have to be found again later between the pieces a download and
+   its TLS handshake leave. An instance that is still ending while the next
+   starts (destroy is asynchronous) can use more than the pool: those blocks
+   come from the heap and are freed as before. */
+#define RA_POOL_MAX 8
+static uint8_t *pool[RA_POOL_MAX];
+static bool pool_used[RA_POOL_MAX];
+static int pool_bs;
+static portMUX_TYPE pool_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static uint8_t *block_get(int bs)
+{
+    taskENTER_CRITICAL(&pool_mux);
+    for (int i = 0; i < RA_POOL_MAX && bs == pool_bs; i++)
+    {
+        if (pool[i] && !pool_used[i])
+        {
+            pool_used[i] = true;
+            taskEXIT_CRITICAL(&pool_mux);
+            return pool[i];
+        }
+    }
+    taskEXIT_CRITICAL(&pool_mux);
+    uint8_t *p = heap_caps_malloc(bs, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!p)
+    {
+        return NULL;
+    }
+    /* a free place in the pool: keep this block from now on */
+    taskENTER_CRITICAL(&pool_mux);
+    if (!pool_bs)
+    {
+        pool_bs = bs;
+    }
+    for (int i = 0; i < RA_POOL_MAX && bs == pool_bs; i++)
+    {
+        if (!pool[i])
+        {
+            pool[i] = p;
+            pool_used[i] = true;
+            break;
+        }
+    }
+    taskEXIT_CRITICAL(&pool_mux);
+    return p;
+}
+
+static void block_put(uint8_t *p)
+{
+    if (!p)
+    {
+        return;
+    }
+    taskENTER_CRITICAL(&pool_mux);
+    for (int i = 0; i < RA_POOL_MAX; i++)
+    {
+        if (pool[i] == p)
+        {
+            pool_used[i] = false;
+            taskEXIT_CRITICAL(&pool_mux);
+            return;
+        }
+    }
+    taskEXIT_CRITICAL(&pool_mux);
+    free(p);
+}
+
 static void ra_free(readahead_t *ra)
 {
     if (ra->slot_buf)
     {
         for (int i = 0; i < ra->n; i++)
         {
-            free(ra->slot_buf[i]);
+            block_put(ra->slot_buf[i]);
         }
     }
     free(ra->slot_buf);
@@ -174,7 +243,7 @@ readahead_t *readahead_create(int blocks, int block_size, uint32_t limit, readah
     {
         ra->slot_block[i] = -1;
         /* single blocks instead of one large buffer: fits into a fragmented heap */
-        ra->slot_buf[i] = heap_caps_malloc(block_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        ra->slot_buf[i] = block_get(block_size);
         ok = ra->slot_buf[i] != NULL;
     }
     if (ok && xTaskCreatePinnedToCore(ra_task, "[TB] readahead", RA_TASK_STACK, ra, prio, &ra->task, core) != pdPASS)
