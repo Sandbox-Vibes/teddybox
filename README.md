@@ -28,24 +28,30 @@ flash, LIS3DH accelerometer) against teddyCloud.
 | Live events (RTNL: tonie, playback, volume, ears, slap, tilt, charger) | to Boxine (`rtnl.bxcl.de`), or to teddyCloud with a patched CA | to teddyCloud only (`rtnl`, on) |
 | Home Assistant | — (only what teddyCloud derives from the box) | MQTT discovery: playback, tonie, chapters, progress, volume, battery, settings, diagnostics, buttons |
 | Speaker sound | flat | three profiles in the DAC's own filters: flat, low cut, tuned (measured, default) |
-| Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original) |
+| Volume, ears, slap, tilt, headphones, LEDs | yes | yes (volume steps and slap configuration taken from the original; lowest step adjustable down to silent) |
 | System sounds | yes | the same sounds, read from the box's assets |
 | Firmware updates | from Boxine, automatically | online from GitHub releases or uploaded, on the setup page, A/B with rollback |
 | Back to the other firmware | — | upside down, both ears 20 s, let go; setup page; Home Assistant |
 | Gestures | ears, slap, tilt; upside down both ears 10 s: restart | the same, plus as Hackiebox CFW: both ears briefly = off, upside-down slap = start over; see "Gestures" |
 | Sleep timer | — (Toniebox 2 / app only) | small ear held 2 s (30 min) or Home Assistant; quieter at the end, then off |
 | Certificate / flash backup | — | on the setup page (needs a press on the box) |
-| Own content without a server | — | TAF upload per tonie on the setup page, protected from updates |
+| Own content without a server | — | TAF upload or audio files converted in the browser, per tonie on the setup page, protected from updates |
 | Tonie names | in the app | from teddyCloud or own names: setup page and Home Assistant |
 | Crash diagnostics | crash logs to Boxine | `tb_crash.txt` on the SD card, shown on the setup page; task watchdog |
+| Tags | tonies (ICODE SLIX/SLIX2 with privacy mode) | the same, plus ISO 15693 tags without privacy mode (self-made tonies) |
 | MMA8451 accelerometer (some boxes) | yes | no, LIS3DH only |
 | Tonies app pairing | yes | no |
 
 ## What works
 
 - Playback of tonie content (TAF files) from the SD card, seeking, chapters
-- NFC (TRF7962A), ears for volume, headphone detection, LEDs, accelerometer
-  (slap and tilt for chapters)
+- NFC (TRF7962A): tonies (NXP ICODE SLIX/SLIX2, privacy mode unlocked with
+  the tonie passwords) and other ISO 15693 tags without privacy mode
+  (self-made tonies; content by UID from teddyCloud or uploaded). NFC
+  stickers and cards after ISO 14443 (NTAG, MIFARE) cannot be read by the
+  chip.
+- Ears for volume, headphone detection, LEDs, accelerometer (slap and tilt
+  for chapters)
 - **WiFi from the original firmware**: networks stored by the Tonies app
   (NVS `TB_WIFI`, `SSID0..6`/`PW0..6`) are used directly, newest first.
   WPS push button as fallback, credentials are stored in the same format.
@@ -467,8 +473,9 @@ original that is restart, on the charger factory reset). Held 30 s, or the
 box turned upright while holding: nothing. Without a working accelerometer
 the long gestures also work upright. The original firmware's "both ears
 5 s" (WiFi setup / offline mode) does nothing in TeddyBox. The gestures with both
-ears run in their own small task, so restart and the switch to the original
-firmware also work when the main loop hangs.
+ears run outside the main loop (in the I/O task with the accelerometer and
+the battery), so restart and the switch to the original firmware also work
+when the main loop hangs.
 
 ## Sleep timer
 
@@ -493,6 +500,10 @@ read from the flash dump):
 - 16 volume steps per output, speaker -20 dB to +2.5 dB, headphones -20 dB
   to -2 dB; each ear press moves one step. The percent values in Home
   Assistant and in the settings map onto these steps.
+- `volume_min_db` (setup page: Box, "Lowest step"): the lowest step down to
+  -63 dB or silent (both DAC channels muted); the steps up to the middle one
+  are spread evenly down to it, the middle (the usual default volume) and
+  everything above stay as in the original.
 - **DAC clocks within the data sheet**: PLL 98.3 MHz, DAC_CLK 49.152 MHz,
   DAC_MOD_CLK 6.144 MHz, DOSR 128. The values taken over earlier from
   RvX_TLV320DAC3100 ran the PLL at 295 MHz and the DAC far above its limits:
@@ -532,12 +543,30 @@ encodes); a SILK/hybrid packet is skipped with a log hint to use
 - `cpu_mhz = 160` (default) or `240`: fixed clock via power management (no
   light sleep). CELT at 160 MHz: about 32 % of one core, about 40 % while
   downloading. `decoder = adf` always runs at 240 MHz.
-- RAM while decoding music: about 60 KB instead of 126 KB with ESP-ADF; on
-  the box about 125 KB free while playing (85 KB with read-ahead and hash
-  check running), about 60 KB during a download.
+- RAM while decoding music: about 60 KB instead of 126 KB with ESP-ADF. On
+  the box (v0.7.0) while playing and downloading at the same time: about
+  50-60 KB free, largest block 17-28 KB (before v0.7.0: 8-15 KB free,
+  largest block 7.5-11 KB).
+- The decoder task (18 KB stack, 11 KB used) is created for every
+  playback and needs one free block of that size. While nothing plays, a
+  block of that size is kept and given back right before the start, so a
+  heap cut up by downloads and TLS handshakes cannot stop it. If the start
+  fails anyway, the box tries once more and then gives up cleanly (LED
+  "failed", `Pipeline did not start`) instead of looking as if it played.
 - Output is bit exact with the libopus reference (32 bit multiply path, as
   on every 32 bit CPU): `tests/qemu/qemu_codec_test.c` and
   `celt_host_reference.c`.
+
+### Resume position
+
+- Taking a tonie off keeps its position (also through deep sleep, in RTC
+  memory); put on again, it continues there. Played to the end, it starts
+  from the beginning next time.
+- The position belongs to the content (audio ID of the file): a new episode
+  on the same tonie starts from the beginning. A download that continues an
+  unfinished `.tmp` of the same content keeps the position; any other
+  download starts from the beginning instead of waiting for blocks far into
+  the file.
 
 ### SD card hangs and read-ahead
 
@@ -650,9 +679,13 @@ the dump. QEMU test `tests/qemu/mkqcrash.sh`.
 Without `boxine_fallback` the box only talks to what is configured:
 teddyCloud (`cloud_host`) and the MQTT broker (`mqtt_host`), plus WiFi,
 DHCP, ARP and DNS lookups for those host names in the local network. No
-time servers (the time comes from teddyCloud), no mDNS, no telemetry.
-It shows up in the router as `teddybox-xxxx`. Inbound, nothing listens
-in normal mode. Checked with a packet capture in QEMU (Ethernet instead of
+time servers (the time comes from teddyCloud), no telemetry. It shows up
+in the router as `teddybox-xxxx`. Inbound, nothing listens in normal mode.
+
+In setup mode in the home network the box also serves the setup page,
+answers mDNS for `teddybox-xxxx.local`, and on "Install vX.Y.Z" downloads
+that release from github.com. The page in the browser asks api.github.com
+for the latest release (from the browser, not the box). Checked with a packet capture in QEMU (Ethernet instead of
 WiFi). Note that teddyCloud itself contacts the Boxine cloud if its
 `cloud.enabled` is on.
 
@@ -784,8 +817,12 @@ Notes on the IDF 5 port:
   request, receive, header and SD write buffers (7.7 KB, at the first
   request), the read-ahead blocks (pool of 8 x 4 KB) and the CELT decoder
   buffers (about 25 KB, from the first tonie on). Ears, accelerometer and
-  battery share one task (`[TB] io`, 50 ms tick, 4 KB stack) instead of
+  battery share one task (`[TB] io`, 50 ms tick, 3.5 KB stack) instead of
   three (8.5 KB).
+- Task stacks are sized from the box's own measurements (`MEM: stack
+  unused` in the log, every 30 s while playing), each with at least 1 KB
+  left: decoder 18 KB, NFC 4.5 KB, mqtt_ha 5 KB, RTNL 4 KB, read-ahead
+  3 KB, esp_timer 2.5 KB.
 
 ## Tests
 
@@ -793,8 +830,10 @@ Notes on the IDF 5 port:
 make -C tests/host     # host unit tests, no ESP-IDF needed
 ```
 
-QEMU tests (decoder, downloads, read-ahead, hash check): see
-`tests/qemu/README.md`.
+QEMU tests (decoder, downloads, read-ahead, hash check, setup and tonies
+pages, nightly update, ...): see `tests/qemu/README.md`. The TAF encoder of
+the setup page: `tests/web/run.sh` (Chrome via Playwright, decoded with the
+box's own decoder).
 
 ## Background
 
