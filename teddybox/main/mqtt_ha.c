@@ -19,6 +19,7 @@
 #include "mqtt_client.h"
 
 #include "mqtt_ha.h"
+#include "board.h"
 #include "mqtt_ha_payload.h"
 #include "settings.h"
 #include "playback.h"
@@ -312,7 +313,13 @@ static const char *reset_reason_text(esp_reset_reason_t r)
     case ESP_RST_WDT:
         return "watchdog";
     case ESP_RST_DEEPSLEEP:
-        return "wake from deep sleep";
+    {
+        /* with the wake source: unexpected wakes */
+        static char s[96];
+        const char *w = audio_board_wake_info();
+        snprintf(s, sizeof(s), "wake from deep sleep%s%s", *w ? ": " : "", w);
+        return s;
+    }
     case ESP_RST_BROWNOUT:
         return "brownout (low voltage)";
     default:

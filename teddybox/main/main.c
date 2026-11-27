@@ -408,6 +408,10 @@ void app_main(void)
                                         : cause == ESP_SLEEP_WAKEUP_TIMER ? "timer (nightly update)"
                                         : cause == ESP_SLEEP_WAKEUP_UNDEFINED ? "power on / reset"
                                                                            : "other");
+        if (*audio_board_wake_info())
+        {
+            ESP_LOGI(TAG, "Wake: %s", audio_board_wake_info());
+        }
     }
 
     /* The NVS partition belongs to the original firmware (WiFi, OTA slot table,
