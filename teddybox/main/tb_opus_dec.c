@@ -14,9 +14,7 @@ static const char *TAG = "CELT";
 /* 60 ms stereo: the longest packet of a tonie file (teddyCloud encodes 60 ms) */
 #define MAX_FRAME 2880
 #define IN_BUF 2048
-/* libopus allocates its temporary arrays on the stack (about 16 KB measured
-   for 60 ms stereo frames) */
-#define TASK_STACK (22 * 1024)
+#define TASK_STACK TB_OPUS_TASK_STACK
 
 typedef struct
 {

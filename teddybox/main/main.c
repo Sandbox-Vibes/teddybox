@@ -243,7 +243,7 @@ static void ears_step(void)
    the accelerometer and the battery, 8.5 KB stack together): every
    ACCEL_LOOP_MS (50 ms) slap wait, tilt sample and ear gestures; every
    BATTERY_POLL_MS the battery. With_ui false (nightly update): battery only. */
-#define IO_TASK_STACK 4096
+#define IO_TASK_STACK 3584 /* 2.1 KB used */
 static void io_task(void *arg)
 {
     const bool with_ui = (bool)(uintptr_t)arg;
