@@ -134,14 +134,9 @@ static esp_err_t tb_open(audio_element_handle_t self)
 
 static esp_err_t tb_close(audio_element_handle_t self)
 {
-    tb_opus_t *o = (tb_opus_t *)audio_element_getdata(self);
-    /* freed after every file: the RAM is needed elsewhere between tonies */
-    audio_free(o->dec);
-    audio_free(o->demux);
-    audio_free(o->pcm);
-    o->dec = NULL;
-    o->demux = NULL;
-    o->pcm = NULL;
+    /* the decoder buffers (state, Ogg packet, PCM: about 25 KB) stay from
+       the first tonie on: freed and taken again for every file, they had to
+       be found again between the pieces a download leaves in the heap */
     if (AEL_STATE_PAUSED != audio_element_get_state(self))
     {
         audio_element_set_byte_pos(self, 0);

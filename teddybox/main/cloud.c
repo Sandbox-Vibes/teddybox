@@ -23,6 +23,7 @@
 #include "lwip/dns.h"
 
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "memdiag.h"
 #include "mempeak.h"
 #include "cloud.h"
@@ -93,6 +94,40 @@ static QueueHandle_t cloud_request_queue;
 /* TLS connection handling                              */
 /********************************************************/
 
+/* Buffers of the cloud task. All requests run in it, one after the other
+   (also the automatic resume), so one set is enough. Allocated once at the
+   first request and kept: before, every request and every download took
+   and gave back these pieces around the TLS handshake, which left the heap
+   cut into small blocks while a tonie played. */
+typedef struct
+{
+    uint8_t rx[HTTP_RECEIVE_SIZE];
+    uint8_t header[MAX_HTTP_HEADER_SIZE + 1];
+    char request[768];
+    char url[160];
+    uint8_t wbuf[CLOUD_WRITE_BLOCK];
+} cloud_bufs_t;
+static cloud_bufs_t *bufs;
+
+static cloud_bufs_t *cloud_bufs(void)
+{
+    if (!bufs)
+    {
+        bufs = heap_caps_malloc(sizeof(*bufs), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        if (!bufs)
+        {
+            ESP_LOGE(TAG, "No memory for the request buffers (%u bytes)", (unsigned)sizeof(*bufs));
+        }
+    }
+    return bufs;
+}
+
+static uint8_t *cloud_header_buffer(void)
+{
+    cloud_bufs_t *b = cloud_bufs();
+    return b ? b->header : NULL;
+}
+
 esp_tls_t *cloud_connect_teddycloud(void)
 {
     /* never the Boxine cloud */
@@ -129,23 +164,30 @@ static int cloud_taskwatch = -1;
 static esp_err_t cloud_request(cloud_req_t *req)
 {
     esp_err_t ret = ESP_FAIL;
+    cloud_bufs_t *b = cloud_bufs();
+    if (!b)
+    {
+        return ESP_FAIL;
+    }
 
-    char *auth_line = strdup("");
-    char *range_line = strdup("");
-    char *request;
-    char *url;
+    char auth_line[96] = "";
+    char range_line[40] = "";
+    char *request = b->request;
+    char *url = b->url;
 
     if (req->auth)
     {
-        free(auth_line);
-        asprintf(&auth_line, "Authorization: BD %s\r\n", req->auth);
+        snprintf(auth_line, sizeof(auth_line), "Authorization: BD %s\r\n", req->auth);
     }
     if (req->range_start)
     {
-        free(range_line);
-        asprintf(&range_line, "Range: bytes=%" PRIu32 "-\r\n", req->range_start);
+        snprintf(range_line, sizeof(range_line), "Range: bytes=%" PRIu32 "-\r\n", req->range_start);
     }
-    asprintf(&url, "https://%s:%d%s", req->host, req->port, req->path);
+    if (snprintf(url, sizeof(b->url), "https://%s:%d%s", req->host, req->port, req->path) >= (int)sizeof(b->url))
+    {
+        ESP_LOGE(TAG, "URL too long: %s", req->path);
+        return ESP_FAIL;
+    }
     ESP_LOGI(TAG, "Connect to %s...", url);
 
     char body_line[48] = "";
@@ -154,7 +196,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
         snprintf(body_line, sizeof(body_line), "Content-Length: %u\r\n", (unsigned)req->body_len);
     }
 
-    asprintf(&request, "%s %s HTTP/1.1\r\n"
+    int request_n = snprintf(request, sizeof(b->request), "%s %s HTTP/1.1\r\n"
                        "Host: %s\r\n"
                        "%s"
                        "%s"
@@ -163,6 +205,11 @@ static esp_err_t cloud_request(cloud_req_t *req)
                        "Connection: close\r\n"
                        "\r\n",
              req->body ? "POST" : "GET", req->path, req->host, auth_line, range_line, body_line, user_agent);
+    if (request_n >= (int)sizeof(b->request))
+    {
+        ESP_LOGE(TAG, "Request too long: %s", req->path);
+        return ESP_FAIL;
+    }
 
     // ESP_LOGI(TAG, "Header %s...", request);
     esp_tls_cfg_t cfg = {
@@ -176,12 +223,7 @@ static esp_err_t cloud_request(cloud_req_t *req)
         .common_name = backends[active_backend].tls_name,
         .skip_common_name = backends[active_backend].tls_name == NULL};
 
-    uint8_t *receive_buffer = malloc(HTTP_RECEIVE_SIZE);
-    if (!receive_buffer)
-    {
-        ESP_LOGE(TAG, "Allocation failed...");
-        return ESP_FAIL;
-    }
+    uint8_t *receive_buffer = b->rx;
 
     /* the handshake is one of the two big memory peaks, see mempeak.h */
     bool peak = mempeak_enter("TLS handshake", 8000);
@@ -308,12 +350,9 @@ static esp_err_t cloud_request(cloud_req_t *req)
 
 exit:
     esp_tls_conn_destroy(tls);
-
-    free(auth_line);
-    free(range_line);
-    free(request);
-    free(url);
-    free(receive_buffer);
+    /* the request may carry the auth token */
+    memset(b->request, 0, sizeof(b->request));
+    memset(auth_line, 0, sizeof(auth_line));
 
     return ret;
 }
@@ -367,7 +406,11 @@ esp_err_t cloud_set_time(void)
 {
     http_parser_t http_parser_handler_ctx = {
         .http_data_cbr = &cloud_set_time_cbr,
-        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE + 1)};
+        .header_buffer = cloud_header_buffer()};
+    if (!http_parser_handler_ctx.header_buffer)
+    {
+        return ESP_ERR_NO_MEM;
+    }
     cloud_req_t req = {
         .host = CLOUD_HOST,
         .port = CLOUD_PORT,
@@ -377,7 +420,6 @@ esp_err_t cloud_set_time(void)
 
     esp_err_t ret = cloud_request(&req);
 
-    free(http_parser_handler_ctx.header_buffer);
 
     return ret;
 }
@@ -484,15 +526,9 @@ esp_err_t cloud_content_length_cbr(void *ctx, size_t range_start, size_t total_l
              skip ? " (resume, skipping)" : resume ? " (resume)" : "");
 
     cloud_create_directories(req->tmpname);
-    if (!req->wbuf)
-    {
-        req->wbuf = malloc(CLOUD_WRITE_BLOCK);
-        if (!req->wbuf)
-        {
-            ESP_LOGE(TAG, "[CDL] No memory for the write buffer");
-            return ESP_FAIL;
-        }
-    }
+    /* the cloud task's buffer: a cut off rest is fetched again on resume,
+       nothing stays in it after the request */
+    req->wbuf = cloud_bufs()->wbuf;
     req->wbuf_len = 0;
     req->sd_write_us = 0;
     req->synced = req->received;
@@ -783,7 +819,7 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
         .http_end_cbr = &cloud_content_end_cbr,
         .content_length_cbr = &cloud_content_length_cbr,
         .ctx = content_req,
-        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE + 1)};
+        .header_buffer = cloud_header_buffer()};
 
     cloud_req_t req = {
         .host = CLOUD_HOST,
@@ -799,7 +835,6 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
     content_req->state = CC_STATE_CONNECTING;
     esp_err_t ret = cloud_request(&req);
 
-    free(http_parser_handler_ctx.header_buffer);
 
     /* connection failed before any response: make sure the waiting side gets an answer */
     if (content_req->resume_attempt > 0 && !content_req->abort && content_req->state != CC_STATE_FINISHED &&
@@ -861,7 +896,7 @@ esp_err_t cloud_post(const char *path, const uint8_t *body, size_t body_len, uin
         .http_status_cbr = &cloud_mem_status_cbr,
         .http_data_cbr = &cloud_mem_data_cbr,
         .ctx = &mem,
-        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE + 1)};
+        .header_buffer = cloud_header_buffer()};
     if (!parser.header_buffer)
     {
         return ESP_ERR_NO_MEM;
@@ -880,7 +915,6 @@ esp_err_t cloud_post(const char *path, const uint8_t *body, size_t body_len, uin
 
     esp_err_t ret = cloud_request(&req);
     bool complete = parser.finished && parser.has_content_length && parser.received_data_length == parser.content_length;
-    free(parser.header_buffer);
 
     if (ret != ESP_OK || mem.status != 200 || mem.overflow || !complete)
     {
@@ -967,7 +1001,7 @@ static void cloud_claim_send(void)
         .http_status_cbr = &cloud_claim_status_cbr,
         .http_data_cbr = &cloud_ignore_data_cbr,
         .ctx = &status,
-        .header_buffer = malloc(MAX_HTTP_HEADER_SIZE + 1)};
+        .header_buffer = cloud_header_buffer()};
     if (!parser.header_buffer)
     {
         return;
@@ -982,7 +1016,6 @@ static void cloud_claim_send(void)
         .connection_closed_cbr = &http_parser_closed_cbr,
         .connection_closed_ctx = &parser};
     cloud_request(&req);
-    free(parser.header_buffer);
     memset(auth, 0, sizeof(auth));
     memset(token, 0, sizeof(token));
     if (status == 200 || status == 204)
@@ -1128,7 +1161,7 @@ void cloud_content_cleanup(cloud_content_req_t *req)
         pb_finish_tmp(req->filename);
     }
     free(req->tmpname);
-    free(req->wbuf);
+    /* req->wbuf belongs to the cloud task */
     vSemaphoreDelete(req->update_sem);
     free(req->filename);
     free(req);

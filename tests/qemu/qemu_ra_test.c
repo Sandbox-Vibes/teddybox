@@ -241,7 +241,27 @@ void app_main(void)
     vTaskDelay(pdMS_TO_TICKS(200));
     size_t heap1 = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     ESP_LOGI(TAG, "free internal heap before %u after %u", (unsigned)heap0, (unsigned)heap1);
-    check("5 memory returned", heap1 + 1024 >= heap0);
+    /* the 8 blocks stay in the pool (kept between tonies), everything else returns */
+    check("5 memory returned (except the 8 pool blocks)", heap1 + 1024 + 8 * (BS + 32) >= heap0 && heap1 + 8 * BS <= heap0 + 1024);
+
+    /* 6: the next instances use the pool: no more memory taken for good;
+       two at once (destroy is asynchronous) take extra blocks from the heap
+       and give them back */
+    {
+        static rd_t r1 = {.name = "/sdcard/grow.bin"}, r2 = {.name = "/sdcard/grow.bin"};
+        readahead_t *a = readahead_create(8, BS, NB, rd, &r1, rd_free, 6, tskNO_AFFINITY);
+        size_t with_a = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        readahead_t *b = readahead_create(8, BS, NB, rd, &r2, rd_free, 6, tskNO_AFFINITY);
+        size_t with_b = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        check("6 first instance from the pool", a && with_a + 8 * BS > heap1);
+        check("6 second instance from the heap", b && with_b + 8 * BS <= with_a + 1024);
+        readahead_destroy(a);
+        readahead_destroy(b);
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        size_t heap2 = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        ESP_LOGI(TAG, "free internal heap after two more: %u", (unsigned)heap2);
+        check("6 memory returned again", heap2 + 1024 >= heap1);
+    }
 
     unlink("/sdcard/ra.bin");
     unlink("/sdcard/grow.bin");
