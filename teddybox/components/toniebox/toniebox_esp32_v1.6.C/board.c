@@ -346,6 +346,12 @@ void audio_board_set_charger(bool present)
 
 static bool charger_present(void)
 {
+    /* before sleep in normal operation the battery monitor has the ADC and
+       told us its state (asking the ADC would only log an error) */
+    if (charger_hint >= 0)
+    {
+        return charger_hint == 1;
+    }
     adc_oneshot_unit_handle_t unit;
     adc_oneshot_unit_init_cfg_t ucfg = {.unit_id = ADC_UNIT_1};
     if (adc_oneshot_new_unit(&ucfg, &unit) != ESP_OK)
