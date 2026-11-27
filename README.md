@@ -117,7 +117,7 @@ English. Texts that come from the box itself (error messages, Home
 Assistant names, the nightly update result) follow `text_language`
 (English by default, see "Configuration").
 
-Saving (tabs Verbindung and Box) writes `teddybox.ini`, stores the WiFi in
+Saving (tabs Connection and Box) writes `teddybox.ini`, stores the WiFi in
 the original firmware's format and restarts. Unused for 15 minutes, the box
 switches off. Cloud, MQTT and NFC do not run in setup mode.
 
@@ -127,39 +127,39 @@ Lists every tonie on the SD card with its state (complete, incomplete
 download, damaged, new version waiting, stream), size, chapters and audio
 id, and whether the file came from teddyCloud or was uploaded. For each:
 
-- **Datei hochladen**: a finished TAF file (from teddyCloud, TonieToolbox,
+- **Upload file** / **Replace file**: a finished TAF file (from teddyCloud, TonieToolbox,
   teddy …) for this tonie. The box checks the header, that the length fits
   and the SHA-1 of the audio data before it replaces anything; a damaged or
   incomplete file is refused and the old one stays.
-- **Vor teddyCloud schützen / Schutz aufheben**: a protected file
+- **Protect from teddyCloud / Remove protection**: a protected file
   (`<file>.own` next to it; every upload is protected) is not reported in
   the freshness check and not touched by the nightly update, so teddyCloud
   never replaces it.
-- **Löschen**: the file and its leftovers (`.tmp`, `.old`, `.bad`).
-- **Name geben / ändern**: an own name shown instead of the UID (named
+- **Delete**: the file and its leftovers (`.tmp`, `.old`, `.bad`).
+- **Give a name / Rename**: an own name shown instead of the UID (named
   tonies first, sorted by name). Kept in `tb_alias.txt` on the SD card
   (`UID=name` per line), also after deleting the file. Without an own name
-  the name from teddyCloud is shown (badge "Name aus teddyCloud").
+  the name from teddyCloud is shown (badge "Name from teddyCloud").
 
 Names from teddyCloud: while teddyCloud is the backend in use, the box asks
 its web interface (`http://<cloud_host>:<tc_web_port>/api/getTagInfo`,
-plain HTTP, port 80 by default, field "Web-Port" on the setup page) for
+plain HTTP, port 80 by default, field "Web port" on the setup page) for
 series and episode of each tonie from teddyCloud's `tonies.json` (or
 `tonies.custom.json`): the tonie on the box first, then the others on the
 card one every 2 s, each once per start (while a tonie downloads and
 plays, memory is too short for the request: the box then asks again 30 s
 later). They are kept in `tb_names.txt`
-and also go to Home Assistant as "Tonie-Name". If teddyCloud's web
+and also go to Home Assistant as "Tonie name". If teddyCloud's web
 interface needs a login, no names are fetched (log line once). Only the
 default content folder of teddyCloud is asked (no per-box overlay). QEMU
 test `tests/qemu/mkqnames.sh run`.
 
-A tonie that is not on the card yet: pick it from "zuletzt aufgelegt" (the
+A tonie that is not on the card yet: pick it from "recently placed" (the
 last 8 tags placed on the box, kept in NVS) or type its UID. A large tonie
 can take a few minutes over the hotspot. QEMU test
 `tests/qemu/mkqtonies.sh run`.
 
-**Audio files to a tonie** ("Oder: Audiodateien umwandeln"): choose MP3,
+**Audio files to a tonie** ("Or: convert audio files"): choose MP3,
 M4A, WAV, OGG, FLAC … (whatever the browser can decode), each file becomes
 a chapter (sorted by name, order can be changed). The conversion runs in
 the browser, the box only gets the finished TAF through the normal upload
@@ -249,7 +249,7 @@ be used against the Boxine cloud by a non-original firmware.
 ### Optional: Boxine fallback and original user agent
 
 Both are off by default and can be switched on in the setup page
-("Erweitert") or in `teddybox.ini`.
+("Advanced") or in `teddybox.ini`.
 
 - With `boxine_fallback`, the box tries teddyCloud first and uses the Boxine
   cloud only if teddyCloud does not answer; every 5 minutes it checks whether
@@ -425,22 +425,23 @@ teddyCloud's `plugins` folder; details in its README.
 ## Home Assistant
 
 With `mqtt_host` set, the box registers itself via MQTT discovery as device
-"TeddyBox" (`<id>` = `teddybox_<mac>`, 35 entities):
+"TeddyBox" (`<id>` = `teddybox_<mac>`, 35 entities). The names below are the
+English ones; with `text_language = de` Home Assistant gets them in German.
 
 | Entities | |
 |---|---|
-| Status, Tonie, Kapitel, Kapitel gesamt | playing / idle, UID of the current tonie, chapter |
-| Tonie-Name | name of the current tonie: own name from the setup page, else teddyCloud's ("series – episode"), else the UID |
-| Fortschritt, Kapitel-Fortschritt, Gespielt, Gesamtdauer | progress in % and minutes (from the Ogg granule positions), at most every 10 s |
+| Status, Tonie, Chapter, Chapters total | playing / idle, UID of the current tonie, chapter |
+| Tonie name | name of the current tonie: own name from the setup page, else teddyCloud's ("series – episode"), else the UID |
+| Progress, Chapter progress, Played, Total duration | progress in % and minutes (from the Ogg granule positions), at most every 10 s |
 | Download | % of a running download |
-| Lautstärke | number, limited by `volume_max` |
-| Akku (geschätzt), Akkuspannung, Lädt, Akku schwach | charge estimated from the voltage (NiMH curve, amplifier load added back, unknown while charging) |
-| Kopfhörer, WLAN-Signal | |
-| LED-Helligkeit, Klapsen, Klapsen umgekehrt, Kippen, Lautsprecher-Klang | settings, applied at once and saved to the INI |
-| Stopp, Nächstes/Vorheriges Kapitel, Ausschalten | buttons |
-| Original-Firmware starten | button, disabled by default in Home Assistant |
-| Start setup / Einrichtung starten | button: restarts into setup mode (in the home network, see "Setup page") |
-| Schlaf-Timer | number in minutes (0 off, up to 240), shows the minutes left; see "Sleep timer" |
+| Volume | number, limited by `volume_max` |
+| Battery (estimated), Battery voltage, Charging, Battery low | charge estimated from the voltage (NiMH curve, amplifier load added back, unknown while charging) |
+| Headphones, WiFi signal | |
+| LED brightness, Slap (sensitivity), Slap reversed, Tilt (sensitivity), Speaker sound | settings, applied at once and saved to the INI |
+| Stop, Next/Previous chapter, Power off | buttons |
+| Start original firmware | button, disabled by default in Home Assistant |
+| Start setup | button: restarts into setup mode (in the home network, see "Setup page") |
+| Sleep timer | number in minutes (0 off, up to 240), shows the minutes left; see "Sleep timer" |
 | Diagnostics | free heap (now and minimum), start time, reason of the last start, firmware slot, last nightly update |
 
 Topics: `teddybox/<mac>/state` and `/diag` (JSON),
@@ -482,7 +483,7 @@ when the main loop hangs.
 Hold the **small ear alone for 2 seconds**: the sleep timer starts with 30
 minutes (long high beep); the volume step of the press is taken back. The
 same again switches it off (long low beep). From Home Assistant the number
-"Schlaf-Timer" sets any time from 5 to 240 minutes (0 = off) and shows the
+"Sleep timer" sets any time from 5 to 240 minutes (0 = off) and shows the
 minutes left. Over the last third of the time (1 to 10 minutes) the volume
 goes down to nothing, then the box stops and switches off. The volume
 itself stays as it was; the ears and Home Assistant still change it during
@@ -511,10 +512,10 @@ read from the flash dump):
   reached the speaker. See `docs/original-firmware.md`.
 - **Speaker EQ** in the DAC's own biquads (no CPU load), headphones stay
   flat. `speaker_eq` in the INI, on the setup page and in Home Assistant:
-  - `full` (default, "Optimiert"): 4th order Butterworth high-pass at 150 Hz,
+  - `full` (default, "Optimized"): 4th order Butterworth high-pass at 150 Hz,
     -5 dB at 470 Hz (Q 1.4), -3 dB at 1.65 kHz (Q 1.8), -3 dB at 6.3 kHz (Q 3)
-  - `lowcut` ("Nur Tiefenfilter"): only the high-pass
-  - `off` ("Wie Original"): flat, as the original firmware
+  - `lowcut` ("Bass cut only"): only the high-pass
+  - `off` ("Like original"): flat, as the original firmware
 
   The cuts come from phone measurements with third-octave test tones and pink
   noise (2026-11-21, see `speaker_eq.h`): flat, the box has +4 to +5 dB at
@@ -695,7 +696,7 @@ Besides the ESP-IDF watchdogs (interrupts, idle tasks) TeddyBox watches its
 own tasks: main loop and NFC must check in within 30 s, playback within
 90 s, the cloud task within 120 s (a download in progress checks in with
 every block). If one hangs, the box restarts instead of staying silent;
-Home Assistant shows "Grund des letzten Starts: crash: playback stuck for
+Home Assistant shows "Reason of the last start: crash: playback stuck for
 91 s" and so on. A connection that sends nothing for a minute is given up
 (the download is then resumed). QEMU test `tests/qemu/mkqtw.sh`.
 
@@ -732,7 +733,7 @@ esptool.py -b 921600 write_flash 0x3a0000 teddybox/build/teddybox.bin 0x16f000 o
 Only the free slot and the 8 KiB boot selection are written. Bootloader,
 partition table, NVS, certificates and both original apps stay as they are.
 
-Back to the original firmware: the button "Original-Firmware starten" on
+Back to the original firmware: the button "Start original firmware" on
 the setup page or in Home Assistant, or on the box: **upside down**, both
 ears held **20 s** (beep at 10 s, LED blinks blue and beep at 20 s), **let
 go** (see "Gestures"). Or with esptool:
