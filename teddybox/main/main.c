@@ -187,16 +187,14 @@ void ctrl_request_setup(void)
 static volatile int ears_signal = EG_NONE;
 
 /* gestures with both ears as in the original firmware / Hackiebox CFW, see
-   ear_gestures.h. Own small task so that restart and switching to the
-   original firmware still work when the main loop hangs (idea from the
-   jcarletto27/teddybox fork). Without a working accelerometer the long
-   gestures also work upright. */
-static void ears_task(void *arg)
+   ear_gestures.h. In the I/O task, not the main loop, so that restart and
+   switching to the original firmware still work when the main loop hangs
+   (idea from the jcarletto27/teddybox fork). Without a working
+   accelerometer the long gestures also work upright. */
+static void ears_step(void)
 {
-    ear_gesture_t g = {0};
-    while (true)
+    static ear_gesture_t g;
     {
-        vTaskDelay(pdMS_TO_TICKS(50));
         int64_t now = esp_timer_get_time();
         eg_action_t a = ear_gesture_step(&g, now, audio_board_ear_big(), audio_board_ear_small(),
                                          !accel_working() || accel_upside_down());
@@ -239,6 +237,55 @@ static void ears_task(void *arg)
             break;
         }
     }
+}
+
+/* One task for the small periodic jobs (before: own tasks for the ears,
+   the accelerometer and the battery, 8.5 KB stack together): every
+   ACCEL_LOOP_MS (50 ms) slap wait, tilt sample and ear gestures; every
+   BATTERY_POLL_MS the battery. With_ui false (nightly update): battery only. */
+#define IO_TASK_STACK 4096
+static void io_task(void *arg)
+{
+    const bool with_ui = (bool)(uintptr_t)arg;
+    int64_t next_tick = esp_timer_get_time(), next_battery = next_tick;
+    while (true)
+    {
+        int64_t now = esp_timer_get_time();
+        if (now >= next_battery)
+        {
+            battery_poll();
+            next_battery = now + BATTERY_POLL_MS * 1000LL;
+        }
+        next_tick += ACCEL_LOOP_MS * 1000LL;
+        if (next_tick < now)
+        {
+            /* fell behind (a long log line, a slow I2C read): no catching up */
+            next_tick = now + ACCEL_LOOP_MS * 1000LL;
+        }
+        /* until the next tick: slaps act at once */
+        while ((now = esp_timer_get_time()) < next_tick - 2000)
+        {
+            int ms = (int)((next_tick - now) / 1000);
+            if (with_ui)
+            {
+                accel_wait(ms);
+            }
+            else
+            {
+                vTaskDelay(pdMS_TO_TICKS(ms));
+            }
+        }
+        if (with_ui)
+        {
+            accel_sample();
+            ears_step();
+        }
+    }
+}
+
+static void io_start(bool with_ui)
+{
+    xTaskCreatePinnedToCore(io_task, "[TB] io", IO_TASK_STACK, (void *)(uintptr_t)with_ui, 5, NULL, tskNO_AFFINITY);
 }
 
 /* sleep timer, driven by the main loop */
@@ -503,6 +550,7 @@ void app_main(void)
         ESP_LOGI(TAG, "Nightly update");
         ledman_change("off");
         battery_init();
+        io_start(false);
         wifi_init();
         cloud_init();
         mqtt_ha_init();
@@ -527,6 +575,7 @@ void app_main(void)
 
     accel_init(board_handle);
     battery_init();
+    io_start(true);
     wifi_init();
     nfc_init();
     cloud_init();
@@ -537,7 +586,6 @@ void app_main(void)
 
     int64_t last_activity_time = esp_timer_get_time();
     int64_t remute_time = 0;
-    xTaskCreatePinnedToCore(ears_task, "[TB] ears", 3072, NULL, 4, NULL, tskNO_AFFINITY);
     /* small ear held alone: sleep timer on/off */
     int64_t small_ear_since = 0;
     uint32_t small_ear_volume = 0;
@@ -789,7 +837,7 @@ void app_main(void)
         }
 
         /* feedback for the gestures with both ears; they are evaluated by
-           ears_task, so restart and original firmware work even when this
+           the I/O task (ears_step), so restart and original firmware work even when this
            loop hangs */
         int ears_sig = ears_signal;
         if (ears_sig != EG_NONE)
