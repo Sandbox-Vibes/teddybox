@@ -28,6 +28,12 @@
 #include "settings.h"
 
 #define PB_DL_CONNECT_TIMEOUT_MS 20000
+/* a tonie that needs a download waits this long for WiFi and teddyCloud
+   (after power on they need a few seconds) before the network error sound */
+#define PB_CLOUD_WAIT_MS 30000
+/* the start jingle plays to the end before a tonie starts (as the
+   original); at most this long */
+#define PB_STARTUP_JINGLE_MAX_MS 10000
 #include "dac3100.h"
 #include "board.h"
 #include "math.h"
@@ -49,6 +55,9 @@ audio_event_iface_handle_t evt;
 static QueueHandle_t playback_queue;
 static bool pb_default_content = false;
 static bool pb_playing = false;
+/* the start jingle is playing: requests wait for its end */
+static bool pb_startup_jingle = false;
+static TickType_t pb_startup_since;
 static pb_toniefile_t pb_toniefile_info;
 static volatile bool pb_headset = false;
 static cloud_content_req_t *current_dl_req = NULL;
@@ -1426,6 +1435,9 @@ static esp_err_t pb_int_play_default(uint32_t lang, uint32_t id)
 {
     char filename[64];
 
+    pb_startup_jingle = id == CONTENT_DEFAULT_STARTUP;
+    pb_startup_since = xTaskGetTickCount();
+
     sprintf(filename, "/sdcard/CONTENT/%08" PRIX32 "/%08" PRIX32, lang, id);
     if (pb_check_file(filename) == PB_ERR_GOOD_FILE)
     {
@@ -1496,6 +1508,29 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
 
     /* if there is already a download running, cancel it first */
     pb_int_abort_dl();
+
+    /* right after power on (tonie already on the box) or a WiFi drop: wait
+       for WiFi and teddyCloud instead of failing at once with the network
+       error sound */
+    if (cloud_is_enabled() && !cloud_is_ready())
+    {
+        ESP_LOGI(TAG, "Waiting for WiFi and teddyCloud before the download...");
+        ledman_change("checking");
+        int64_t until = esp_timer_get_time() + PB_CLOUD_WAIT_MS * 1000LL;
+        while (!cloud_is_ready() && esp_timer_get_time() < until)
+        {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            taskwatch_feed(pb_taskwatch);
+            if (nfc_get_current_uid() != req->uid)
+            {
+                ESP_LOGI(TAG, "Tonie taken off while waiting for the network");
+                free(filename);
+                ledman_change("idle");
+                return ESP_OK;
+            }
+        }
+        ESP_LOGI(TAG, "Network %s", cloud_is_ready() ? "ready" : "still not ready, trying anyway");
+    }
 
     ESP_LOGI(TAG, "initiate download");
     current_dl_req = cloud_content_download(req->uid, req->token);
@@ -1732,7 +1767,25 @@ void pb_mainthread(void *arg)
         }
 
         pb_req_t *req = NULL;
-        if (xQueueReceive(playback_queue, &req, 0) == pdTRUE)
+        /* the start jingle plays to the end (as the original); a tonie
+           placed meanwhile, or already on the box at power on, waits for it.
+           That also gives WiFi a few seconds. */
+        bool hold = false;
+        if (pb_startup_jingle)
+        {
+            TickType_t age = xTaskGetTickCount() - pb_startup_since;
+            /* pb_playing comes with the "Run" event a moment after the start */
+            if ((!pb_playing && age >= pdMS_TO_TICKS(1000)) || !pb_default_content ||
+                age >= pdMS_TO_TICKS(PB_STARTUP_JINGLE_MAX_MS))
+            {
+                pb_startup_jingle = false;
+            }
+            else if (xQueuePeek(playback_queue, &req, 0) == pdTRUE && req->type != PB_REQ_TYPE_DEFAULT)
+            {
+                hold = true;
+            }
+        }
+        if (!hold && xQueueReceive(playback_queue, &req, 0) == pdTRUE)
         {
             switch (req->type)
             {

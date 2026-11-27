@@ -65,6 +65,8 @@ static cloud_backend_t backends[2];
 static volatile int active_backend = BACKEND_TEDDYCLOUD;
 /* teddyCloud answers (time sync worked) and is the backend in use */
 static volatile bool teddycloud_up = false;
+/* WiFi up and a backend answered (time request): downloads can start */
+static volatile bool cloud_ready = false;
 static char user_agent[64];
 
 #define CLOUD_HOST (backends[active_backend].host)
@@ -1032,6 +1034,16 @@ static void cloud_claim_send(void)
 /* cloud request code, called from external code        */
 /********************************************************/
 
+bool cloud_is_enabled(void)
+{
+    return cloud_request_queue != NULL;
+}
+
+bool cloud_is_ready(void)
+{
+    return cloud_ready && wifi_is_connected();
+}
+
 cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc_token)
 {
     if (!cloud_request_queue)
@@ -1267,6 +1279,7 @@ static void cloud_task(void *ctx)
         }
 
         teddycloud_up = cloud_available && active_backend == BACKEND_TEDDYCLOUD;
+        cloud_ready = cloud_available && wifi_is_connected();
         if (teddycloud_up)
         {
             /* names of the tonies from teddyCloud's web API (plain HTTP, short) */
