@@ -315,7 +315,7 @@ static const char *reset_reason_text(esp_reset_reason_t r)
     case ESP_RST_DEEPSLEEP:
     {
         /* with the wake source: unexpected wakes */
-        static char s[96];
+        static char s[112];
         const char *w = audio_board_wake_info();
         snprintf(s, sizeof(s), "wake from deep sleep%s%s", *w ? ": " : "", w);
         return s;

@@ -787,6 +787,7 @@ static void guard_task(void *arg)
     maint_schedule_next();
     audio_board_set_timer_wakeup(maint_sleep_us());
     maint_clock_sleep();
+    audio_board_set_charger(battery_is_charging());
     vTaskDelay(pdMS_TO_TICKS(200));
     audio_board_poweroff();
     vTaskDelete(NULL);

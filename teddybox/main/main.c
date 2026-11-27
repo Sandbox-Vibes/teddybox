@@ -941,6 +941,7 @@ shutdown:
 
     ESP_LOGI(TAG, "Poweroff");
     maint_run_end();
+    audio_board_set_charger(battery_is_charging());
     vTaskDelay(500 / portTICK_PERIOD_MS);
     audio_board_poweroff();
 

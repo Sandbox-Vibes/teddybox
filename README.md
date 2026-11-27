@@ -614,7 +614,14 @@ often right after a long download.
 - Peripheral power and SD card power are held off during deep sleep
   (digital pads would lose their level otherwise).
 - On the charger the box sleeps with the ears as wake source and checks every
-  5 minutes whether it was taken off.
+  5 minutes whether it was taken off. "On the charger" is the wake line held
+  low or the station's 5 V rail (GPIO8) present: while charging the wake line
+  is not always held low and moved now and then, which woke the box every
+  few minutes. A wake by the wake line with no ear pressed while the line is
+  low or the station is there sends the box back to sleep at once.
+- After a wake from deep sleep the HA sensor "Reason of the last start"
+  names the wake source and the line, ear and charger state right after
+  it (`wake from deep sleep: wake line; then line high, ear none, charger yes`).
 - Idle power off after 60 s by default (`idle_timeout`).
 
 ## Crash dumps
