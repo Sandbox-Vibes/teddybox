@@ -1192,6 +1192,35 @@ void pb_set_last(uint64_t nfc_uid, uint32_t play_position)
 /********************************************************/
 
 /* the decoder start is one of the two big memory peaks, see mempeak.h */
+/* The decoder task is created anew for every playback (ADF elements end
+   their task on terminate) and needs one free block of its stack size
+   (18 KB). After downloads and TLS handshakes the heap can be cut up so
+   that no block is that large any more (27 Nov: "allocation of 22528
+   bytes failed", playback silent and stuck). So a block of that size is
+   kept while nothing plays and given back right before the pipeline
+   starts: the task gets that very hole. */
+static void *pb_dec_reserve;
+static TickType_t pb_idle_since;
+
+static void pb_dec_reserve_take(void)
+{
+    if (pb_dec_reserve || !settings_get()->decoder_celt)
+    {
+        return;
+    }
+    /* only when such a block is there: a failed malloc would log */
+    if (heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) >= TB_OPUS_TASK_STACK + 64)
+    {
+        pb_dec_reserve = heap_caps_malloc(TB_OPUS_TASK_STACK, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+}
+
+static void pb_dec_reserve_give(void)
+{
+    free(pb_dec_reserve);
+    pb_dec_reserve = NULL;
+}
+
 static bool pb_mempeak_taken = false;
 static TickType_t pb_mempeak_since = 0;
 #define PB_MEMPEAK_MAX_MS 3000
@@ -1257,6 +1286,16 @@ static void pb_int_stop()
     pb_int_abort_dl();
 }
 
+/* after a failed start: audio_pipeline_run() left the pipeline in the error
+   state (a second run would only say "already started"); back to init */
+static void pb_pipeline_reset(void)
+{
+    audio_pipeline_stop(pipeline);
+    audio_pipeline_wait_for_stop(pipeline);
+    audio_pipeline_terminate(pipeline);
+    audio_event_iface_discard(evt);
+}
+
 static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
 {
     ESP_LOGI(TAG, "Play: '%s'", file);
@@ -1307,7 +1346,31 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
     audio_event_iface_discard(evt);
     pb_mempeak_taken = mempeak_enter("playback start", 5000);
     pb_mempeak_since = xTaskGetTickCount();
-    audio_pipeline_run(pipeline);
+    pb_dec_reserve_give();
+    esp_err_t run = audio_pipeline_run(pipeline);
+    if (run != ESP_OK)
+    {
+        /* a task could not be created (no block large enough): tidy up and
+           try once more, then give up cleanly instead of looking as if it
+           played (silent, no auto power off) */
+        ESP_LOGW(TAG, "Pipeline did not start (largest free block %u), trying again",
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+        pb_pipeline_reset();
+        vTaskDelay(pdMS_TO_TICKS(500));
+        run = audio_pipeline_run(pipeline);
+    }
+    if (run != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Pipeline did not start: not enough memory");
+        pb_pipeline_reset();
+        pb_mempeak_release();
+        pb_progress_reset();
+        pb_toniefile_close(&pb_toniefile_info);
+        pb_playing = false;
+        pb_default_content = false;
+        ledman_change("failed");
+        return ESP_FAIL;
+    }
     audio_pipeline_resume(pipeline);
 
     return ESP_OK;
@@ -1569,6 +1632,17 @@ void pb_mainthread(void *arg)
 
         pb_audio_rate_check();
         pb_decoder_load_log();
+
+        /* keep the block for the next decoder task (see pb_dec_reserve):
+           a moment after the end, the old task's stack is freed by then */
+        if (pb_playing)
+        {
+            pb_idle_since = xTaskGetTickCount();
+        }
+        else if (!pb_dec_reserve && xTaskGetTickCount() - pb_idle_since > pdMS_TO_TICKS(1000))
+        {
+            pb_dec_reserve_take();
+        }
 
         /* the decoder normally reports its format within a few 100 ms */
         if (pb_mempeak_taken && xTaskGetTickCount() - pb_mempeak_since > pdMS_TO_TICKS(PB_MEMPEAK_MAX_MS))
