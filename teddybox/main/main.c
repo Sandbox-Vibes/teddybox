@@ -66,7 +66,7 @@ typedef struct
     uint64_t nfc_uid;
     uint32_t play_position;
     uint32_t audio_id; /* content of play_position (a new episode starts over) */
-    uint32_t rtc_check;
+    uint32_t rtc_check; /* over everything before it */
 } rtc_mem_t;
 
 /* RTC_NOINIT: survives deep sleep and also software resets (OTA update,
@@ -317,7 +317,9 @@ static uint32_t rotl32a(uint32_t x, uint32_t n)
 static uint32_t rtc_checksum_calc()
 {
     uint8_t *buf = (uint8_t *)&rtc_storage;
-    uint32_t len = sizeof(rtc_storage) - sizeof(uint32_t);
+    /* everything before the checksum (sizeof - 4 would include it once the
+       struct has padding at the end, as with the audio ID) */
+    uint32_t len = offsetof(rtc_mem_t, rtc_check);
     uint32_t chk = 0x55AA5A5A;
 
     for (int pos = 0; pos < len; pos++)
@@ -476,6 +478,7 @@ void app_main(void)
     if (rtc_storage.volume > ctrl_volume_max())
     {
         rtc_storage.volume = ctrl_volume_max();
+        rtc_checksum_update();
     }
     audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
 
