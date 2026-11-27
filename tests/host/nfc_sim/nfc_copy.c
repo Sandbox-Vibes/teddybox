@@ -393,5 +393,5 @@ void nfc_init()
         return;
     }
 
-    xTaskCreatePinnedToCore(nfc_mainthread, "[TB] NFC", 6000, trf, NFC_TASK_PRIO, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(nfc_mainthread, "[TB] NFC", 4608 /* 2.1 KB used */, trf, NFC_TASK_PRIO, NULL, tskNO_AFFINITY);
 }
