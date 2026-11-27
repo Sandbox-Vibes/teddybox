@@ -11,7 +11,7 @@
 
 static const char *TAG = "ReadAhead";
 
-#define RA_TASK_STACK 4096
+#define RA_TASK_STACK 3072 /* 1.9 KB used */
 /* a block that was not there (yet): try again after */
 #define RA_RETRY_US 500000
 

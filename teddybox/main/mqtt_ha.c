@@ -500,7 +500,7 @@ void mqtt_ha_init(void)
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
 
-    xTaskCreate(&mqtt_ha_task, "[TB] mqtt_ha", 6144, NULL, 4, NULL);
+    xTaskCreate(&mqtt_ha_task, "[TB] mqtt_ha", 5120 /* 2.5 KB used incl. discovery */, NULL, 4, NULL);
     ESP_LOGI(TAG, "Home Assistant integration started, topic %s", base_topic);
 }
 

@@ -184,5 +184,5 @@ void rtnl_init(void)
         return;
     }
     rtnl_queue = xQueueCreate(RTNL_QUEUE_LEN, sizeof(rtnl_item_t));
-    xTaskCreatePinnedToCore(rtnl_task, "[TB] RTNL", 5000, NULL, 3, NULL, 0);
+    xTaskCreatePinnedToCore(rtnl_task, "[TB] RTNL", 4096 /* 3 KB used (TLS connect) */, NULL, 3, NULL, 0);
 }
