@@ -79,6 +79,9 @@ static bool pb_dl_running(const cloud_content_req_t *dl)
 
 static uint64_t pb_last_nfc_uid = 0;
 static uint32_t pb_last_play_position = 0;
+/* audio ID of the content the position belongs to (0 = unknown): a new
+   episode on the same tonie has another one and starts from the beginning */
+static uint32_t pb_last_audio_id = 0;
 
 static const char *TAG = "[PB]";
 
@@ -354,6 +357,11 @@ TonieboxAudioFileHeader *pb_toniefile_get_header(FILE *fd)
         return NULL;
     }
     uint8_t *buffer = malloc(proto_size);
+    if (!buffer)
+    {
+        ESP_LOGE(TAG, "No memory for the header");
+        return NULL;
+    }
     if (fread(buffer, proto_size, 1, fd) != 1)
     {
         free(buffer);
@@ -370,6 +378,29 @@ TonieboxAudioFileHeader *pb_toniefile_get_header(FILE *fd)
     }
 
     return taf;
+}
+
+/* audio ID from a TAF header on the card, 0 if there is none (yet) */
+static uint32_t pb_file_audio_id(const char *path)
+{
+    if (!path)
+    {
+        return 0;
+    }
+    FILE *fd = fopen(path, "rb");
+    if (!fd)
+    {
+        return 0;
+    }
+    uint32_t id = 0;
+    TonieboxAudioFileHeader *taf = pb_toniefile_get_header(fd);
+    if (taf)
+    {
+        id = taf->audio_id;
+        toniebox_audio_file_header__free_unpacked(taf, NULL);
+    }
+    fclose(fd);
+    return id;
 }
 
 esp_err_t pb_toniefile_open(pb_toniefile_t *info, const char *filepath)
@@ -1176,15 +1207,21 @@ uint32_t pb_get_resume_position()
     return pb_last_play_position;
 }
 
+uint32_t pb_get_resume_audio_id(void)
+{
+    return pb_last_audio_id;
+}
+
 uint64_t pb_get_current_uid()
 {
     return pb_last_nfc_uid;
 }
 
-void pb_set_last(uint64_t nfc_uid, uint32_t play_position)
+void pb_set_last(uint64_t nfc_uid, uint32_t play_position, uint32_t audio_id)
 {
     pb_last_nfc_uid = nfc_uid;
     pb_last_play_position = play_position;
+    pb_last_audio_id = audio_id;
 }
 
 /********************************************************/
@@ -1325,6 +1362,14 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
         /* resuming needs block 2 or later: block 1 starts with the Opus header
            again, after the initial header the decoder would see the stream
            twice ("Apparent chaining without changing serial number") */
+        uint32_t audio_id = pb_toniefile_info.taf ? pb_toniefile_info.taf->audio_id : 0;
+        if (nfc_uid == pb_last_nfc_uid && pb_last_audio_id && audio_id && audio_id != pb_last_audio_id &&
+            pb_last_play_position)
+        {
+            ESP_LOGI(TAG, "UID %16llX: new content (audio ID %08" PRIX32 ", was %08" PRIX32 "), play from start", nfc_uid,
+                     audio_id, pb_last_audio_id);
+            pb_last_play_position = 0;
+        }
         if (nfc_uid == pb_last_nfc_uid && pb_last_play_position + 1 >= 2)
         {
             ESP_LOGI(TAG, "UID %16llX match, set last play position to %d", nfc_uid, pb_last_play_position);
@@ -1340,6 +1385,7 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
             pb_last_play_position = 0;
             pb_last_nfc_uid = nfc_uid;
         }
+        pb_last_audio_id = audio_id;
     }
 
     /* events of a run that ended on its own (jingle just finished) are stale now */
@@ -1457,6 +1503,20 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
     if (!pb_default_content && pb_last_nfc_uid != req->uid)
     {
         pb_last_play_position = 0;
+    }
+    else if (!pb_default_content && pb_last_play_position)
+    {
+        /* the position counts only for the same content: a download that
+           continues a .tmp of it (tonie taken off while downloading) keeps
+           it, a new download (new episode, or the file was gone) starts from
+           the beginning instead of waiting for blocks far into the file */
+        uint32_t tmp_id = pb_file_audio_id(current_dl_req ? current_dl_req->tmpname : NULL);
+        if (!tmp_id || (pb_last_audio_id && tmp_id != pb_last_audio_id))
+        {
+            ESP_LOGI(TAG, "New download (audio ID %08" PRIX32 ", played %08" PRIX32 "): play from start", tmp_id,
+                     pb_last_audio_id);
+            pb_last_play_position = 0;
+        }
     }
 
     bool proceed = false;
