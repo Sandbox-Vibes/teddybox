@@ -201,7 +201,20 @@ static bool nfc_inventory(trf7962a_t trf)
         return false;
     }
     nfc_log_dump("INVENTORY", received_data, received_length);
-    return received_length == 12 && received_data[0] == 0;
+    if (received_length != 12 || received_data[0] != 0)
+    {
+        return false;
+    }
+    /* every ISO 15693 UID starts with E0 (sent LSB first, so it is the last
+       UID byte); 27 Nov: interference (collision/framing errors for a minute)
+       let a garbled answer through as UID 1FFFFCFFF01F81F6, the box stopped
+       the tonie and tried to download that one */
+    if (received_data[9] != 0xE0)
+    {
+        ESP_LOGW(TAG, "Inventory answer with an invalid UID ignored");
+        return false;
+    }
+    return true;
 }
 
 /* privacy password via GET RANDOM + SET PASSWORD */
@@ -287,7 +300,19 @@ void nfc_mainthread(void *arg)
             }
             else if (memcmp(nfc_current_uid_rev, &received_data[2], 8))
             {
-                nfc_new_tag(trf, "changed");
+                /* a different UID only counts when a second read agrees, a
+                   single disturbed answer must not stop the tonie */
+                uint8_t first[8];
+                memcpy(first, &received_data[2], 8);
+                if (nfc_inventory(trf) && !memcmp(first, &received_data[2], 8))
+                {
+                    nfc_new_tag(trf, "changed");
+                }
+                else
+                {
+                    ESP_LOGW(TAG, "Other UID read once, not confirmed: ignored");
+                    nfc_field_off(trf);
+                }
             }
             else
             {

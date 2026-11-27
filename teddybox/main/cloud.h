@@ -101,5 +101,9 @@ cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc
 bool cloud_is_enabled(void);
 /* WiFi connected and a backend reachable: a download can start now */
 bool cloud_is_ready(void);
+/* a content download is queued or running: background work that needs RAM
+   (file check, RTNL connection) waits, the download and the decoder next to
+   it need nearly all of it */
+bool cloud_download_busy(void);
 cloud_content_state_t cloud_content_get_state(cloud_content_req_t *req);
 void cloud_content_cleanup(cloud_content_req_t *req);

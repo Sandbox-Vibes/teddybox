@@ -17,6 +17,7 @@
 #include "bootsel.h"
 #include "cloud.h"
 #include "playback.h"
+#include "taf_verify.h"
 
 static const char *TAG = "DLTEST";
 extern const uint8_t ca_start[] asm("_binary_tc_ca_der_start");
@@ -115,6 +116,43 @@ void app_main(void)
     cloud_content_state_t st = run(0);
     check("2 resumed download: complete, renamed", st == CC_STATE_FINISHED && fsize(FINAL) == TOTAL && fsize(TMP) < 0 &&
                                                        pb_check_file(FINAL) == PB_ERR_GOOD_FILE);
+
+    /* 2b: a download in progress postpones the background file check (RAM
+       for the download next to the playback, 27 Nov) and the busy flag clears
+       when the request is done; without the postponement the wrong hash
+       would move the file to .bad */
+    {
+        FILE *f = fopen("/sdcard/vbusy.taf", "wb");
+        static uint8_t zero[4096];
+        for (int i = 0; f && i < 16; i++)
+        {
+            fwrite(zero, 1, sizeof(zero), f);
+        }
+        if (f)
+        {
+            fclose(f);
+        }
+        static const uint8_t wrong[20] = {0xde, 0xad};
+        vTaskDelay(pdMS_TO_TICKS(3000)); /* check of case 2 over (one at a time) */
+        unlink(TMP);
+        unlink(FINAL);
+        static const uint8_t tok[32] = {1, 2, 3};
+        cloud_content_req_t *req = cloud_content_download(UID, tok);
+        bool busy_during = cloud_download_busy();
+        taf_verify_start("/sdcard/vbusy.taf", wrong, 20, 15 * 4096, 0x0BADF00D);
+        while (!req->done)
+        {
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+        bool busy_after = cloud_download_busy();
+        cloud_content_cleanup(req);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        check("2b busy while downloading, clear after", busy_during && !busy_after);
+        check("2b file check postponed, file not renamed", fsize("/sdcard/vbusy.taf") > 0 &&
+                                                                fsize("/sdcard/vbusy.taf.bad") < 0);
+        unlink("/sdcard/vbusy.taf");
+        unlink("/sdcard/vbusy.taf.bad");
+    }
 
     /* 3: partial file of an older version (in the final name) is continued */
     truncate(FINAL, 3 * 4096 * 2);

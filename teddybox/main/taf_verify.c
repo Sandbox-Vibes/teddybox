@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "mbedtls/sha1.h"
+#include "cloud.h"
 
 static const char *TAG = "Verify";
 
@@ -52,7 +53,11 @@ static void rename_bad(const char *filename)
 static void verify_task(void *arg)
 {
     verify_job_t *job = arg;
-    uint8_t *buf = malloc(VERIFY_BUF);
+    /* a download next to the playback needs the RAM (27 Nov: buffers, stack
+       and FILE of the check plus RTNL left 1.6 KB, TLS could not take its
+       4 KB records); the file is checked the next time it is played */
+    bool postponed = cloud_download_busy();
+    uint8_t *buf = postponed ? NULL : malloc(VERIFY_BUF);
     FILE *f = buf ? fopen(job->filename, "rb") : NULL;
     int result = -1; /* -1 not checked, 0 bad, 1 good */
     int64_t t0 = esp_timer_get_time();
@@ -75,6 +80,12 @@ static void verify_task(void *arg)
             }
             mbedtls_sha1_update(&ctx, buf, got);
             left -= got;
+            if (cloud_download_busy())
+            {
+                postponed = true;
+                io_ok = false;
+                break;
+            }
             /* background work: give playback and download the SD card */
             vTaskDelay(1);
         }
@@ -85,12 +96,12 @@ static void verify_task(void *arg)
         {
             result = memcmp(digest, job->sha1, 20) == 0;
         }
-        else
+        else if (!postponed)
         {
             ESP_LOGW(TAG, "'%s': read error or file too short, not checked", job->filename);
         }
     }
-    else
+    else if (!postponed)
     {
         ESP_LOGW(TAG, "'%s': cannot open, not checked", job->filename);
     }
@@ -121,6 +132,10 @@ static void verify_task(void *arg)
     running = false;
     portEXIT_CRITICAL(&lock);
 
+    if (postponed)
+    {
+        ESP_LOGI(TAG, "'%s': check postponed, a download needs the RAM", job->filename);
+    }
     if (result == 1)
     {
         ESP_LOGI(TAG, "Audio hash OK: '%s' (%d.%d s)", job->filename, ms / 1000, ms % 1000 / 100);
