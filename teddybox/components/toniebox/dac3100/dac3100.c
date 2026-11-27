@@ -47,6 +47,12 @@ static uint8_t reg_page = 0;
  */
 static const int8_t vol_table_spk[DAC3100_VOL_STEPS] = {-40, -37, -34, -31, -28, -25, -22, -18, -15, -12, -9, -6, -3, 0, 3, 5};
 static const int8_t vol_table_hp[DAC3100_VOL_STEPS] = {-40, -36, -32, -28, -26, -24, -22, -20, -18, -16, -14, -12, -10, -8, -6, -4};
+/* lowest step in 0.5 dB: -40 (-20 dB) as in the original, lower for a
+   quieter start, DAC3100_VOL_MIN_MUTE for silence. Then the lower half of
+   the steps (up to the middle step, the usual default volume) is spread
+   evenly in dB between it and the middle step; the upper half stays. */
+static int vol_min_hdb = DAC3100_VOL_MIN_DEFAULT;
+#define VOL_MID_STEP (DAC3100_VOL_STEPS / 2)
 static dac3100_output_t cur_output = DAC3100_OUT_NONE;
 static int cur_volume = 50;
 static bool cur_muted = true;
@@ -395,16 +401,33 @@ int dac3100_volume_step(int percent, int dir)
     return dac3100_volume_percent(idx);
 }
 
+static int step_half_db(const int8_t *table, int idx)
+{
+    if (vol_min_hdb == DAC3100_VOL_MIN_DEFAULT || idx >= VOL_MID_STEP)
+    {
+        return table[idx];
+    }
+    /* -63.5 dB is the lowest the DAC volume goes; below that: muted */
+    int lo = vol_min_hdb <= DAC3100_VOL_MIN_MUTE ? -127 : vol_min_hdb;
+    return lo + (table[VOL_MID_STEP] - lo) * idx / VOL_MID_STEP;
+}
+
+static bool step_muted(int idx)
+{
+    return idx == 0 && vol_min_hdb <= DAC3100_VOL_MIN_MUTE;
+}
+
 int dac3100_volume_half_db(int percent)
 {
     const int8_t *table = cur_output == DAC3100_OUT_HEADPHONE ? vol_table_hp : vol_table_spk;
-    return table[dac3100_volume_index(percent)];
+    return step_half_db(table, dac3100_volume_index(percent));
 }
 
 static void dac3100_apply_volume(void)
 {
     const int8_t *table = cur_output == DAC3100_OUT_HEADPHONE ? vol_table_hp : vol_table_spk;
-    int8_t v = table[dac3100_volume_index(cur_volume)];
+    int idx = dac3100_volume_index(cur_volume);
+    int8_t v = step_half_db(table, idx);
 
     /* beep level follows the volume, as in the original (1 dB units, 2 = 0 dB) */
     beep_level = v < -43 ? 45 : (v >= 1 ? 0 : 2 - v);
@@ -412,6 +435,25 @@ static void dac3100_apply_volume(void)
     dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
     dac3100_write_reg(DAC_VOL_L_CTRL, (uint8_t)v);
     dac3100_write_reg(DAC_VOL_R_CTRL, (uint8_t)v);
+    /* lowest step "silent": both DAC channels muted (beeps too) */
+    dac3100_write_reg(DAC_VOL_CTRL, step_muted(idx) ? 0x0C : 0x00);
+}
+
+void dac3100_set_volume_min(int half_db)
+{
+    if (half_db > DAC3100_VOL_MIN_DEFAULT)
+    {
+        half_db = DAC3100_VOL_MIN_DEFAULT;
+    }
+    if (half_db < DAC3100_VOL_MIN_MUTE)
+    {
+        half_db = DAC3100_VOL_MIN_MUTE;
+    }
+    vol_min_hdb = half_db;
+    if (cur_output != DAC3100_OUT_NONE)
+    {
+        dac3100_apply_volume();
+    }
 }
 
 /* DAC channels off; filter coefficients can only be written in this state */

@@ -114,6 +114,20 @@ int main(void)
     CHECK(s->update_hour == -1 && !strcmp(s->timezone, "UTC0"));
     s->update_hour = 3; snprintf(s->timezone, sizeof(s->timezone), "CET-1CEST,M3.5.0,M10.5.0/3");
 
+    /* lowest volume step: -20..-64 dB, invalid keeps the value */
+    s->volume_min_db = -20;
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("volume_min_db = -10\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->volume_min_db == -20);
+    f = fopen(SETTINGS_INI_PATH, "w"); fputs("volume_min_db = -64\n", f); fclose(f);
+    settings_load_ini();
+    CHECK(s->volume_min_db == -64);
+    CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
+    s->volume_min_db = -20;
+    settings_load_ini();
+    CHECK(s->volume_min_db == -64);
+    s->volume_min_db = -20;
+
     /* nightly update on battery: -1 = only on the charger, invalid keeps the value */
     s->update_battery = 30;
     f = fopen(SETTINGS_INI_PATH, "w"); fputs("update_battery = 5\n", f); fclose(f);

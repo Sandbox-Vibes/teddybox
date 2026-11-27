@@ -430,6 +430,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Board init");
     audio_board_handle_t board_handle = audio_board_init();
     dac3100_set_speaker_eq(settings_get()->speaker_eq);
+    dac3100_set_volume_min(settings_get()->volume_min_db <= -64 ? DAC3100_VOL_MIN_MUTE : settings_get()->volume_min_db * 2);
     led_set_brightness(settings_get()->led_brightness);
     ledman_init();
 

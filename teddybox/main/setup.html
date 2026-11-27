@@ -238,6 +238,9 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 <input class="rng" id="vmax" type="range" min="10" max="100" step="5"></div>
 <div class="f"><div class="vh"><label class="lb" for="vmaxh">Max. Lautstärke Kopfhörer</label><span class="val" id="vmaxh-v"></span></div>
 <input class="rng" id="vmaxh" type="range" min="10" max="100" step="5"></div>
+<div class="f"><label class="lb" for="vmin">Leiseste Stufe</label>
+<select class="in" id="vmin"><option value="-20">−20 dB (wie Original)</option><option value="-30">−30 dB</option><option value="-40">−40 dB</option><option value="-50">−50 dB</option><option value="-63">−63 dB (kaum hörbar)</option><option value="-64">Stumm</option></select>
+<p class="hint">Wie leise die unterste Stufe ist (Lautsprecher und Kopfhörer). Die Stufen bis zur Mitte werden gleichmäßig darauf verteilt, die oberen bleiben.</p></div>
 <div class="f"><span class="lb" id="speq-l">Klang</span>
 <div class="segs" role="radiogroup" aria-labelledby="speq-l" data-for="speq" style="grid-template-columns:repeat(3,minmax(0,1fr))">
 <button class="seg" type="button" role="radio" data-v="full">Optimiert</button>
@@ -462,6 +465,7 @@ const EN={
 'Umwandeln und hochladen':'Convert and upload','{n} Dateien':'{n} files','Nach oben':'Move up','Nach unten':'Move down','Entfernen':'Remove','Bitte Audiodateien auswählen.':'Please choose audio files.',
 'Lade den Encoder …':'Loading the encoder …','Der Encoder konnte nicht geladen werden.':'The encoder could not be loaded.','Kapitel {i}/{n}: lese {s} …':'Chapter {i}/{n}: reading {s} …','Kapitel {i}/{n} wird umgewandelt …':'Chapter {i}/{n} is being converted …',
 '{s}: Dieses Format kann der Browser nicht lesen.':'{s}: the browser cannot read this format.','Gespeichert: {n} Kapitel, {t}, Prüfsumme stimmt.':'Stored: {n} chapters, {t}, checksum correct.','Umwandlung abgebrochen: {s}':'Conversion aborted: {s}','Wird umgewandelt …':'Converting …',
+'Leiseste Stufe':'Lowest step','−20 dB (wie Original)':'−20 dB (as original)','−63 dB (kaum hörbar)':'−63 dB (barely audible)','Stumm':'Silent','Wie leise die unterste Stufe ist (Lautsprecher und Kopfhörer). Die Stufen bis zur Mitte werden gleichmäßig darauf verteilt, die oberen bleiben.':'How quiet the lowest step is (speaker and headphones). The steps up to the middle are spread evenly down to it, the upper ones stay.',
 'Firmware':'Firmware','Online-Update':'Online update','Suche nach einer neuen Version …':'Looking for a new version …','Update-Fortschritt':'Update progress','Installieren':'Install',
 '{v} installieren':'Install {v}','Neue Version {v} verfügbar.':'New version {v} available.','Du hast die neueste Version ({v}).':'You have the latest version ({v}).','Entwicklungsstand – letzte Version ist {v}.':'Development build – the latest release is {v}.','GitHub nicht erreichbar.':'GitHub not reachable.','Versionshinweise':'Release notes',
 'Die Box lädt {v} von GitHub …':'The box is downloading {v} from GitHub …','Lädt {v} … {p} %':'Downloading {v} … {p} %','Prüft und installiert …':'Checking and installing …',
@@ -568,7 +572,7 @@ async function load(){
     if(cfg.ca_custom){$('caname').textContent=T('Eigenes CA-Zertifikat gespeichert');}
     $('mhost').value=cfg.mqtt_host||'';$('mport').value=cfg.mqtt_port||1883;$('muser').value=cfg.mqtt_user||'';
     if(cfg.mqtt_pass_set)$('mpass').placeholder=T('unverändert lassen');
-    $('lang').value=String(cfg.lang_id??1);$('tlang').value=cfg.text_lang==='de'?'de':'en';$('vmax').value=cfg.volume_max||100;$('vmaxh').value=cfg.volume_max_hdp||100;
+    $('lang').value=String(cfg.lang_id??1);$('tlang').value=cfg.text_lang==='de'?'de':'en';$('vmax').value=cfg.volume_max||100;$('vmaxh').value=cfg.volume_max_hdp||100;{const m=String(cfg.volume_min_db??-20),o=$('vmin');if(![...o.options].some(x=>x.value===m))o.add(new Option(m+' dB',m));o.value=m;}
     $('tcset').checked=cfg.tc_box_settings!==false;$('idle').value=cfg.idle_timeout||60;
     segSet('speq',cfg.speaker_eq||'full');segSet('led',String(cfg.led_brightness??3));
     $('slap').value=cfg.slap??3;$('slaprev').checked=!!cfg.slap_reverse;$('tilt').value=cfg.tilt??3;
@@ -664,7 +668,7 @@ $('save').onclick=async()=>{
   const body={wifi_ssid:$('ssid').value.trim(),wifi_pass:$('wpass').value,
     cloud_host:$('chost').value.trim(),cloud_port:+$('cport').value||443,tc_web_port:$('cwport').value===''?80:+$('cwport').value,
     mqtt_host:$('mhost').value.trim(),mqtt_port:+$('mport').value||1883,mqtt_user:$('muser').value.trim(),mqtt_pass:$('mpass').value,
-    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,volume_max_hdp:+$('vmaxh').value||100,tc_box_settings:$('tcset').checked,idle_timeout:+$('idle').value||60,
+    lang_id:+$('lang').value,volume_max:+$('vmax').value||100,volume_max_hdp:+$('vmaxh').value||100,volume_min_db:+$('vmin').value,tc_box_settings:$('tcset').checked,idle_timeout:+$('idle').value||60,
     speaker_eq:$('speq').value||'full',led_brightness:+$('led').value,slap:+$('slap').value,slap_reverse:$('slaprev').checked,tilt:+$('tilt').value,
     update_hour:+$('uphour').value,update_battery:+$('upbat').value,decoder:$('decoder').value,cpu_mhz:+$('cpumhz').value,download_playing:+$('dlplay').value,
     readahead:$('readahead').value==='1',rtnl:$('rtnl').value==='1',boxine_fallback:$('boxfb').checked,user_agent_original:$('uaorig').checked,

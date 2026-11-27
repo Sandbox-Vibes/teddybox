@@ -33,6 +33,7 @@ static settings_t settings = {
     .volume_max_hdp = 100,
     .tc_box_settings = true,
     .volume_default = 50,
+    .volume_min_db = -20,
     .idle_timeout_s = 60,
     .speaker_eq = SPEAKER_EQ_DEFAULT,
     .led_brightness = 3,
@@ -123,6 +124,8 @@ int settings_save_ini(const char *path)
                      "# max volume with headphones plugged in\n"
                      "volume_max_hdp = %u\n"
                      "volume_default = %u\n"
+                     "# lowest volume step in dB: -20 (original) down to -63, -64 = silent\n"
+                     "volume_min_db = %d\n"
                      "idle_timeout = %u\n"
                      "# speaker EQ: off, lowcut (high-pass 150 Hz) or full (plus cuts at 470 Hz, 1.65 kHz and 6.3 kHz, measured)\n"
                      "speaker_eq = %s\n"
@@ -168,7 +171,7 @@ int settings_save_ini(const char *path)
                      s->mqtt_host, s->mqtt_port, s->mqtt_user, s->mqtt_pass,
                      s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
                      s->ha_discovery_prefix,
-                     s->lang_id, s->volume_max, s->volume_max_hdp, s->volume_default, (unsigned)s->idle_timeout_s,
+                     s->lang_id, s->volume_max, s->volume_max_hdp, s->volume_default, s->volume_min_db, (unsigned)s->idle_timeout_s,
                      speaker_eq_name(s->speaker_eq), s->led_brightness, s->ears_poweroff ? 1 : 0,
                      s->slap_level, s->slap_reverse ? 1 : 0, s->tilt_level, s->mem_log ? 1 : 0, s->update_hour, s->update_battery, s->timezone, s->claim ? 1 : 0, s->decoder_celt ? "celt" : "adf", s->cpu_mhz, s->dl_playing_kib_s, s->readahead ? 1 : 0, s->tc_box_settings ? 1 : 0, s->rtnl ? 1 : 0) > 0;
     ok = fprintf(f,
@@ -343,6 +346,17 @@ void settings_load_ini(void)
             else
             {
                 ESP_LOGW(TAG, "Invalid tc_box_settings '%s' (0 or 1)", val);
+            }
+        }
+        else if (!strcmp(key, "volume_min_db"))
+        {
+            if (num >= -64 && num <= -20 && val[0] == '-')
+            {
+                settings.volume_min_db = num;
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Invalid volume_min_db '%s' (-20 to -63 dB, -64 silent)", val);
             }
         }
         else if (!strcmp(key, "volume_default") && num >= 0 && num <= 100)

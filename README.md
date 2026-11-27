@@ -216,6 +216,7 @@ Written by the setup page; all keys are optional.
 | `lang_id` | from NVS | system sounds: 0=EN-GB 1=DE 2=EN-US 3=FR |
 | `volume_max`, `volume_default` | 100, 50 | percent |
 | `volume_max_hdp` | 100 | percent, with headphones plugged in |
+| `volume_min_db` | -20 | lowest volume step in dB (speaker and headphones): -20 as the original, down to -63, -64 = silent; the steps up to the middle one (50 %) are spread evenly down to it, the upper ones stay. Setup page: Box, "Lowest step" |
 | `tc_box_settings` | 1 | take over box settings changed in teddyCloud, see below |
 | `idle_timeout` | 60 | seconds until power off |
 | `speaker_eq` | `full` | `off`, `lowcut`, `full`, see Audio |

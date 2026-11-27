@@ -192,6 +192,11 @@ esp_err_t dac3100_get_volume(int *volume);
 esp_err_t dac3100_set_gain(int gain);
 
 #define DAC3100_VOL_STEPS 16
+/* lowest volume step in 0.5 dB: -40 = -20 dB as the original, down to -126
+   (-63 dB); DAC3100_VOL_MIN_MUTE = silent */
+#define DAC3100_VOL_MIN_DEFAULT (-40)
+#define DAC3100_VOL_MIN_MUTE (-128)
+void dac3100_set_volume_min(int half_db);
 
 typedef enum
 {
