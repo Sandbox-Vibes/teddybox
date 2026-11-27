@@ -123,7 +123,15 @@ static void rtnl_task(void *arg)
 
     while (true)
     {
-        if (xQueueReceive(rtnl_queue, &it, tls ? pdMS_TO_TICKS(1000) : portMAX_DELAY) != pdTRUE)
+        if (tls && cloud_download_busy())
+        {
+            /* the download next to the playback needs the RAM of this
+               connection (about 10 KB); events wait in the queue */
+            ESP_LOGI(TAG, "Download running, closing the connection");
+            esp_tls_conn_destroy(tls);
+            tls = NULL;
+        }
+        if (xQueueReceive(rtnl_queue, &it, tls ? pdMS_TO_TICKS(250) : portMAX_DELAY) != pdTRUE)
         {
             if (tls && esp_timer_get_time() - last_us > RTNL_IDLE_CLOSE_MS * 1000LL)
             {
@@ -139,6 +147,12 @@ static void rtnl_task(void *arg)
         }
         if (!tls)
         {
+            while (cloud_download_busy() && settings_get()->rtnl)
+            {
+                /* connect after the download; events queue up meanwhile
+                   (dropped when the queue is full) */
+                vTaskDelay(pdMS_TO_TICKS(500));
+            }
             if (esp_timer_get_time() < retry_after_us)
             {
                 continue; /* dropped */

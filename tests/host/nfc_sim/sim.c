@@ -21,6 +21,7 @@ static int unsupported = 0, fifo_overflows = 0, tokens_ok = 0, tokens_bad = 0;
 static uint8_t tag_mem(uint64_t uid, int i) { return (uint8_t)(uid >> (8 * (i % 8))) ^ (uint8_t)(0x11 * i); }
 static bool tag_powered = false, tag_unlocked = false; static uint8_t rnd[2];
 static uint64_t last_tag = 0;
+static int garbled = 0, other = 0; /* disturbed answers given (per run) */
 
 static void advance(double ms)
 {
@@ -55,7 +56,14 @@ esp_err_t trf7962a_xmit(trf7962a_t c, uint8_t *tx, uint8_t txl, uint8_t *rx, uin
     case 0xB2: rnd[0] = (uint8_t)now_ms; rnd[1] = (uint8_t)(now_ms / 7); rx[0]=0; rx[1]=rnd[0]; rx[2]=rnd[1]; rx[3]=rx[4]=0; *rxl=5; return ESP_OK;
     case 0xB3: { uint32_t p = (tx[4]^rnd[0]) | (tx[5]^rnd[1])<<8 | (tx[6]^rnd[0])<<16 | (uint32_t)(tx[7]^rnd[1])<<24;
                  if (p != TONIE_PASS) return ESP_FAIL; tag_unlocked = true; rx[0]=0; rx[1]=rx[2]=0; *rxl=3; return ESP_OK; }
-    case 0x01: if (!tag_unlocked) return ESP_FAIL; rx[0]=0; rx[1]=0; for (int i=0;i<8;i++) rx[2+i]=t>>(8*i); rx[10]=rx[11]=0; *rxl=12; return ESP_OK;
+    case 0x01: { if (!tag_unlocked) return ESP_FAIL;
+        /* interference while tonie A lies there (27 Nov): one garbled answer
+           without E0 at 15 s, one single answer with another E0 UID at 20 s;
+           neither may stop A */
+        uint64_t u = t;
+        if (t == 0xE004035000112233ULL && now_ms >= 15000 && !garbled) { garbled = 1; u = 0x1FFFFCFFF01F81F6ULL; }
+        else if (t == 0xE004035000112233ULL && now_ms >= 20000 && !other) { other = 1; u = 0xE0040350DEADBEEFULL; }
+        rx[0]=0; rx[1]=0; for (int i=0;i<8;i++) rx[2+i]=u>>(8*i); rx[10]=rx[11]=0; *rxl=12; return ESP_OK; }
     case 0x23: /* READ MULTIPLE BLOCKS: not implemented by the SLIX-L, silent in non-addressed mode */
         unsupported++; return ESP_FAIL;
     case 0x20: { /* READ SINGLE BLOCK: 8 blocks of 4 bytes */
@@ -95,6 +103,7 @@ int main(int argc, char **argv)
         now_ms = 0; field = false; field_ms = 0; n_play = n_stop = 0; last_tag = 0; tag_powered = tag_unlocked = false;
         sim_end_ms = phase[i].from; double f0 = 0;
         if (phase[i].from > 0) { if (!setjmp(sim_end)) nfc_mainthread((void *)1); f0 = field_ms; }
+        garbled = other = 0;
         now_ms = 0; field = false; field_ms = 0; n_play = n_stop = 0; tokens_ok = tokens_bad = fifo_overflows = unsupported = 0; last_tag = 0; tag_powered = tag_unlocked = false;
         sim_end_ms = phase[i].to;
         int v = sim_verbose; sim_verbose = v && i == 2;

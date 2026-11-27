@@ -23,4 +23,5 @@ python3 taf_run.py "$W/c.taf" 300 > /dev/null
 python3 taf_check.py "$W/c.taf" 1
 "$W/taf_decode" "$W/c.taf" "$W/c.wav"
 python3 taf_check.py sample_browser.taf 3
+python3 pick_click.py
 echo "ALL OK"

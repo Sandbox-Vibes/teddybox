@@ -67,6 +67,8 @@ static volatile int active_backend = BACKEND_TEDDYCLOUD;
 static volatile bool teddycloud_up = false;
 /* WiFi up and a backend answered (time request): downloads can start */
 static volatile bool cloud_ready = false;
+/* content downloads queued or running (verify and RTNL step aside for them) */
+static int content_busy = 0;
 static char user_agent[64];
 
 #define CLOUD_HOST (backends[active_backend].host)
@@ -1039,6 +1041,11 @@ bool cloud_is_enabled(void)
     return cloud_request_queue != NULL;
 }
 
+bool cloud_download_busy(void)
+{
+    return __atomic_load_n(&content_busy, __ATOMIC_SEQ_CST) > 0;
+}
+
 bool cloud_is_ready(void)
 {
     return cloud_ready && wifi_is_connected();
@@ -1140,6 +1147,7 @@ cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc
         strcpy(req->filename, "(error)");
     }
 
+    __atomic_add_fetch(&content_busy, 1, __ATOMIC_SEQ_CST);
     xQueueSend(cloud_request_queue, &req, portMAX_DELAY);
 
     return req;
@@ -1352,6 +1360,7 @@ static void cloud_task(void *ctx)
         {
             cloud_resume_lost(req);
         }
+        __atomic_sub_fetch(&content_busy, 1, __ATOMIC_SEQ_CST);
         /* last access to req, the requester frees it after this */
         req->done = true;
 
