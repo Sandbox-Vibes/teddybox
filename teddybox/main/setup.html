@@ -206,7 +206,7 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 </div>
 <p class="hint">Über den Web-Port (Weboberfläche von teddyCloud, meist 80) holt die Box die Namen der Tonies. 0 = nicht fragen.</p>
 <div class="f"><span class="lb">CA-Zertifikat von teddyCloud</span>
-<label class="drop"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
+<label class="drop" for="cafile"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
 <span class="t"><b id="caname">Datei wählen</b><span>certs/server/ca.der · DER oder PEM</span></span>
 <input id="cafile" type="file" accept=".der,.pem,.crt,.cer"></label>
 <p class="status" id="castatus"></p></div>
@@ -329,7 +329,7 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 <input class="in mono" id="tnuid" aria-label="Oder UID eingeben" placeholder="oder UID eingeben, z. B. E00403500EEA5646" autocapitalize="characters" spellcheck="false" style="font-size:13px">
 <p class="hint">Ein neuer Tonie erscheint hier, sobald er einmal auf der Box lag (auch ohne Inhalt).</p></div>
 <div class="f"><span class="lb">TAF-Datei</span>
-<label class="drop" style="flex-wrap:wrap"><span class="tile"><svg class="ic"><use href="#i-file"/></svg></span>
+<label class="drop" for="tnfile" style="flex-wrap:wrap"><span class="tile"><svg class="ic"><use href="#i-file"/></svg></span>
 <span class="t"><b id="tnname">Datei wählen</b><span id="tnsub">.taf aus teddyCloud oder TonieToolbox</span></span>
 <span class="val" id="tnpct"></span>
 <progress id="tnprog" max="100" value="0" hidden aria-label="Upload-Fortschritt"></progress>
@@ -337,7 +337,7 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 <p class="status" id="tnstatus"></p></div>
 <button class="primary m" id="tnbtn" type="button">Hochladen</button>
 <div class="f" style="margin-top:18px"><span class="lb">Oder: Audiodateien umwandeln</span>
-<label class="drop" style="flex-wrap:wrap"><span class="tile"><svg class="ic"><use href="#i-file"/></svg></span>
+<label class="drop" for="aufile" style="flex-wrap:wrap"><span class="tile"><svg class="ic"><use href="#i-file"/></svg></span>
 <span class="t"><b id="auname">Dateien wählen</b><span id="ausub">MP3, M4A, WAV, OGG … – jede Datei wird ein Kapitel</span></span>
 <span class="val" id="aupct"></span>
 <progress id="auprog" max="100" value="0" hidden aria-label="Fortschritt der Umwandlung"></progress>
@@ -382,7 +382,7 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 <button class="primary m" id="olbtn" type="button" hidden>Installieren</button>
 </div>
 <div class="f"><span class="lb">Neue TeddyBox-Firmware</span>
-<label class="drop"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
+<label class="drop" for="fwfile"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
 <span class="t"><b id="fwname">teddybox.bin wählen</b><span>Startet auf Probe, sonst zurück zur bisherigen</span></span>
 <input id="fwfile" type="file" accept=".bin"></label></div>
 <div id="pdask" hidden class="f">
