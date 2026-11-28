@@ -112,6 +112,10 @@ static void pb_decoder_load_log(void)
 {
     static int64_t t0;
     static uint32_t run0, total0;
+    /* the "dec" task is created anew for every playback: a run time counter
+       of another task is no baseline (28 Nov: a quick tonie change gave
+       "42886.5 % CPU") */
+    static TaskHandle_t dec0;
     if (!pb_playing || pb_default_content)
     {
         t0 = 0;
@@ -135,16 +139,25 @@ static void pb_decoder_load_log(void)
         return;
     }
     uint32_t total = 0, run = 0;
+    TaskHandle_t dec = NULL;
     n = uxTaskGetSystemState(ts, n, &total);
     for (UBaseType_t i = 0; i < n; i++)
     {
         if (!strcmp(ts[i].pcTaskName, "dec"))
         {
             run = ts[i].ulRunTimeCounter;
+            dec = ts[i].xHandle;
         }
     }
     free(ts);
-    if (t0 && total > total0)
+    if (dec != dec0)
+    {
+        /* other decoder task: start measuring again */
+        t0 = 0;
+        logged = 0;
+    }
+    dec0 = dec;
+    if (t0 && total > total0 && run >= run0)
     {
         uint32_t mhz = 0;
         esp_clk_tree_src_get_freq_hz(SOC_MOD_CLK_CPU, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &mhz);
