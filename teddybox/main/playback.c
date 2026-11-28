@@ -1970,7 +1970,7 @@ void pb_init(esp_periph_set_handle_t set)
     pb_mon_start();
     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
     i2s_cfg.type = AUDIO_STREAM_WRITER;
-    /* same DMA buffering as with IDF 4.4: 4 x 512 frames */
+    /* DMA buffering: 4 x 512 frames */
     i2s_cfg.chan_cfg.dma_desc_num = 4;
     i2s_cfg.chan_cfg.dma_frame_num = 512;
 
