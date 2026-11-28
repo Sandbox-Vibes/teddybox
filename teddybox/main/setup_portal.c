@@ -47,7 +47,7 @@ static char mdns_host[24] = ""; /* "teddybox-xxxx" */
 #define CA_DIR "/sdcard/teddybox"
 #endif
 #define CA_FILE CA_DIR "/ca.der"
-#define BOXINE_CA_FILE CA_DIR "/boxine-ca.der"
+#define BOXINE_CA_FILE CLOUD_BOXINE_CA_FILE
 #define MAX_BODY 4096
 #define MAX_SCAN 20
 
@@ -553,6 +553,8 @@ static esp_err_t save_handler(httpd_req_t *req)
         s->readahead = cJSON_IsTrue(b);
     }
     cJSON_Delete(o);
+    /* fallback just switched on, box not patched: keep its Boxine CA */
+    cloud_boxine_ca_keep();
 
     if (settings_save_ini(SETTINGS_INI_PATH) != 0)
     {

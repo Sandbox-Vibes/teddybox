@@ -263,12 +263,17 @@ Both are off by default and can be switched on in the setup page
 - The CA for these connections is `boxine_ca`, by default
   `/spiflash/cert/ca.der` in the assets partition. That file is the original
   Boxine CA only on a box that was not patched for teddyCloud; the patch
-  replaces it with teddyCloud's. On a patched box, upload the original one
-  on the setup page ("Advanced"): teddyCloud keeps it as
-  `certs/client/ca.der` (or `certs/client/<mac>/ca.der`). It is stored as
-  `/sdcard/teddybox/boxine-ca.der`. If the configured CA is teddyCloud's
-  ("TeddyCloud Root CA", or the same file as for teddyCloud), the box logs
-  an error at start and leaves the fallback off.
+  replaces it with teddyCloud's.
+  - Box not patched: when the fallback is switched on (setup page or
+    `teddybox.ini`, checked at every start), the box copies the CA from flash
+    to `/sdcard/teddybox/boxine-ca.der` and sets `boxine_ca` to it, so a later
+    teddyCloud patch of the flash does not break the fallback.
+  - Box patched: upload the original CA on the setup page ("Advanced");
+    teddyCloud keeps it as `certs/client/ca.der` (or
+    `certs/client/<mac>/ca.der`). It is stored in the same file.
+  - If the configured CA is teddyCloud's ("TeddyCloud Root CA", or the same
+    file as for teddyCloud), the box logs an error at start and leaves the
+    fallback off.
 - The Boxine fallback has only been tested against a local server, never
   against the real Boxine cloud.
 - Behind the Boxine cloud the box has no tonie names, no box settings from

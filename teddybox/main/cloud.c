@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -687,6 +688,69 @@ bool cloud_ca_is_teddycloud(const uint8_t *der, size_t len)
     return tc;
 }
 
+#define FLASH_CA "/spiflash/cert/ca.der"
+
+/* teddyCloud's CA (by name, or the same bytes as the CA used for teddyCloud) */
+static bool ca_is_teddycloud_or_same(const uint8_t *der, size_t len)
+{
+    if (cloud_ca_is_teddycloud(der, len))
+    {
+        return true;
+    }
+    const settings_t *s = settings_get();
+    if (!s->cloud_host[0] || !strcmp(s->ca_path, FLASH_CA))
+    {
+        return false; /* compared with itself: says nothing */
+    }
+    uint8_t *tc = NULL;
+    size_t tc_len = 0;
+    bool same = false;
+    if (cloud_load_cert(s->ca_path, &tc, &tc_len) == ESP_OK)
+    {
+        same = tc_len == len && !memcmp(tc, der, len);
+        free(tc);
+    }
+    return same;
+}
+
+bool cloud_boxine_ca_keep(void)
+{
+    settings_t *s = settings_get_mutable();
+    if (!s->boxine_fallback || (s->boxine_ca[0] && strcmp(s->boxine_ca, FLASH_CA)))
+    {
+        return false; /* off, or an own CA file is set */
+    }
+    uint8_t *ca = NULL;
+    size_t len = 0;
+    if (cloud_load_cert(FLASH_CA, &ca, &len) != ESP_OK)
+    {
+        return false;
+    }
+    if (ca_is_teddycloud_or_same(ca, len))
+    {
+        /* patched box: cloud_init says what to do */
+        free(ca);
+        return false;
+    }
+    mkdir("/sdcard/teddybox", S_IRWXU);
+    FILE *f = fopen(CLOUD_BOXINE_CA_FILE, "wb");
+    bool ok = f && fwrite(ca, len, 1, f) == 1;
+    if (f)
+    {
+        ok = (fclose(f) == 0) && ok;
+    }
+    free(ca);
+    if (!ok)
+    {
+        ESP_LOGW(TAG, "Could not copy the Boxine CA to the SD card, the one in flash is used");
+        unlink(CLOUD_BOXINE_CA_FILE);
+        return false;
+    }
+    snprintf(s->boxine_ca, sizeof(s->boxine_ca), "%s", CLOUD_BOXINE_CA_FILE);
+    ESP_LOGI(TAG, "Boxine CA from flash copied to '%s'", CLOUD_BOXINE_CA_FILE);
+    return true;
+}
+
 void cloud_init(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -694,6 +758,10 @@ void cloud_init(void)
     esp_ota_get_partition_description(esp_ota_get_running_partition(), &running_app_info);
     cloud_init_user_agent();
 
+    if (cloud_boxine_ca_keep() && settings_save_ini(SETTINGS_INI_PATH) != 0)
+    {
+        ESP_LOGW(TAG, "Could not save the settings");
+    }
     const settings_t *s = settings_get();
     if (s->cloud_enabled)
     {
@@ -708,7 +776,7 @@ void cloud_init(void)
         /* SNI and host name check like the original firmware */
         cloud_backend_t *bx = &backends[BACKEND_BOXINE];
         *bx = (cloud_backend_t){.name = "Boxine", .host = s->boxine_host, .port = 443, .tls_name = s->boxine_host};
-        const char *ca = s->boxine_ca[0] ? s->boxine_ca : "/spiflash/cert/ca.der";
+        const char *ca = s->boxine_ca[0] ? s->boxine_ca : FLASH_CA;
         const cloud_backend_t *tc = &backends[BACKEND_TEDDYCLOUD];
         if (cloud_load_cert(ca, &bx->ca, &bx->ca_len) != ESP_OK)
         {

@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "bootsel.h"
 #include "cloud.h"
+#include "test_boxine_ca.h"
 #include "playback.h"
 #include "taf_verify.h"
 
@@ -136,6 +137,34 @@ void app_main(void)
             check("0 broken CA not taken for teddyCloud's", !cloud_ca_is_teddycloud(ca, ca_len));
             free(ca);
         }
+    }
+
+    /* 0b: Boxine CA kept on the SD card when the fallback is switched on
+       (cloud.c reads the "flash" CA from /sdcard/CERT/ in this test) */
+    {
+        settings_t *s = settings_get_mutable();
+        const char *flash = "/sdcard/CERT/ca.der";
+        FILE *cf = fopen(flash, "wb");
+        fwrite(test_boxine_ca_der, 1, test_boxine_ca_der_len, cf);
+        fclose(cf);
+        unlink(CLOUD_BOXINE_CA_FILE);
+        strcpy(s->boxine_ca, flash);
+        s->boxine_fallback = false;
+        check("0b fallback off: nothing copied", !cloud_boxine_ca_keep() && fsize(CLOUD_BOXINE_CA_FILE) < 0);
+        s->boxine_fallback = true;
+        check("0b unpatched box: CA copied to the SD card", cloud_boxine_ca_keep() &&
+                                                                !strcmp(s->boxine_ca, CLOUD_BOXINE_CA_FILE) &&
+                                                                fsize(CLOUD_BOXINE_CA_FILE) == (long)test_boxine_ca_der_len);
+        check("0b own CA set: left alone", !cloud_boxine_ca_keep() && !strcmp(s->boxine_ca, CLOUD_BOXINE_CA_FILE));
+        cf = fopen(flash, "wb");
+        fwrite(ca_start, 1, ca_end - ca_start, cf);
+        fclose(cf);
+        unlink(CLOUD_BOXINE_CA_FILE);
+        strcpy(s->boxine_ca, flash);
+        check("0b patched box (teddyCloud CA in flash): not copied", !cloud_boxine_ca_keep() &&
+                                                                          !strcmp(s->boxine_ca, flash) &&
+                                                                          fsize(CLOUD_BOXINE_CA_FILE) < 0);
+        s->boxine_fallback = false;
     }
 
     /* 1: interrupted download stays .tmp, no final file */
