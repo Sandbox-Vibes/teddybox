@@ -11,6 +11,8 @@
 #include "rtnl_encode.h"
 
 void rtnl_init(void);
+/* the connection to teddyCloud is open */
+bool rtnl_is_connected(void);
 void rtnl_tag(uint64_t uid, bool valid);
 void rtnl_tag_removed(uint64_t uid);
 void rtnl_audio_id(uint32_t audio_id);

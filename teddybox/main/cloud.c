@@ -45,6 +45,7 @@
 #include "sd_retry.h"
 #include "cloud_internal.h"
 #include "taf_verify.h"
+#include "rtnl.h"
 
 cloud_backend_t backends[2];
 volatile int active_backend = BACKEND_TEDDYCLOUD;
@@ -130,6 +131,13 @@ static esp_err_t cloud_request_do(cloud_req_t *req);
 esp_err_t cloud_request(cloud_req_t *req)
 {
     __atomic_add_fetch(&request_active, 1, __ATOMIC_SEQ_CST);
+    /* let RTNL close its connection first (it checks every 100 ms): 28 Nov,
+       the freshness handshake started while RTNL was still connected and
+       free RAM fell to 2.7 KB */
+    for (int i = 0; i < 20 && rtnl_is_connected(); i++)
+    {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
     esp_err_t ret = cloud_request_do(req);
     __atomic_sub_fetch(&request_active, 1, __ATOMIC_SEQ_CST);
     return ret;
