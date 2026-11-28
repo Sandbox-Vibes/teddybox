@@ -108,6 +108,18 @@ void app_main(void)
     unlink(FINAL);
     unlink(TMP);
 
+    /* 0: custom tags (never asked at the Boxine cloud), rules as teddyCloud */
+    {
+        static const uint8_t zero[32] = {0};
+        static const uint8_t tok[32] = {0x12, 0x34};
+        check("0 original tonie with token", !cloud_tag_is_custom(0xE00403500EEA5646ULL, tok));
+        check("0 original UID, token not checked", !cloud_tag_is_custom(0xE00403500EEA5646ULL, NULL));
+        check("0 all-zero token = custom", cloud_tag_is_custom(0xE00403500EEA5646ULL, zero));
+        check("0 other UID prefix (SLIX2 E0:04:01) = custom", cloud_tag_is_custom(0xE004010812345678ULL, tok));
+        check("0 other maker (E0:07) = custom", cloud_tag_is_custom(0xE007000012345678ULL, NULL));
+        check("0 teddyCloud is the backend here", !cloud_backend_is_boxine());
+    }
+
     /* 1: interrupted download stays .tmp, no final file */
     run(32768);
     check("1 aborted download: only .tmp", fsize(FINAL) < 0 && fsize(TMP) > 0 && fsize(TMP) < TOTAL);

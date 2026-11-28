@@ -258,6 +258,12 @@ Both are off by default and can be switched on in the setup page
   cloud only if teddyCloud does not answer; every 5 minutes it checks whether
   teddyCloud is back. Boxine connections use the original CA from the assets
   partition, send SNI and verify the server name, like the original firmware.
+- Tags that are not original tonies are never asked for at Boxine, by the
+  same rules as teddyCloud (`cloud.markCustomTagByUid` / `ByPass`): the UID
+  does not start with `E0:04:03`, or the token read from the tag is all
+  zeros. Such a tag gets no download from Boxine (error sound, as for an
+  unknown tonie), and the freshness check sent to Boxine leaves it out
+  (also tonies without a token saved on the SD card).
 - teddyCloud passes the box's user agent on to Boxine. Without
   `user_agent_original`, Boxine therefore sees `toniebox-esp32-teddybox/...`
   whenever teddyCloud fetches content for TeddyBox.
