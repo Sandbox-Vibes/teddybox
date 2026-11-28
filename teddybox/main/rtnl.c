@@ -8,6 +8,7 @@
 #include "esp_tls.h"
 #include "esp_app_desc.h"
 #include "rtnl.h"
+#include "taf_verify.h"
 #include "cloud.h"
 #include "settings.h"
 #include "dac3100.h"
@@ -122,6 +123,15 @@ bool rtnl_is_connected(void)
     return rtnl_connected;
 }
 
+/* the connection (about 10 KB) gives way to downloads, requests of the
+   cloud task and the background check of a new file (8 KB buffer and its
+   stack). 28 Nov, end of a tonie: RTNL connected while the check ran, the
+   heap was left fragmented (largest block 7.9 KB for minutes afterwards) */
+static bool rtnl_must_wait(void)
+{
+    return cloud_tls_busy() || taf_verify_running();
+}
+
 static void rtnl_task(void *arg)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -133,11 +143,11 @@ static void rtnl_task(void *arg)
     while (true)
     {
         rtnl_connected = tls != NULL;
-        if (tls && cloud_tls_busy())
+        if (tls && rtnl_must_wait())
         {
             /* a download or another request of the cloud task needs the
                RAM of this connection (about 10 KB); events wait in the queue */
-            ESP_LOGI(TAG, "Cloud request running, closing the connection");
+            ESP_LOGI(TAG, "Cloud request or file check running, closing the connection");
             esp_tls_conn_destroy(tls);
             tls = NULL;
             rtnl_connected = false;
@@ -158,7 +168,7 @@ static void rtnl_task(void *arg)
         }
         if (!tls)
         {
-            while (cloud_tls_busy() && settings_get()->rtnl)
+            while (rtnl_must_wait() && settings_get()->rtnl)
             {
                 /* connect after the cloud request; events queue up meanwhile
                    (dropped when the queue is full) */
@@ -168,9 +178,13 @@ static void rtnl_task(void *arg)
             {
                 continue; /* dropped */
             }
+            /* counts as connected while the handshake runs: it needs the
+               most RAM, the others wait for it to end */
+            rtnl_connected = true;
             tls = cloud_connect_teddycloud();
             if (!tls)
             {
+                rtnl_connected = false;
                 /* teddyCloud not (yet) reachable or not the backend in use */
                 retry_after_us = esp_timer_get_time() + RTNL_RETRY_MS * 1000LL;
                 continue;

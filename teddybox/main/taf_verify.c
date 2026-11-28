@@ -1,4 +1,5 @@
 #include "taf_verify.h"
+#include "rtnl.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,6 +62,12 @@ static void verify_task(void *arg)
     /* a download next to the playback needs the RAM (27 Nov: buffers, stack
        and FILE of the check plus RTNL left 1.6 KB, TLS could not take its
        4 KB records); the file is checked the next time it is played */
+    /* the RTNL connection closes for the check (see rtnl.c); allocate
+       the buffer once it is gone, so the two do not interleave in the heap */
+    for (int i = 0; i < 30 && rtnl_is_connected(); i++)
+    {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
     bool postponed = cloud_download_busy();
     uint8_t *buf = postponed ? NULL : malloc(VERIFY_BUF);
     FILE *f = buf ? fopen(job->filename, "rb") : NULL;

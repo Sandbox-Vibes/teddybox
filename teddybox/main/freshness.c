@@ -233,9 +233,10 @@ int freshness_parse_response(const uint8_t *buf, size_t len, uint64_t *marked, i
 }
 
 /* collects UID and audio_id of every tonie file, removes .old leftovers whose new version is complete */
-static int collect_tonies(TonieFCInfo *infos, int max)
+static int collect_tonies(TonieFCInfo *infos, int max, int *unreadable)
 {
     int skipped_custom = 0;
+    *unreadable = 0;
     DIR *top = opendir(CONTENT_DIR);
     if (!top)
     {
@@ -301,6 +302,7 @@ static int collect_tonies(TonieFCInfo *infos, int max)
             fclose(f);
             if (!taf)
             {
+                (*unreadable)++;
                 continue;
             }
 
@@ -399,7 +401,12 @@ esp_err_t freshness_run(void)
         goto out;
     }
 
-    int n = collect_tonies(infos, FC_MAX_TONIES);
+    int unreadable;
+    int n = collect_tonies(infos, FC_MAX_TONIES, &unreadable);
+    if (unreadable)
+    {
+        ESP_LOGW(TAG, "%d tonie header(s) could not be read", unreadable);
+    }
     if (n == FC_MAX_TONIES)
     {
         ESP_LOGW(TAG, "More than %d tonies on the SD card, only the first %d are checked", FC_MAX_TONIES, FC_MAX_TONIES);
@@ -409,6 +416,13 @@ esp_err_t freshness_run(void)
         ptrs[i] = &infos[i];
     }
 
+    if (n == 0 && unreadable)
+    {
+        /* most likely no memory just now (28 Nov): try again later
+           instead of reporting an empty card */
+        ret = ESP_FAIL;
+        goto out;
+    }
     if (n == 0)
     {
         /* nothing to ask for; teddyCloud would also wait for a body that never comes */
