@@ -373,6 +373,128 @@ static void pb_audio_rate_check(void)
 /* ********************************************************************************************************************* */
 /* ********************************************************************************************************************* */
 
+static bool hdr_varint(FILE *fd, uint32_t *left, uint64_t *v, uint8_t *raw, int *raw_len)
+{
+    *v = 0;
+    *raw_len = 0;
+    for (int shift = 0; shift < 64; shift += 7)
+    {
+        int c = *left ? fgetc(fd) : EOF;
+        if (c == EOF)
+        {
+            return false;
+        }
+        (*left)--;
+        raw[(*raw_len)++] = (uint8_t)c;
+        *v |= (uint64_t)(c & 0x7f) << shift;
+        if (!(c & 0x80))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
+ * Copies the header's fields from the file into out (or only counts them,
+ * out == NULL), with the padding field _fill replaced by an empty one: it
+ * is about 4 KB that nobody reads, and protobuf-c would allocate a copy.
+ * 28 Nov: after a tonie, with a fragmented heap (largest block 3.8 KB),
+ * every header failed and the freshness check saw no tonies at all.
+ * Returns the length, -1 for a broken header.
+ */
+static long hdr_compact(FILE *fd, uint32_t size, uint8_t *out, size_t out_size)
+{
+    if (fseek(fd, 4, SEEK_SET) != 0)
+    {
+        return -1;
+    }
+    uint32_t left = size;
+    size_t len = 0;
+    uint8_t raw[10];
+    int raw_len;
+#define HDR_EMIT(p, n)                       \
+    do                                       \
+    {                                        \
+        if (out && len + (n) > out_size)     \
+            return -1;                       \
+        if (out)                             \
+            memcpy(out + len, (p), (n));     \
+        len += (n);                          \
+    } while (0)
+    while (left)
+    {
+        uint64_t key;
+        if (!hdr_varint(fd, &left, &key, raw, &raw_len))
+        {
+            return -1;
+        }
+        uint32_t field = key >> 3, type = key & 7;
+        if (field == 5 && type == 2)
+        {
+            uint64_t n;
+            uint8_t nraw[10];
+            int nraw_len;
+            /* skipped, but its last byte must be there (a header that is
+               still being downloaded is not complete yet) */
+            if (!hdr_varint(fd, &left, &n, nraw, &nraw_len) || n > left ||
+                (n && (fseek(fd, (long)n - 1, SEEK_CUR) != 0 || fgetc(fd) == EOF)))
+            {
+                return -1;
+            }
+            left -= n;
+            static const uint8_t empty_fill[2] = {0x2A, 0x00};
+            HDR_EMIT(empty_fill, 2);
+            continue;
+        }
+        HDR_EMIT(raw, raw_len);
+        uint64_t n;
+        switch (type)
+        {
+        case 0:
+            if (!hdr_varint(fd, &left, &n, raw, &raw_len))
+            {
+                return -1;
+            }
+            HDR_EMIT(raw, raw_len);
+            continue;
+        case 1:
+            n = 8;
+            break;
+        case 5:
+            n = 4;
+            break;
+        case 2:
+            if (!hdr_varint(fd, &left, &n, raw, &raw_len) || n > left)
+            {
+                return -1;
+            }
+            HDR_EMIT(raw, raw_len);
+            break;
+        default:
+            return -1;
+        }
+        if (n > left)
+        {
+            return -1;
+        }
+        while (n)
+        {
+            uint8_t chunk[32];
+            size_t k = n < sizeof(chunk) ? n : sizeof(chunk);
+            if (fread(chunk, 1, k, fd) != k)
+            {
+                return -1;
+            }
+            HDR_EMIT(chunk, k);
+            n -= k;
+            left -= k;
+        }
+    }
+#undef HDR_EMIT
+    return (long)len;
+}
+
 TonieboxAudioFileHeader *pb_toniefile_get_header(FILE *fd)
 {
     fseek(fd, 0, SEEK_SET);
@@ -389,20 +511,28 @@ TonieboxAudioFileHeader *pb_toniefile_get_header(FILE *fd)
         ESP_LOGE(TAG, "Invalid header size: 0x%04X", proto_size);
         return NULL;
     }
-    uint8_t *buffer = malloc(proto_size);
+    long len = hdr_compact(fd, proto_size, NULL, 0);
+    if (len < 0)
+    {
+        ESP_LOGE(TAG, "Failed to read header");
+        return NULL;
+    }
+    uint8_t *buffer = malloc(len ? len : 1);
     if (!buffer)
     {
         ESP_LOGE(TAG, "No memory for the header");
         return NULL;
     }
-    if (fread(buffer, proto_size, 1, fd) != 1)
+    if (hdr_compact(fd, proto_size, buffer, len) != len)
     {
         free(buffer);
         ESP_LOGE(TAG, "Failed to read header");
         return NULL;
     }
+    /* behind the header, as before */
+    fseek(fd, 4 + proto_size, SEEK_SET);
 
-    TonieboxAudioFileHeader *taf = toniebox_audio_file_header__unpack(NULL, proto_size, (const uint8_t *)buffer);
+    TonieboxAudioFileHeader *taf = toniebox_audio_file_header__unpack(NULL, len, (const uint8_t *)buffer);
     free(buffer);
     if (!taf)
     {
