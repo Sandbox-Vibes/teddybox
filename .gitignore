@@ -10,6 +10,9 @@ teddybox/dependencies.lock
 tests/host/battery_sim/sim
 tests/host/battery_sim/battery_copy.c
 tests/host/battery_sim/stub/battery.h
+# copied from teddybox/main at every build (make), never edited
+tests/host/nfc_sim/nfc_copy.c
+tests/host/nfc_sim/stub/nfc.h
 teddybox/sdkconfig.old
 # host test executables
 tests/host/test_*

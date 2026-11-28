@@ -6,7 +6,8 @@ test: sim
 	./sim
 	./sim plain
 
-# nfc.c is copied so that its includes resolve to the stubs, not to main/
+# nfc.c is copied at every build (not kept in git) so that its includes
+# resolve to the stubs, not to main/
 sim: sim.c $(MAIN)/nfc.c $(MAIN)/nfc.h
 	cp $(MAIN)/nfc.c nfc_copy.c
 	cp $(MAIN)/nfc.h stub/nfc.h
