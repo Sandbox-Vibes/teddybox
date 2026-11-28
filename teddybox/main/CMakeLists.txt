@@ -1,6 +1,6 @@
 # own task watchdog: taskwatch.c; minimal mDNS responder: mdns_min.c
 set(srcs
-    "ledman.c" "main.c" "cloud.c" "cloud_http.c" "memdiag.c" "mempeak.c"
+    "ledman.c" "main.c" "cloud.c" "cloud_download.c" "cloud_claim.c" "cloud_http.c" "memdiag.c" "mempeak.c"
     "tls_mfl.c" "ogg_pos.c" "nfc.c" "ota.c" "playback.c" "wifi.c" "accel.c"
     "settings.c" "sfx.c" "battery.c" "bootsel.c" "freshness.c" "tonie_names.c"
     "tonie_names_tc.c" "tonies_portal.c" "tonie_seen.c" "crashlog.c"
