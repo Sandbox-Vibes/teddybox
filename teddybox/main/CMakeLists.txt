@@ -10,7 +10,7 @@ set(srcs
     "mqtt_ha_payload.c" "setup_portal.c" "backup.c" "backup_zip.c" "maint.c"
     "ogg_demux.c" "tb_opus_dec.c" "readahead.c" "taf_verify.c"
     "proto/protobuf-c.c" "proto/proto/toniebox.pb.taf-header.pb-c.c"
-    "taskwatch.c" "mdns_min.c" "fw_fetch.c")
+    "taskwatch.c" "mdns_min.c" "fw_fetch.c" "ofw_patch.c")
 
 # the QEMU test build adds its test sounds here (tests/qemu/qemu_variant.py)
 set(embed_files)

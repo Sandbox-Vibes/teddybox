@@ -372,6 +372,18 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 </section>
 
 <section>
+<div class="hd"><h2 class="rd">Original-Firmware für teddyCloud</h2><span class="badge" id="opbadge">…</span></div>
+<p class="hint">Wie der ESP32-Patch von teddyCloud: Die CA von teddyCloud kommt in den Flash, und die Original-Firmware bekommt die teddyCloud-Adresse statt der Boxine-Server. Nur nötig, wenn du auch die Original-Firmware mit teddyCloud nutzen willst; TeddyBox selbst braucht das nicht. Die Original-CA von Boxine wird vorher auf die SD-Karte gesichert.</p>
+<p class="hint" id="opinfo"></p>
+<div class="note"><svg class="ic"><use href="#i-warn"/></svg><p><b>Erst das komplette Flash-Abbild sichern.</b> Geht beim Schreiben der Strom weg, startet die Original-Firmware nicht mehr. Freigabe wie bei der Sicherung (kleines Ohr).</p></div>
+<div class="f"><label class="lb" for="ophost">Adresse von teddyCloud für die Original-Firmware</label>
+<input class="in" id="ophost" autocapitalize="none" spellcheck="false" maxlength="16" placeholder="tc.lan"></div>
+<p class="hint">Höchstens 16 Zeichen, besser höchstens 12: Bei 13 bis 16 Zeichen bleibt das Live-Log (rtnl.bxcl.de) beim Original. teddyCloud muss auf Port 443 erreichbar sein.</p>
+<p class="status" id="opstatus"></p>
+<div class="g2"><button type="button" class="sec" id="opapply">Patchen</button><button type="button" class="sec" id="opundo">Rückgängig</button></div>
+</section>
+
+<section>
 <div class="hd"><h2 class="rd">Absturzprotokoll</h2><span class="badge good" id="crbadge">leer</span></div>
 <pre class="mono" id="crlog">…</pre>
 <p class="hint">Enthält Version, betroffenen Task und Adressen, keine Zugangsdaten – du kannst den Text zur Fehlersuche weitergeben.</p>
@@ -419,6 +431,14 @@ const $=id=>document.getElementById(id);
 /* language: German if the browser prefers German, else English */
 const DE=/^de\b/i.test((navigator.languages&&navigator.languages[0])||navigator.language||'');
 const EN={
+'Original-Firmware für teddyCloud':'Original firmware for teddyCloud','Wie der ESP32-Patch von teddyCloud: Die CA von teddyCloud kommt in den Flash, und die Original-Firmware bekommt die teddyCloud-Adresse statt der Boxine-Server. Nur nötig, wenn du auch die Original-Firmware mit teddyCloud nutzen willst; TeddyBox selbst braucht das nicht. Die Original-CA von Boxine wird vorher auf die SD-Karte gesichert.':'Like teddyCloud\'s ESP32 patch: teddyCloud\'s CA goes into flash, and the original firmware gets the teddyCloud address instead of the Boxine servers. Only needed if you want to use the original firmware with teddyCloud too; TeddyBox itself does not need it. The original Boxine CA is saved to the SD card first.',
+'Erst das komplette Flash-Abbild sichern.':'Back up the complete flash image first.','Geht beim Schreiben der Strom weg, startet die Original-Firmware nicht mehr. Freigabe wie bei der Sicherung (kleines Ohr).':'If power is lost while writing, the original firmware no longer starts. Released like the backup (small ear).',
+'Adresse von teddyCloud für die Original-Firmware':'teddyCloud address for the original firmware','Höchstens 16 Zeichen, besser höchstens 12: Bei 13 bis 16 Zeichen bleibt das Live-Log (rtnl.bxcl.de) beim Original. teddyCloud muss auf Port 443 erreichbar sein.':'At most 16 characters, better at most 12: with 13 to 16 the live log (rtnl.bxcl.de) stays as it is. teddyCloud must be reachable on port 443.',
+'Patchen':'Patch','Rückgängig':'Undo','gepatcht':'patched','original':'original','keine':'none',
+'Keine Original-Firmware gefunden.':'No original firmware found.','Die Original-Firmware ist beschädigt (Prüfung fehlgeschlagen).':'The original firmware is damaged (check failed).',
+'Von TeddyBox gepatcht auf {h}. CA im Flash: {c}.':'Patched by TeddyBox to {h}. CA in flash: {c}.','Boxine-Server in der Original-Firmware: {n}. CA im Flash: {c}.':'Boxine servers in the original firmware: {n}. CA in flash: {c}.',
+'teddyCloud':'teddyCloud','Boxine (oder unbekannt)':'Boxine (or unknown)','teddyCloud läuft nicht auf Port 443, das braucht die Original-Firmware.':'teddyCloud is not on port 443, the original firmware needs that.',
+'Erst oben „Sicherung freigeben“ und das kleine Ohr drücken.':'First “Release backup” above and press the small ear.','Schreibe … (nicht ausschalten)':'Writing … (do not switch off)','Fertig.':'Done.',
 'TeddyBox einrichten':'Set up TeddyBox','Hotspot der Box':'Hotspot of the box','Bereiche':'Sections',
 'Verbindung':'Connection','Box':'Box','Tonies':'Tonies','System':'System',
 'WLAN':'WiFi','Erneut suchen':'Scan again','Netz auswählen oder Namen eingeben. Netze aus der Tonies-App werden automatisch übernommen.':'Pick a network or enter its name. Networks from the Tonies app are used automatically.',
@@ -720,7 +740,7 @@ function showTab(name){
   $('savebar').hidden=!(name==='net'||name==='box');
   $('footnote').textContent=T(name==='box'?'Schreibt teddybox.ini auf die SD-Karte.':'Ohne Eingabe schaltet sich die Box nach 15 Minuten aus.');
   if(name==='tonies'&&!tnLoaded)tnLoad();
-  if(name==='sys')crLoad();
+  if(name==='sys'){crLoad();opLoad();}
   try{history.replaceState(null,'','#'+name);}catch(e){}
 }
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
@@ -889,6 +909,32 @@ $('aubtn').onclick=async()=>{
     $('aubtn').disabled=$('tnbtn').disabled=false;$('aubtn').textContent=T('Umwandeln und hochladen');
   }
 };
+/* teddyCloud patch of the original firmware */
+async function opLoad(){
+  let j;try{j=await (await fetch('/api/ofwpatch')).json();}catch(e){$('opinfo').textContent=T('Keine Antwort der Box.');return;}
+  const ca=j.flash_ca_teddycloud?T('teddyCloud'):T('Boxine (oder unbekannt)');
+  let info,ok=false;
+  if(!j.ofw_found)info=T('Keine Original-Firmware gefunden.');
+  else if(!j.ofw_valid)info=T('Die Original-Firmware ist beschädigt (Prüfung fehlgeschlagen).');
+  else if(j.patched)info=T('Von TeddyBox gepatcht auf {h}. CA im Flash: {c}.',{h:j.host,c:ca});
+  else{info=T('Boxine-Server in der Original-Firmware: {n}. CA im Flash: {c}.',{n:(j.names_api+j.names_rtnl)||T('keine'),c:ca});ok=true;}
+  if(!j.port_ok)info+=' '+T('teddyCloud läuft nicht auf Port 443, das braucht die Original-Firmware.');
+  $('opinfo').textContent=info;
+  $('opbadge').textContent=j.patched?T('gepatcht'):T('original');$('opbadge').className='badge '+(j.patched?'good':'');
+  if(!$('ophost').value)$('ophost').value=j.patched?j.host:(j.suggest||'');
+  $('opapply').disabled=!(ok&&j.port_ok);$('opundo').disabled=!j.patched;
+  return j;
+}
+async function opRun(body){
+  const j0=await opLoad();if(j0&&!j0.unlocked){setStatus($('opstatus'),T('Erst oben „Sicherung freigeben“ und das kleine Ohr drücken.'),'err');return;}
+  $('opapply').disabled=$('opundo').disabled=true;setStatus($('opstatus'),T('Schreibe … (nicht ausschalten)'));
+  try{const j=await (await fetch('/api/ofwpatch',{method:'POST',body:JSON.stringify(body)})).json();
+    setStatus($('opstatus'),j.ok?T('Fertig.'):T('Fehler: {s}',{s:j.error}),j.ok?'ok':'err');}
+  catch(e){setStatus($('opstatus'),T('Keine Antwort der Box.'),'err');}
+  opLoad();
+}
+$('opapply').onclick=()=>opRun({action:'apply',host:$('ophost').value.trim()});
+$('opundo').onclick=()=>opRun({action:'undo'});
 /* crash log */
 async function crLoad(){
   try{const t=(await (await fetch('/api/crashlog')).text()).trim();

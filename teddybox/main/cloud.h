@@ -114,6 +114,8 @@ bool cloud_tls_busy(void);
 bool cloud_backend_is_boxine(void);
 /* a DER certificate that teddyCloud made (its root CA), not Boxine's */
 bool cloud_ca_is_teddycloud(const uint8_t *der, size_t len);
+/* reads a file (certificate) into a new buffer */
+esp_err_t cloud_load_cert(const char *path, uint8_t **ptr, size_t *length);
 /* where the Boxine CA is kept on the SD card (upload on the setup page, or
    the copy of the one in flash) */
 #define CLOUD_BOXINE_CA_FILE "/sdcard/teddybox/boxine-ca.der"

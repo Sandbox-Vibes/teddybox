@@ -26,6 +26,7 @@
 #include "speaker_eq.h"
 #include "settings.h"
 #include "cloud.h"
+#include "ofw_patch.h"
 #include "wifi.h"
 #include "mdns_min.h"
 #include "fw_fetch.h"
@@ -691,6 +692,63 @@ static esp_err_t original_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* teddyCloud patch of the original firmware (ofw_patch.c) */
+static esp_err_t ofwpatch_get(httpd_req_t *req)
+{
+    touch();
+    ofw_patch_status_t st;
+    ofw_patch_status(&st);
+    const settings_t *s = settings_get();
+    cJSON *j = cJSON_CreateObject();
+    cJSON_AddBoolToObject(j, "ofw_found", st.ofw_found);
+    cJSON_AddBoolToObject(j, "ofw_valid", st.ofw_valid);
+    cJSON_AddNumberToObject(j, "names_api", st.names_found[0]);
+    cJSON_AddNumberToObject(j, "names_rtnl", st.names_found[1]);
+    cJSON_AddBoolToObject(j, "patched", st.patched);
+    cJSON_AddStringToObject(j, "host", st.host);
+    cJSON_AddBoolToObject(j, "flash_ca_teddycloud", st.flash_ca_teddycloud);
+    cJSON_AddBoolToObject(j, "boxine_ca_saved", st.boxine_ca_saved);
+    cJSON_AddBoolToObject(j, "port_ok", s->cloud_port == 443);
+    /* suggestion: the teddyCloud address, if short enough */
+    cJSON_AddStringToObject(j, "suggest", ofw_patch_host_valid(s->cloud_host) ? s->cloud_host : "");
+    cJSON_AddBoolToObject(j, "unlocked", backup_unlocked());
+    return send_json(req, j);
+}
+
+static esp_err_t ofwpatch_post(httpd_req_t *req)
+{
+    touch();
+    if (!backup_unlocked())
+    {
+        return send_result(req, false, L("Release first: \"Release backup\" and press the small ear",
+                                         "Erst freigeben: „Sicherung freigeben“ und das kleine Ohr drücken"));
+    }
+    size_t len = 0;
+    char *body = read_body(req, &len);
+    cJSON *o = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    cJSON *act = o ? cJSON_GetObjectItemCaseSensitive(o, "action") : NULL;
+    cJSON *host = o ? cJSON_GetObjectItemCaseSensitive(o, "host") : NULL;
+    char err[128] = "";
+    esp_err_t r = ESP_ERR_INVALID_ARG;
+    if (cJSON_IsString(act) && !strcmp(act->valuestring, "apply") && cJSON_IsString(host))
+    {
+        r = ofw_patch_apply(host->valuestring, err, sizeof(err));
+    }
+    else if (cJSON_IsString(act) && !strcmp(act->valuestring, "undo"))
+    {
+        r = ofw_patch_undo(err, sizeof(err));
+    }
+    else
+    {
+        snprintf(err, sizeof(err), "Invalid request");
+    }
+    cJSON_Delete(o);
+    /* boxine_ca / ca_path may have changed, also after a partial run */
+    settings_save_ini(SETTINGS_INI_PATH);
+    return send_result(req, r == ESP_OK, r == ESP_OK ? NULL : err);
+}
+
 esp_err_t setup_portal_register(httpd_handle_t server)
 {
     static const httpd_uri_t uris[] = {
@@ -701,6 +759,8 @@ esp_err_t setup_portal_register(httpd_handle_t server)
         {.uri = "/api/save", .method = HTTP_POST, .handler = save_handler},
         {.uri = "/api/firmware", .method = HTTP_POST, .handler = firmware_handler},
         {.uri = "/api/original", .method = HTTP_POST, .handler = original_handler},
+        {.uri = "/api/ofwpatch", .method = HTTP_GET, .handler = ofwpatch_get},
+        {.uri = "/api/ofwpatch", .method = HTTP_POST, .handler = ofwpatch_post},
     };
     for (int i = 0; i < sizeof(uris) / sizeof(uris[0]); i++)
     {
@@ -930,7 +990,7 @@ void setup_portal_run(void)
     hc.stack_size = 8192;          /* cJSON and certificate parsing */
     hc.max_open_sockets = 5;       /* phones open many connections */
     hc.lru_purge_enable = true;
-    hc.max_uri_handlers = 28;      /* setup + backup + tonies (+ TAF encoder) + crash log + online update */
+    hc.max_uri_handlers = 30;      /* setup + backup + tonies (+ TAF encoder) + crash log + online update + OFW patch */
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &hc) != ESP_OK || setup_portal_register(server) != ESP_OK)
     {

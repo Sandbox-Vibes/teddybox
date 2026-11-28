@@ -13,6 +13,7 @@ media), builds it, patches out the ADC calibration QEMU does not have
 | `mkqstream.sh` | teddyCloud streams: detection, no `Range` for a left-over stream, no resume, `.tmp` deleted, transfer end recorded; a complete file with an odd length is kept as a tonie | `fake_stream_server.py 4444 <server cert> <server key>` running (the local teddyCloud's server certificate, so the box trusts it) |
 | `mkqresume.sh` | automatic resume after lost connections, abort while waiting | as `mkqdl.sh`, plus `cut_proxy.py 4443 127.0.0.1 443 50000` running (cuts every connection after 50 KB) |
 | `mkqdl.sh` | downloads: abort, resume, `.tmp` handling, migration | a local teddyCloud with cloud access off, client certificate in the assets FAT under `CERT/` |
+| `mkqofw.sh` | teddyCloud patch of the original firmware: names, checksum, SHA-256, CA; undo byte for byte, also after an interrupted run (`run` builds and runs) | the original firmware in a slot of the base image, CA and client certificate under `CERT/` |
 | `mkqra.sh` | read-ahead: SD hangs, seek, growing file, ending during a hang | |
 | `mkqtcset.sh` | box settings from teddyCloud: baseline, change taken over, box change stays (`run` drives teddyCloud's web API) | as `mkqdl.sh`, teddyCloud web API on 127.0.0.1:80 |
 | `mkqtonies.sh` | Tonies tab: list, upload (good, damaged, too short, made in the browser), protection, delete; TAF encoder files served gzip; crash log view/delete (`run` drives it with curl through a port forward) | |

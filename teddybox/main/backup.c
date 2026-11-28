@@ -62,6 +62,11 @@ static bool unlocked(void)
     return esp_timer_get_time() < bk_get(&unlocked_until);
 }
 
+bool backup_unlocked(void)
+{
+    return unlocked();
+}
+
 static void box_id(char *out, size_t size)
 {
     uint8_t mac[6];
