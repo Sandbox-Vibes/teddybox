@@ -79,6 +79,29 @@ static RTC_NOINIT_ATTR rtc_mem_t rtc_storage;
 /* Requests from other tasks (MQTT, cloud, NFC, I/O) to the main loop: set
    by the caller, taken by the main loop with an atomic exchange, so a new
    request that comes in while the loop handles the old one is not lost. */
+/* settings changed from Home Assistant are saved a few seconds after the
+   last change, not once per change (28 Nov: six writes of teddybox.ini in
+   six seconds while trying tilt and LED levels) */
+#define SETTINGS_SAVE_DELAY_US (3 * 1000000LL)
+static int64_t settings_save_at = 0;
+
+static void settings_save_later(void)
+{
+    settings_save_at = esp_timer_get_time() + SETTINGS_SAVE_DELAY_US;
+}
+
+static void settings_save_now(void)
+{
+    if (settings_save_at)
+    {
+        settings_save_at = 0;
+        if (settings_save_ini(SETTINGS_INI_PATH) != 0)
+        {
+            ESP_LOGW(TAG, "Could not save the settings");
+        }
+    }
+}
+
 static inline int ctrl_take(volatile int *req)
 {
     return __atomic_exchange_n(req, -1, __ATOMIC_SEQ_CST);
@@ -360,7 +383,10 @@ void app_main(void)
     maint_clock_wake();
     const bool maint_mode = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER && maint_due();
     audio_board_set_timer_wakeup(maint_sleep_us());
-    audio_board_sleep_check(maint_mode);
+    /* 28 Nov: a test firmware, installed and then put on the charger, went
+       straight back to sleep before it had confirmed itself; the next start
+       rolled it back to the previous one. On probation: always start. */
+    audio_board_sleep_check(maint_mode, ota_on_probation());
 
     esp_log_level_set("*", ESP_LOG_WARN);
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -727,10 +753,7 @@ void app_main(void)
                 ms->volume_default = ms->volume_max;
             }
             ESP_LOGI(TAG, "Max volume: speaker %u %%, headphones %u %%", ms->volume_max, ms->volume_max_hdp);
-            if (settings_save_ini(SETTINGS_INI_PATH) != 0)
-            {
-                ESP_LOGW(TAG, "Could not save the max volume");
-            }
+            settings_save_later();
         }
         /* lower limit (new limit, headphones plugged in): turn down */
         if (rtc_storage.volume > (uint32_t)ctrl_volume_max())
@@ -747,10 +770,7 @@ void app_main(void)
             if (settings_get()->led_brightness != led_req)
             {
                 settings_get_mutable()->led_brightness = led_req;
-                if (settings_save_ini(SETTINGS_INI_PATH) != 0)
-                {
-                    ESP_LOGW(TAG, "Could not save LED brightness");
-                }
+                settings_save_later();
             }
         }
 
@@ -758,10 +778,7 @@ void app_main(void)
         {
             ESP_LOGI(TAG, "Slap %d%s, tilt %d", settings_get()->slap_level, settings_get()->slap_reverse ? " (reversed)" : "",
                      settings_get()->tilt_level);
-            if (settings_save_ini(SETTINGS_INI_PATH) != 0)
-            {
-                ESP_LOGW(TAG, "Could not save slap/tilt settings");
-            }
+            settings_save_later();
         }
 
         int eq_req = ctrl_take(&ctrl_eq_request);
@@ -772,11 +789,12 @@ void app_main(void)
             if (settings_get()->speaker_eq != eq_req)
             {
                 settings_get_mutable()->speaker_eq = eq_req;
-                if (settings_save_ini(SETTINGS_INI_PATH) != 0)
-                {
-                    ESP_LOGW(TAG, "Could not save speaker EQ");
-                }
+                settings_save_later();
             }
+        }
+        if (settings_save_at && cur_time >= settings_save_at)
+        {
+            settings_save_now();
         }
         if (ctrl_poweroff_request)
         {
@@ -836,6 +854,7 @@ void app_main(void)
         if (ctrl_take_flag(&ctrl_setup_request))
         {
             ESP_LOGW(TAG, "Restarting into setup mode (Home Assistant)");
+            settings_save_now();
             pb_stop();
             rtc_checksum_update();
             setup_request_magic = SETUP_REQUEST_MAGIC;
@@ -845,6 +864,7 @@ void app_main(void)
         if (ctrl_take_flag(&ctrl_boot_original_request))
         {
             ESP_LOGW(TAG, "Switching to the original firmware");
+            settings_save_now();
             pb_stop();
             rtc_checksum_update();
             bootsel_boot_original();
@@ -896,10 +916,15 @@ shutdown:
     audio_board_set_timer_wakeup(maint_sleep_us());
     maint_clock_sleep();
     ledman_change("poweroff");
+    settings_save_now();
     audio_board_sdcard_unmount();
     rtc_checksum_update();
 
     ESP_LOGI(TAG, "Poweroff");
+    /* switched off normally (ears, idle, battery) within the first seconds
+       of a new firmware: it worked, a deep sleep on probation would roll it
+       back (a crash or a failed hardware check never gets here) */
+    ota_confirm_running();
     maint_run_end();
     audio_board_set_charger(battery_is_charging());
     vTaskDelay(500 / portTICK_PERIOD_MS);

@@ -428,7 +428,7 @@ const char *audio_board_wake_info(void)
     return wake_info;
 }
 
-void audio_board_sleep_check(bool stay_awake_on_timer)
+void audio_board_sleep_check(bool stay_awake_on_timer, bool must_start)
 {
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
     bool line = false, big = false, small = false, station = false;
@@ -476,7 +476,7 @@ void audio_board_sleep_check(bool stay_awake_on_timer)
        station is there: the box was put on the charger (or the line moved
        while charging). Do not start, sleep on (waking on the ears). */
     bool put_on_charger = cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE && (line || station) && !big && !small;
-    if ((cause == ESP_SLEEP_WAKEUP_TIMER && !stay_awake_on_timer) || put_on_charger)
+    if (((cause == ESP_SLEEP_WAKEUP_TIMER && !stay_awake_on_timer) || put_on_charger) && !must_start)
     {
         /* only the charger check: straight back to sleep, peripherals stay off
            (their pins are still held from the last sleep) */

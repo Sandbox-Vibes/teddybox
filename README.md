@@ -778,9 +778,11 @@ setup mode is started at the box (big ear while switching on) or with the
   alternates between the two slots, the EU app is never touched.
 - Rollback: the original bootloader supports it. A new version boots "on
   probation", checks SD card, DAC, accelerometer and NFC chip and confirms
-  itself after running 10 seconds (or once the setup page is up). If it
-  crashes, restarts or a check fails before that, the bootloader starts the
-  previous version again.
+  itself after running 10 seconds (or once the setup page is up, or when it
+  is switched off normally before that). If it crashes, restarts or a check
+  fails before that, the bootloader starts the previous version again. While
+  on probation the box never goes straight back to sleep after a wake (e.g.
+  put on the charger): that would count as a restart and roll it back.
 - Switching to the original firmware (both ears) marks it valid right away,
   so it does not fall back to TeddyBox after its first restart.
 
