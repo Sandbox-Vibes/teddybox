@@ -305,57 +305,6 @@ int ctrl_get_sleep_timer(void)
     return sleep_timer_remaining_min(&sleep_timer, esp_timer_get_time());
 }
 
-void dir_list(const char *path)
-{
-    DIR *dir = opendir(path);
-    while (true)
-    {
-        struct dirent *de = readdir(dir);
-        if (!de)
-        {
-            break;
-        }
-        ESP_LOGI(TAG, "  - %s", de->d_name);
-    }
-    closedir(dir);
-}
-
-void print_all_tasks(void *params)
-{
-    TaskStatus_t *taskStatusArray;
-    UBaseType_t taskCount;
-    UBaseType_t i;
-    size_t free_heap_size;
-
-    while (1)
-    {
-        taskCount = uxTaskGetNumberOfTasks();
-        taskStatusArray = pvPortMalloc(taskCount * sizeof(TaskStatus_t));
-
-        if (taskStatusArray != NULL)
-        {
-            taskCount = uxTaskGetSystemState(taskStatusArray, taskCount, NULL);
-
-            free_heap_size = esp_get_free_heap_size();
-            ESP_LOGI(TAG, "Task Count:     %d", taskCount);
-            ESP_LOGI(TAG, "Free Heap Size: %d", free_heap_size);
-            ESP_LOGI(TAG, "");
-            ESP_LOGI(TAG, "StackMark Name");
-
-            for (i = 0; i < taskCount; i++)
-            {
-                ESP_LOGI(TAG, "%6d %s",
-                         uxTaskGetStackHighWaterMark(taskStatusArray[i].xHandle),
-                         taskStatusArray[i].pcTaskName);
-            }
-
-            vPortFree(taskStatusArray);
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(5000)); // Wait for 5 seconds
-    }
-}
-
 static uint32_t rotl32a(uint32_t x, uint32_t n)
 {
     return (x << n) | (x >> (32 - n));
@@ -510,7 +459,6 @@ void app_main(void)
 
     pb_init(set);
 
-    // xTaskCreate(print_all_tasks, "print_all_tasks", 4096, NULL, 5, NULL);
 
     if (rtc_storage.rtc_magic != 0xDEADC0DE || !rtc_checksum_valid())
     {

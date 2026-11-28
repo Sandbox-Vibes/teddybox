@@ -110,7 +110,6 @@ typedef struct
 
 void pb_init(esp_periph_set_handle_t set);
 void pb_mainthread(void *arg);
-void pb_deinit(void);
 esp_err_t pb_seek(int32_t blocks);
 esp_err_t pb_seek_chapter(int32_t chapters);
 esp_err_t pb_set_chapter(int32_t chapter);
@@ -120,7 +119,6 @@ int32_t pb_get_chapter_count(void);
 TonieboxAudioFileHeader *pb_toniefile_get_header(FILE *fd);
 bool pb_headphones_connected(void);
 
-esp_err_t pb_play(const char *uri);
 esp_err_t pb_play_default_lang(uint32_t lang, uint32_t id);
 esp_err_t pb_play_default(uint32_t id);
 esp_err_t pb_play_content(uint64_t nfc_uid);
@@ -142,7 +140,6 @@ bool pb_file_is_stream(const char *filename);
 /* uploaded on the setup page ("<filename>.own" exists): teddyCloud's
    freshness check and the nightly update leave it alone */
 bool pb_file_is_own(const char *filename);
-uint32_t pb_get_play_position();
 uint64_t pb_get_current_uid();
 void pb_set_last(uint64_t nfc_uid, uint32_t play_position, uint32_t audio_id);
 /* audio ID of the content the resume position belongs to */

@@ -399,22 +399,6 @@ esp_err_t trf7962a_xmit(trf7962a_t ctx, uint8_t *tx_data, uint8_t tx_length, uin
     return ESP_OK;
 }
 
-void trf7962a_dump_regs(trf7962a_t ctx)
-{
-    ESP_LOGI(TAG, "Register dump");
-    uint8_t regs[32];
-
-    trf7962a_get_reg(ctx, 0, regs, 0x1f);
-    trf7962a_get_reg(ctx, 1, regs, 0x1f);
-    trf7962a_get_reg(ctx, 2, regs, 0x1f);
-    trf7962a_get_reg(ctx, 4, regs, 0x1f);
-    for (int reg = 0; reg < 0x20; reg++)
-    {
-        ESP_LOGI(TAG, "   0x%02X: 0x%02X", reg, regs[reg]);
-    }
-    ESP_LOGI(TAG, "Done");
-}
-
 void trf7962a_isr(void *ctx_in)
 {
     trf7962a_t ctx = (trf7962a_t)ctx_in;

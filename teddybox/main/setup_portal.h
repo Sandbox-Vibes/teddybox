@@ -31,5 +31,3 @@ esp_err_t setup_portal_register(httpd_handle_t server);
 /* captive portal DNS on UDP port 53 */
 void setup_portal_start_dns(void);
 
-/* true once /api/save succeeded */
-bool setup_portal_saved(void);

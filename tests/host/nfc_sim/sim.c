@@ -95,8 +95,8 @@ int main(int argc, char **argv)
 {
     plain_b = argc > 1 && !strcmp(argv[1], "plain");
     sim_verbose = argc > 1 && !plain_b;
-    if (plain_b) printf("  (Tonie B: Tag ohne NXP-Befehle und Privacy-Modus)\n");
-    struct { const char *name; double from, to; } phase[] = {{"ohne Tonie", 0, 5000}, {"Tonie liegt auf", 5000, 35000}, {"ohne Tonie", 50000, 60000}};
+    if (plain_b) printf("  (tonie B: tag without NXP commands and privacy mode)\n");
+    struct { const char *name; double from, to; } phase[] = {{"no tonie", 0, 5000}, {"tonie on the box", 5000, 35000}, {"no tonie", 50000, 60000}};
     /* run once per phase end, measuring the field share inside the phase */
     double prev_field = 0, prev_t = 0;
     for (int i = 0; i < 3; i++) {
@@ -109,12 +109,12 @@ int main(int argc, char **argv)
         int v = sim_verbose; sim_verbose = v && i == 2;
         if (!setjmp(sim_end)) nfc_mainthread((void *)1);
         sim_verbose = v;
-        printf("  %-16s Feld an: %5.1f %%\n", phase[i].name, 100.0 * (field_ms - f0) / (phase[i].to - phase[i].from));
+        printf("  %-16s field on: %5.1f %%\n", phase[i].name, 100.0 * (field_ms - f0) / (phase[i].to - phase[i].from));
         if (i == 2) {
-            printf("  Ereignisse: Start A bei %.2f s, Start B bei %.2f s, Stopp nach Entfernen bei %.2f s (Tonie weg bei 50.00 s)\n",
+            printf("  events: start A at %.2f s, start B at %.2f s, stop after removal at %.2f s (tonie gone at 50.00 s)\n",
                    n_play > 0 ? play_events[0]/1000 : -1, n_play > 1 ? play_events[1]/1000 : -1, n_stop > 0 ? stop_at[n_stop-1]/1000 : -1);
-            printf("  Anzahl Starts: %d (erwartet 2), Stopps: %d\n", n_play, n_stop);
-            printf("  Token: %d korrekt gelesen, %d falsch (erwartet 2 / 0), FIFO-Überläufe: %d, nicht unterstützte Befehle: %d\n", tokens_ok, tokens_bad, fifo_overflows, unsupported);
+            printf("  starts: %d (want 2), stops: %d\n", n_play, n_stop);
+            printf("  tokens: %d read correctly, %d wrong (want 2 / 0), FIFO overflows: %d, unsupported commands: %d\n", tokens_ok, tokens_bad, fifo_overflows, unsupported);
             if (tokens_ok != 2 || tokens_bad || fifo_overflows || unsupported) { printf("  FAIL token\n"); return 1; }
         }
     }

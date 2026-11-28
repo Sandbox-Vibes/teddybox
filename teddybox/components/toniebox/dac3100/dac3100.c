@@ -292,41 +292,6 @@ esp_err_t dac3100_init(audio_hal_codec_config_t *cfg)
     dac3100_write_reg(INT1_CTRL_REG, 0x80);    // 1:Headset-insertion detect IRQ INT1, 0:Button-press detect, ...., 0=INT1 is only one pulse 2ms
     dac3100_write_reg(GPIO1_INOUT_CTRL, 0x14); // XX:reserved, 0101:GPIO1=INT1 output, X=GPIO1 input buffer value, GPIO1 Output=X
 
-#if 0
-    dac3100_write_reg(PAGE_CONTROL, DAC_OUT_VOL); // MUTE ALL
-    dac3100_write_reg(L_VOL_TO_HPL, 0x7F);        // HPL Vol -oo
-    dac3100_write_reg(R_VOL_TO_HPR, 0x7F);        // HPL Vol -oo
-    dac3100_write_reg(L_VOL_TO_SPK, 0x7F);        // SPK Vol -oo
-    vTaskDelay(50 / portTICK_RATE_MS);
-
-    // MUTE HP Driver AND SPK Driver
-    dac3100_write_reg(HPL_DRIVER, 0x02); // HPL driver is muted ??? must 1
-    dac3100_write_reg(HPR_DRIVER, 0x02); // HPR driver is muted ??? must 1
-    dac3100_write_reg(SPK_DRIVER, 0x00); // SPK driver is muted
-
-    // PAUSE 50ms
-    vTaskDelay(50 / portTICK_RATE_MS);
-
-    // AMPS Power Down
-    dac3100_write_reg(HP_DRIVERS, 0x00); // HPL HPR Driver Power Down  ??? must 1
-    dac3100_write_reg(SPK_AMP, 0x06); // SPK Amp Power Down ??? must 000011
-
-    // PAUSE 50ms
-    vTaskDelay(50 / portTICK_RATE_MS);
-
-    dac3100_write_reg(HPL_DRIVER, 0x06); // HPL driver 0dB, not muted
-    dac3100_write_reg(HPR_DRIVER, 0x06); // HPR drvier 0dB, not muted
-    dac3100_write_reg(HP_DRIVERS, 0xC4);   // HPL HPR is power up, 1,35V, Shortcut=Error ??? must 1
-    dac3100_write_reg(L_VOL_TO_HPL, 0x92); // ??? Aux to HP ???
-    dac3100_write_reg(R_VOL_TO_HPR, 0x92); // ??? Aux to HP ???
-
-    dac3100_write_reg(L_VOL_TO_SPK, 0x00); // !!! FEHLTE !!!
-    dac3100_write_reg(SPK_AMP, 0x86);      // !!! FEHLTE !!! SPK Amp Power Up
-
-    // PAUSE 50ms
-    vTaskDelay(50 / portTICK_RATE_MS);
-
-#endif
     dac3100_write_reg(PAGE_CONTROL, SERIAL_IO);
     dac3100_write_reg(DAC_VOL_L_CTRL, 0xDC);
     dac3100_write_reg(DAC_VOL_R_CTRL, 0xDC);
