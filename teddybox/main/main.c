@@ -376,6 +376,15 @@ static bool rtc_checksum_valid()
     return rtc_storage.rtc_check == rtc_checksum_calc();
 }
 
+/* settings the board takes directly: EQ, lowest volume step, LED */
+static void apply_board_settings(void)
+{
+    const settings_t *s = settings_get();
+    dac3100_set_speaker_eq(s->speaker_eq);
+    dac3100_set_volume_min(s->volume_min_db <= -64 ? DAC3100_VOL_MIN_MUTE : s->volume_min_db * 2);
+    led_set_brightness(s->led_brightness);
+}
+
 void app_main(void)
 {
     /* a timer wake is the charger check or the nightly update; everything
@@ -419,9 +428,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Board init");
     audio_board_handle_t board_handle = audio_board_init();
-    dac3100_set_speaker_eq(settings_get()->speaker_eq);
-    dac3100_set_volume_min(settings_get()->volume_min_db <= -64 ? DAC3100_VOL_MIN_MUTE : settings_get()->volume_min_db * 2);
-    led_set_brightness(settings_get()->led_brightness);
+    apply_board_settings(); /* defaults until teddybox.ini is read below */
     ledman_init();
 
     /* big ear held while switching on: open the setup page */
@@ -473,6 +480,9 @@ void app_main(void)
     /* first boot: no settings file yet */
     bool setup_mode = setup_requested || !settings_ini_exists();
     settings_load_ini();
+    /* 28 Nov: LED brightness, EQ and lowest step were set before the SD
+       card was mounted and stayed at their defaults after every restart */
+    apply_board_settings();
     setenv("TZ", settings_get()->timezone, 1);
     tzset();
     maint_log_status();
