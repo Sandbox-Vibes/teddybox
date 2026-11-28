@@ -2,6 +2,7 @@
    old partial files, finishing a complete .tmp) and of /v1/claim, against the
    local teddyCloud. The assets FAT is mounted as /sdcard. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -18,6 +19,8 @@
 #include "cloud.h"
 #include "playback.h"
 #include "taf_verify.h"
+
+esp_err_t cloud_load_cert(const char *path, uint8_t **ptr, size_t *length); /* cloud.c */
 
 static const char *TAG = "DLTEST";
 extern const uint8_t ca_start[] asm("_binary_tc_ca_der_start");
@@ -83,6 +86,10 @@ void app_main(void)
     strcpy(s->cloud_host, "10.0.2.2");
     s->cloud_port = 443;
     s->cloud_enabled = true;
+    /* fallback with teddyCloud's CA (a patched box): must stay off, see the log */
+    s->boxine_fallback = true;
+    strcpy(s->boxine_host, "10.0.2.2");
+    strcpy(s->boxine_ca, "/sdcard/tcca.der");
 
     esp_netif_init();
     esp_event_loop_create_default();
@@ -118,6 +125,17 @@ void app_main(void)
         check("0 other UID prefix (SLIX2 E0:04:01) = custom", cloud_tag_is_custom(0xE004010812345678ULL, tok));
         check("0 other maker (E0:07) = custom", cloud_tag_is_custom(0xE007000012345678ULL, NULL));
         check("0 teddyCloud is the backend here", !cloud_backend_is_boxine());
+        /* the test teddyCloud's own root CA is recognised (Boxine fallback refuses it) */
+        uint8_t *ca = NULL;
+        size_t ca_len = 0;
+        check("0 teddyCloud CA recognised", cloud_load_cert(settings_get()->ca_path, &ca, &ca_len) == ESP_OK &&
+                                                cloud_ca_is_teddycloud(ca, ca_len));
+        if (ca)
+        {
+            ca[0] = 0x00; /* not DER any more: not taken for teddyCloud's */
+            check("0 broken CA not taken for teddyCloud's", !cloud_ca_is_teddycloud(ca, ca_len));
+            free(ca);
+        }
     }
 
     /* 1: interrupted download stays .tmp, no final file */

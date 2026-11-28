@@ -21,6 +21,7 @@
 #include "esp_netif.h"
 #include "esp_ota_ops.h"
 #include "esp_tls.h"
+#include "mbedtls/x509_crt.h"
 #include "nvs_flash.h"
 
 #include "lwip/err.h"
@@ -668,6 +669,24 @@ static void cloud_init_user_agent(void)
     }
 }
 
+bool cloud_ca_is_teddycloud(const uint8_t *der, size_t len)
+{
+    /* teddyCloud names its own root "TeddyCloud Root CA" (src/cert.c) */
+    mbedtls_x509_crt crt;
+    mbedtls_x509_crt_init(&crt);
+    bool tc = false;
+    if (mbedtls_x509_crt_parse_der(&crt, der, len) == 0)
+    {
+        char subject[128];
+        if (mbedtls_x509_dn_gets(subject, sizeof(subject), &crt.subject) > 0)
+        {
+            tc = strstr(subject, "TeddyCloud") != NULL;
+        }
+    }
+    mbedtls_x509_crt_free(&crt);
+    return tc;
+}
+
 void cloud_init(void)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -686,12 +705,27 @@ void cloud_init(void)
     }
     if (s->boxine_fallback && s->boxine_host[0])
     {
-        /* the CA in flash is the Boxine CA unless the box was patched for teddyCloud */
         /* SNI and host name check like the original firmware */
-        backends[BACKEND_BOXINE] = (cloud_backend_t){.name = "Boxine", .host = s->boxine_host, .port = 443, .tls_name = s->boxine_host};
-        if (cloud_load_cert("/spiflash/cert/ca.der", &backends[BACKEND_BOXINE].ca, &backends[BACKEND_BOXINE].ca_len) != ESP_OK)
+        cloud_backend_t *bx = &backends[BACKEND_BOXINE];
+        *bx = (cloud_backend_t){.name = "Boxine", .host = s->boxine_host, .port = 443, .tls_name = s->boxine_host};
+        const char *ca = s->boxine_ca[0] ? s->boxine_ca : "/spiflash/cert/ca.der";
+        const cloud_backend_t *tc = &backends[BACKEND_TEDDYCLOUD];
+        if (cloud_load_cert(ca, &bx->ca, &bx->ca_len) != ESP_OK)
         {
-            backends[BACKEND_BOXINE].host = NULL;
+            ESP_LOGE(TAG, "Boxine fallback off: no CA in '%s'", ca);
+            bx->host = NULL;
+        }
+        else if (cloud_ca_is_teddycloud(bx->ca, bx->ca_len) ||
+                 (tc->ca && tc->ca_len == bx->ca_len && !memcmp(tc->ca, bx->ca, bx->ca_len)))
+        {
+            /* the box was patched for teddyCloud: every Boxine connection
+               would fail the server check */
+            ESP_LOGE(TAG, "Boxine fallback off: '%s' is the CA of teddyCloud, not of the Boxine cloud. "
+                          "Put the original one (teddyCloud: certs/client/ca.der) on the SD card, "
+                          "setup page Advanced or boxine_ca in teddybox.ini", ca);
+            free(bx->ca);
+            bx->ca = NULL;
+            bx->host = NULL;
         }
     }
 

@@ -112,6 +112,8 @@ bool cloud_download_busy(void);
 bool cloud_tls_busy(void);
 /* the Boxine cloud (opt-in fallback) is the backend in use, not teddyCloud */
 bool cloud_backend_is_boxine(void);
+/* a DER certificate that teddyCloud made (its root CA), not Boxine's */
+bool cloud_ca_is_teddycloud(const uint8_t *der, size_t len);
 /* a tag that is not an original tonie, by the same rules as teddyCloud
    (cloud.markCustomTagByUid / markCustomTagByPass): the UID does not start
    with E0:04:03 or the token is all zeros (token NULL: not checked). Such

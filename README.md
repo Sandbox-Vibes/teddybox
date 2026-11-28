@@ -219,6 +219,7 @@ Written by the setup page; all keys are optional.
 | `ca_path` | `/spiflash/cert/ca.der` | CA of teddyCloud (`certs/server/ca.der`); the CA in flash only works if it was replaced by the teddyCloud patch, otherwise put it on the SD card |
 | `cloud_enabled` | on with a host | `0` forces the cloud off |
 | `boxine_fallback`, `boxine_host` | 0, `prod.de.tbs.toys` | see below |
+| `boxine_ca` | `/spiflash/cert/ca.der` | CA of the Boxine cloud for the fallback; on a box patched for teddyCloud the original one on the SD card, see below |
 | `user_agent_original` | 0 | see below |
 | `mqtt_host`, `mqtt_port`, `mqtt_user`, `mqtt_pass` | empty, 1883 | Home Assistant; off while `mqtt_host` is empty |
 | `mqtt_topic`, `ha_discovery_prefix` | `teddybox/<mac>`, `homeassistant` | |
@@ -256,8 +257,23 @@ Both are off by default and can be switched on in the setup page
 
 - With `boxine_fallback`, the box tries teddyCloud first and uses the Boxine
   cloud only if teddyCloud does not answer; every 5 minutes it checks whether
-  teddyCloud is back. Boxine connections use the original CA from the assets
-  partition, send SNI and verify the server name, like the original firmware.
+  teddyCloud is back. Without `cloud_host` the Boxine cloud is the only
+  backend. Boxine connections send SNI and verify the server name, like the
+  original firmware.
+- The CA for these connections is `boxine_ca`, by default
+  `/spiflash/cert/ca.der` in the assets partition. That file is the original
+  Boxine CA only on a box that was not patched for teddyCloud; the patch
+  replaces it with teddyCloud's. On a patched box, upload the original one
+  on the setup page ("Advanced"): teddyCloud keeps it as
+  `certs/client/ca.der` (or `certs/client/<mac>/ca.der`). It is stored as
+  `/sdcard/teddybox/boxine-ca.der`. If the configured CA is teddyCloud's
+  ("TeddyCloud Root CA", or the same file as for teddyCloud), the box logs
+  an error at start and leaves the fallback off.
+- The Boxine fallback has only been tested against a local server, never
+  against the real Boxine cloud.
+- Behind the Boxine cloud the box has no tonie names, no box settings from
+  teddyCloud, no RTNL events and no claim; content goes to the SD card only,
+  not into teddyCloud's library.
 - Tags that are not original tonies are never asked for at Boxine, by the
   same rules as teddyCloud (`cloud.markCustomTagByUid` / `ByPass`): the UID
   does not start with `E0:04:03`, or the token read from the tag is all

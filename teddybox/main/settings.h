@@ -41,6 +41,9 @@ typedef struct
        reachable. Off by default, see README (box certificate could be blocked) */
     bool boxine_fallback;
     char boxine_host[48];
+    /* CA for the Boxine cloud: the one in flash is teddyCloud's on a patched
+       box, then the original one (teddyCloud: certs/client/ca.der) goes here */
+    char boxine_ca[64];
     /* send the original firmware's user agent ("toniebox-esp32-eu/v5.x")
        instead of "toniebox-esp32-teddybox/<version>"; teddyCloud passes it on */
     bool user_agent_original;
