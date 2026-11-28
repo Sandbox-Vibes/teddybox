@@ -107,6 +107,9 @@ bool cloud_is_ready(void);
    (file check, RTNL connection) waits, the download and the decoder next to
    it need nearly all of it */
 bool cloud_download_busy(void);
+/* a download or any other TLS request of the cloud task (freshness check,
+   time, claim) is running: the RTNL connection steps aside for it */
+bool cloud_tls_busy(void);
 /* the Boxine cloud (opt-in fallback) is the backend in use, not teddyCloud */
 bool cloud_backend_is_boxine(void);
 /* a tag that is not an original tonie, by the same rules as teddyCloud

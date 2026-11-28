@@ -29,7 +29,12 @@ typedef struct
 } verify_job_t;
 
 static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
-static bool running;
+static volatile bool running;
+
+bool taf_verify_running(void)
+{
+    return running;
+}
 static uint32_t good[GOOD_MAX];
 static int good_n;
 static char playing[64];

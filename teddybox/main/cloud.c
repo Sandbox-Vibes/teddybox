@@ -44,6 +44,7 @@
 #include "bootsel.h"
 #include "sd_retry.h"
 #include "cloud_internal.h"
+#include "taf_verify.h"
 
 cloud_backend_t backends[2];
 volatile int active_backend = BACKEND_TEDDYCLOUD;
@@ -120,7 +121,26 @@ esp_tls_t *cloud_connect_teddycloud(void)
 #define CLOUD_READ_IDLE_MAX 6
 int cloud_taskwatch = -1;
 
+/* a TLS request of the cloud task is running (RTNL steps aside, see
+   cloud_tls_busy) */
+static int request_active = 0;
+
+static esp_err_t cloud_request_do(cloud_req_t *req);
+
 esp_err_t cloud_request(cloud_req_t *req)
+{
+    __atomic_add_fetch(&request_active, 1, __ATOMIC_SEQ_CST);
+    esp_err_t ret = cloud_request_do(req);
+    __atomic_sub_fetch(&request_active, 1, __ATOMIC_SEQ_CST);
+    return ret;
+}
+
+bool cloud_tls_busy(void)
+{
+    return cloud_download_busy() || __atomic_load_n(&request_active, __ATOMIC_SEQ_CST) > 0;
+}
+
+static esp_err_t cloud_request_do(cloud_req_t *req)
 {
     esp_err_t ret = ESP_FAIL;
     cloud_bufs_t *b = cloud_bufs();
@@ -583,7 +603,12 @@ static void cloud_task(void *ctx)
         TickType_t fc_age = xTaskGetTickCount() - fc_last;
         TickType_t fc_interval = pdMS_TO_TICKS((uint32_t)settings_get()->freshness_min * FRESHNESS_MINUTE_MS);
         bool after_play = fc_played && fc_age >= pdMS_TO_TICKS(FRESHNESS_AFTER_PLAY_MIN * FRESHNESS_MINUTE_MS);
-        if (cloud_available && !playing && (!fc_done || fc_age >= fc_interval || after_play))
+        /* and not while a file is checked in the background (its buffers and
+           stack): 28 Nov, end of a tonie: check of the new download, RTNL
+           connection and this handshake together left 1.4 KB, WiFi could
+           not allocate a buffer */
+        if (cloud_available && !playing && !taf_verify_running() &&
+            (!fc_done || fc_age >= fc_interval || after_play))
         {
             fc_played = false;
             fc_last = xTaskGetTickCount();
