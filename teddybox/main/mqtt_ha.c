@@ -339,8 +339,8 @@ static void mqtt_publish_diag(void)
     }
     /* last nightly update: "21.11. 03:12: 2 Tonie(s) aktualisiert" */
     char update[96] = "";
-    const char *result;
-    time_t last = maint_last(&result);
+    char result[64];
+    time_t last = maint_last(result, sizeof(result));
     if (last > 1700000000)
     {
         struct tm lt;

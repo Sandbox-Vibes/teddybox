@@ -46,7 +46,7 @@ bool maint_token_load(uint64_t uid, uint8_t token[32]);
 void maint_token_names(uint64_t uid, char dir[9], char file[9]);
 
 /* last run for Home Assistant: time (0 = never) and a short German text */
-time_t maint_last(const char **result);
+time_t maint_last(char *result, size_t size);
 
 /* deep sleep clock: the RC clock of the ESP32-S3 drifts in deep sleep (seen:
    about 1 %, 9 minutes in 14 hours). The drift is measured at every time sync

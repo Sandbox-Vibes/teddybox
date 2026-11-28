@@ -82,7 +82,7 @@ esp_err_t trf7962a_xmit(trf7962a_t c, uint8_t *tx, uint8_t txl, uint8_t *rx, uin
 trf7962a_t audio_board_get_trf(void) { return (trf7962a_t)1; }
 static double play_events[8]; static int n_play = 0; static double stop_at[8]; static int n_stop = 0;
 void pb_play_content(uint64_t uid) { if (n_play < 8) play_events[n_play++] = now_ms; if (sim_verbose) printf("%8.3fs  >> play %016llX\n", sim_now(), (unsigned long long)uid); }
-void pb_play_content_token(uint64_t uid, uint8_t *tok)
+void pb_play_content_token(uint64_t uid, const uint8_t *tok)
 {
     bool ok = true;
     for (int i = 0; i < 32; i++) ok &= tok[i] == tag_mem(uid, i);

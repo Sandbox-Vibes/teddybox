@@ -66,6 +66,21 @@ static void rtc_check(void)
 static void nvs_store(void);
 static int64_t clock_sleep_scale(int64_t real_us);
 
+/* result and time of the last run: written by the update (main task) and
+   its guard task, read by MQTT (maint_last); set as a whole under the lock */
+static portMUX_TYPE result_lock = portMUX_INITIALIZER_UNLOCKED;
+
+static void result_set(const char *text, time_t last)
+{
+    taskENTER_CRITICAL(&result_lock);
+    strlcpy(rtc.result, text, sizeof(rtc.result));
+    if (last)
+    {
+        rtc.last = last;
+    }
+    taskEXIT_CRITICAL(&result_lock);
+}
+
 static void stage_set(const char *fmt, unsigned long long a, int b, int c)
 {
     snprintf(rtc.stage, sizeof(rtc.stage), fmt, a, b, c);
@@ -80,17 +95,18 @@ static void check_unfinished(void)
     {
         return;
     }
-    char prev[64];
+    char prev[64], text[64];
     snprintf(prev, sizeof(prev), "%s", rtc.result);
     if (rtc.last >= rtc.run_start && prev[0])
     {
         /* the result was there, it hung or crashed afterwards */
-        snprintf(rtc.result, sizeof(rtc.result), L("%.30s, then: %.23s", "%.30s, danach: %.23s"), prev, rtc.stage);
+        snprintf(text, sizeof(text), L("%.30s, then: %.23s", "%.30s, danach: %.23s"), prev, rtc.stage);
+        result_set(text, 0);
     }
     else
     {
-        snprintf(rtc.result, sizeof(rtc.result), L("interrupted at: %.45s", "unterbrochen bei: %.45s"), rtc.stage);
-        rtc.last = rtc.run_start;
+        snprintf(text, sizeof(text), L("interrupted at: %.45s", "unterbrochen bei: %.45s"), rtc.stage);
+        result_set(text, rtc.run_start);
     }
     ESP_LOGW(TAG, "Last nightly update did not end normally (step: %s)", rtc.stage);
     rtc.run_start = 0;
@@ -401,12 +417,15 @@ void maint_log_status(void)
              rtc.last > CLOCK_VALID ? rtc.result : "", next);
 }
 
-time_t maint_last(const char **result)
+time_t maint_last(char *result, size_t size)
 {
     rtc_check();
     nvs_restore();
-    *result = rtc.result;
-    return rtc.last;
+    taskENTER_CRITICAL(&result_lock);
+    strlcpy(result, rtc.result, size);
+    time_t last = rtc.last;
+    taskEXIT_CRITICAL(&result_lock);
+    return last;
 }
 
 void maint_token_names(uint64_t uid, char dir[9], char file[9])
@@ -476,8 +495,7 @@ static void check_ears(void)
     if (ears_pressed())
     {
         ESP_LOGI(TAG, "Ear pressed, stopping the update and starting normally");
-        snprintf(rtc.result, sizeof(rtc.result), L("cancelled (ear pressed)", "abgebrochen (Ohr gedrückt)"));
-        rtc.last = time(NULL);
+        result_set(L("cancelled (ear pressed)", "abgebrochen (Ohr gedrückt)"), time(NULL));
         rtc.run_start = 0;
         nvs_store();
         esp_restart();
@@ -651,9 +669,10 @@ static int find_candidates(candidate_t *c, int max)
 
 static void finish(const char *fmt, int a, int b)
 {
-    snprintf(rtc.result, sizeof(rtc.result), fmt, a, b);
-    rtc.last = time(NULL);
-    ESP_LOGI(TAG, "Done: %s", rtc.result);
+    char text[64];
+    snprintf(text, sizeof(text), fmt, a, b);
+    result_set(text, time(NULL));
+    ESP_LOGI(TAG, "Done: %s", text);
     nvs_store();
 }
 
@@ -770,16 +789,17 @@ void maint_run_end(void)
 static void guard_task(void *arg)
 {
     vTaskDelay(pdMS_TO_TICKS((MAINT_MAX_RUN_S + MAINT_GUARD_EXTRA_S) * 1000ULL));
-    char prev[64];
+    char prev[64], text[64];
     snprintf(prev, sizeof(prev), "%s", rtc.result);
     if (rtc.last >= rtc.run_start && prev[0])
     {
-        snprintf(rtc.result, sizeof(rtc.result), L("%.30s, hung at: %.21s", "%.30s, hing bei: %.21s"), prev, rtc.stage);
+        snprintf(text, sizeof(text), L("%.30s, hung at: %.21s", "%.30s, hing bei: %.21s"), prev, rtc.stage);
+        result_set(text, 0);
     }
     else
     {
-        snprintf(rtc.result, sizeof(rtc.result), L("hung at: %.53s", "hing bei: %.53s"), rtc.stage);
-        rtc.last = rtc.run_start ? rtc.run_start : time(NULL);
+        snprintf(text, sizeof(text), L("hung at: %.53s", "hing bei: %.53s"), rtc.stage);
+        result_set(text, rtc.run_start ? rtc.run_start : time(NULL));
     }
     ESP_LOGE(TAG, "Nightly update still running after %d min (step: %s): switching off", (MAINT_MAX_RUN_S + MAINT_GUARD_EXTRA_S) / 60, rtc.stage);
     rtc.run_start = 0;

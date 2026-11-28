@@ -125,8 +125,6 @@ esp_err_t pb_play_content(uint64_t nfc_uid);
 esp_err_t pb_play_content_token(uint64_t nfc_uid, const uint8_t *token);
 esp_err_t pb_stop();
 bool pb_is_playing();
-/* block where the last tonie continues (0 = from the start, also after it played to the end) */
-uint32_t pb_get_resume_position();
 char *pb_build_filename(uint64_t id);
 /* PB_ERR_GOOD_FILE if the TAF file is complete */
 esp_err_t pb_check_file(const char *filename);
@@ -142,8 +140,8 @@ bool pb_file_is_stream(const char *filename);
 bool pb_file_is_own(const char *filename);
 uint64_t pb_get_current_uid();
 void pb_set_last(uint64_t nfc_uid, uint32_t play_position, uint32_t audio_id);
-/* audio ID of the content the resume position belongs to */
-uint32_t pb_get_resume_audio_id(void);
+/* UID, resume position and audio ID of the last tonie, read together */
+void pb_get_last(uint64_t *nfc_uid, uint32_t *play_position, uint32_t *audio_id);
 
 /* playback and download progress, -1 = unknown / nothing playing */
 typedef struct
