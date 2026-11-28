@@ -1,4 +1,8 @@
+# fetched by setup_libs.sh
 esp-adf
+esp-idf
+idf-extra
+idf-extra-src
 teddybox/build
 teddybox/managed_components
 # written by the component manager when it fetches jsmn, nghttp and zlib

@@ -19,7 +19,6 @@
 #include "audio_common.h"
 #include "opus_decoder.h"
 #include "i2s_stream.h"
-#include "raw_stream.h"
 
 #include "playback.h"
 #include "rtnl.h"
@@ -1032,15 +1031,6 @@ char *pb_build_filename(uint64_t id)
     return filename;
 }
 
-esp_err_t pb_play(const char *uri)
-{
-    ESP_LOGI(TAG, "[ * ] Queue uri: '%s'", uri);
-    char *msg = strdup(uri);
-    xQueueSend(playback_queue, &msg, portMAX_DELAY);
-
-    return ESP_OK;
-}
-
 bool pb_file_is_own(const char *filename)
 {
     char own[72];
@@ -1199,16 +1189,6 @@ esp_err_t pb_stop()
 bool pb_is_playing()
 {
     return pb_playing;
-}
-
-uint32_t pb_get_play_position()
-{
-    if (!pb_is_playing())
-    {
-        return 0;
-    }
-
-    return pb_toniefile_info.current_block;
 }
 
 uint32_t pb_get_resume_position()
@@ -2010,24 +1990,4 @@ void pb_init(esp_periph_set_handle_t set)
     audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
 
     xTaskCreatePinnedToCore(pb_mainthread, "[TB] Playback", PB_TASK_STACK, NULL, PB_TASK_PRIO, NULL, tskNO_AFFINITY);
-}
-
-void pb_deinit()
-{
-    ESP_LOGI(TAG, "Stop audio_pipeline");
-
-    audio_pipeline_stop(pipeline);
-    audio_pipeline_wait_for_stop(pipeline);
-    audio_pipeline_terminate(pipeline);
-
-    audio_pipeline_unregister(pipeline, i2s_stream_writer);
-    audio_pipeline_unregister(pipeline, music_decoder);
-
-    audio_event_iface_destroy(evt);
-
-    audio_pipeline_remove_listener(pipeline);
-
-    audio_pipeline_deinit(pipeline);
-    audio_element_deinit(i2s_stream_writer);
-    audio_element_deinit(music_decoder);
 }

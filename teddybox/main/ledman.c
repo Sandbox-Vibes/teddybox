@@ -172,11 +172,6 @@ static void ledman_execute(const SequenceCommand *sequence)
     }
 }
 
-void ledman_set_system_state(SystemState state)
-{
-    current_system_state = state;
-}
-
 void ledman_change(const char *requestedState)
 {
     const char *actualState = requestedState;

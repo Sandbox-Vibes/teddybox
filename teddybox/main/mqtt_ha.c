@@ -45,11 +45,6 @@ static char state_topic[80];
 static char diag_topic[80];
 static volatile bool publish_now = false;
 
-void mqtt_ha_publish_now(void)
-{
-    publish_now = true;
-}
-
 static volatile uint32_t diag_sent;
 
 bool mqtt_ha_flush(int timeout_ms)

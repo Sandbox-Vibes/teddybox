@@ -60,11 +60,6 @@ static void fetch_finished(void)
     saved = true; /* restarts into the new firmware */
 }
 
-bool setup_portal_saved(void)
-{
-    return saved;
-}
-
 void setup_portal_touch(void)
 {
     last_activity = esp_timer_get_time();

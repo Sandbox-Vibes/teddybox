@@ -19,5 +19,5 @@ with open(dst_elf, 'r+b') as f:
         assert code[0] == 0x36 and code[1] & 0x0f == 1, code.hex()  # entry a1, n
         f.seek(off + 3); f.write(bytes([0x1d, 0xf0]))                    # retw.n
         print('patched adc_hw_calibration at', hex(addr))
-subprocess.check_call([sys.executable, '-m', 'esptool', '--chip', 'esp32s3', 'elf2image', '--flash_mode', 'dio',
-                       '--flash_size', '8MB', '-o', dst_bin, dst_elf])
+subprocess.check_call([sys.executable, '-m', 'esptool', '--chip', 'esp32s3', 'elf2image', '--flash-mode', 'dio',
+                       '--flash-size', '8MB', '-o', dst_bin, dst_elf])
