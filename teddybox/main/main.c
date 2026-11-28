@@ -360,7 +360,10 @@ void app_main(void)
     maint_clock_wake();
     const bool maint_mode = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER && maint_due();
     audio_board_set_timer_wakeup(maint_sleep_us());
-    audio_board_sleep_check(maint_mode);
+    /* 28 Nov: a test firmware, installed and then put on the charger, went
+       straight back to sleep before it had confirmed itself; the next start
+       rolled it back to the previous one. On probation: always start. */
+    audio_board_sleep_check(maint_mode, ota_on_probation());
 
     esp_log_level_set("*", ESP_LOG_WARN);
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -900,6 +903,10 @@ shutdown:
     rtc_checksum_update();
 
     ESP_LOGI(TAG, "Poweroff");
+    /* switched off normally (ears, idle, battery) within the first seconds
+       of a new firmware: it worked, a deep sleep on probation would roll it
+       back (a crash or a failed hardware check never gets here) */
+    ota_confirm_running();
     maint_run_end();
     audio_board_set_charger(battery_is_charging());
     vTaskDelay(500 / portTICK_PERIOD_MS);

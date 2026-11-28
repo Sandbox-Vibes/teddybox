@@ -133,3 +133,7 @@ CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
 
 # esp_timer task: 0.6 KB used on the box (27 Nov)
 CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560
+
+# main loop: 848 bytes left at 3.5 KB after Home Assistant commands that
+# save the settings (28 Nov)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096

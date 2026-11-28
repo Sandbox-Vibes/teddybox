@@ -156,7 +156,10 @@ void audio_board_set_charger(bool present);
 void audio_board_deep_sleep(void);
 /* call first in app_main: a timer wake (charger check) goes straight back to
    sleep unless stay_awake_on_timer (nightly update due) */
-void audio_board_sleep_check(bool stay_awake_on_timer);
+/* stay_awake_on_timer: a timer wake is a due nightly update; must_start:
+   never go straight back to sleep (a new firmware on probation has to run
+   until it confirms itself, a sleep before that rolls it back) */
+void audio_board_sleep_check(bool stay_awake_on_timer, bool must_start);
 /* additional timer wake for the next deep sleep (0 = none) */
 void audio_board_set_timer_wakeup(uint64_t us);
 esp_err_t audio_board_sdcard_unmount(void);
