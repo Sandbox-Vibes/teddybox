@@ -208,6 +208,36 @@ The setup hotspot is open, so the backup is only released after the small
 ear is pressed on the box (60 s to press it, then 10 minutes valid). The
 files contain the private key of the box.
 
+### Original firmware for teddyCloud (setup page)
+
+TeddyBox itself needs no patch: its teddyCloud CA can be on the SD card and
+the host is in `teddybox.ini`. The original firmware in its slot only works
+with teddyCloud if the box is patched, as teddyCloud's ESP32 patch does it.
+The System tab can do that on the box:
+
+- teddyCloud's CA (the one in `ca_path`) replaces `/spiflash/cert/ca.der`;
+  the original Boxine CA is saved first as `/sdcard/teddybox/boxine-ca.der`
+  (also used by the Boxine fallback from then on). Nothing is copied if the
+  CA in flash already is teddyCloud's.
+- In the original app, `prod.de.tbs.toys` and `rtnl.bxcl.de` are replaced by
+  the address entered (zero padded). Up to 12 characters both are replaced;
+  with 13 to 16 characters only `prod.de.tbs.toys`, and the original's live
+  log keeps trying `rtnl.bxcl.de` (it fails there, teddyCloud's CA). The
+  original firmware connects to port 443 only, so teddyCloud must listen
+  there; the address must be resolvable by the box's DNS (or an IP).
+- The image checksum and SHA-256 are computed anew and the image is
+  verified. Every changed position is stored in NVS; "Undo" writes the
+  original names back (byte for byte the image from before, also after an
+  interrupted run) and the Boxine CA back into flash. If TeddyBox took its
+  teddyCloud CA from flash, it is moved to `/sdcard/teddybox/ca.der` first.
+- Released like the backup (small ear). Back up the flash image first: a
+  power loss while a sector is rewritten can leave the original firmware
+  unbootable until the image is restored.
+
+The original firmware with the patch has been checked in QEMU (image
+verifies, undo restores it byte for byte), not yet run against teddyCloud
+on a box.
+
 ## Configuration: `teddybox.ini` on the SD card
 
 Written by the setup page; all keys are optional.
