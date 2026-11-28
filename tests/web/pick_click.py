@@ -42,6 +42,8 @@ async def main():
             tab = await pg.evaluate("id=>document.getElementById(id).closest('.tab').id.replace('tab-','')", fid)
             await pg.click('.tabs button[data-tab="%s"]' % tab)
             await pg.wait_for_timeout(400)  # let the tab settle (System: online update box)
+            # fields in a closed <details> (Advanced) are opened as a user would
+            await pg.evaluate("id=>{const d=document.getElementById(id).closest('details');if(d)d.open=true}", fid)
             lab = pg.locator('label.drop:has(#%s) .t b' % fid)
             ok = False
             # up to 3 tries: the System tab can still move (online update box)

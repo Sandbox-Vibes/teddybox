@@ -25,6 +25,7 @@
 #include "crashlog.h"
 #include "speaker_eq.h"
 #include "settings.h"
+#include "cloud.h"
 #include "wifi.h"
 #include "mdns_min.h"
 #include "fw_fetch.h"
@@ -46,6 +47,7 @@ static char mdns_host[24] = ""; /* "teddybox-xxxx" */
 #define CA_DIR "/sdcard/teddybox"
 #endif
 #define CA_FILE CA_DIR "/ca.der"
+#define BOXINE_CA_FILE CLOUD_BOXINE_CA_FILE
 #define MAX_BODY 4096
 #define MAX_SCAN 20
 
@@ -186,6 +188,7 @@ static esp_err_t config_handler(httpd_req_t *req)
     cJSON_AddStringToObject(j, "fw_version", app.version);
     cJSON_AddStringToObject(j, "fw_slot", running->label);
     cJSON_AddBoolToObject(j, "boxine_fallback", s->boxine_fallback);
+    cJSON_AddBoolToObject(j, "boxine_ca_custom", !strcmp(s->boxine_ca, BOXINE_CA_FILE) && stat(BOXINE_CA_FILE, &st) == 0);
     cJSON_AddBoolToObject(j, "user_agent_original", s->user_agent_original);
     /* for the page header and the backup file names */
     uint8_t mac[6];
@@ -256,9 +259,15 @@ static esp_err_t scan_handler(httpd_req_t *req)
     return send_json(req, arr);
 }
 
+/* POST /api/ca: the CA of teddyCloud; /api/ca?for=boxine: the original CA
+   of the Boxine cloud, for the fallback on a box patched for teddyCloud */
 static esp_err_t ca_handler(httpd_req_t *req)
 {
     touch();
+    char query[24] = "", target[8] = "";
+    bool boxine = httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+                  httpd_query_key_value(query, "for", target, sizeof(target)) == ESP_OK && !strcmp(target, "boxine");
+    const char *file = boxine ? BOXINE_CA_FILE : CA_FILE;
     size_t len = 0;
     char *body = read_body(req, &len);
     if (!body)
@@ -280,9 +289,15 @@ static esp_err_t ca_handler(httpd_req_t *req)
 
     char subject[128];
     mbedtls_x509_dn_gets(subject, sizeof(subject), &crt.subject);
+    if (boxine && cloud_ca_is_teddycloud(crt.raw.p, crt.raw.len))
+    {
+        mbedtls_x509_crt_free(&crt);
+        return send_result(req, false, L("This is the CA of teddyCloud. The Boxine one is certs/client/ca.der in teddyCloud.",
+                                         "Das ist die CA von teddyCloud. Die von Boxine ist certs/client/ca.der in teddyCloud."));
+    }
 
     mkdir(CA_DIR, S_IRWXU);
-    FILE *f = fopen(CA_FILE, "wb");
+    FILE *f = fopen(file, "wb");
     bool ok = f && fwrite(crt.raw.p, crt.raw.len, 1, f) == 1;
     if (f)
     {
@@ -295,8 +310,15 @@ static esp_err_t ca_handler(httpd_req_t *req)
     }
 
     settings_t *s = settings_get_mutable();
-    snprintf(s->ca_path, sizeof(s->ca_path), "%s", CA_FILE);
-    ESP_LOGI(TAG, "CA saved: %s", subject);
+    if (boxine)
+    {
+        snprintf(s->boxine_ca, sizeof(s->boxine_ca), "%s", BOXINE_CA_FILE);
+    }
+    else
+    {
+        snprintf(s->ca_path, sizeof(s->ca_path), "%s", CA_FILE);
+    }
+    ESP_LOGI(TAG, "%s CA saved: %s", boxine ? "Boxine" : "teddyCloud", subject);
 
     cJSON *j = cJSON_CreateObject();
     cJSON_AddBoolToObject(j, "ok", true);
@@ -531,6 +553,8 @@ static esp_err_t save_handler(httpd_req_t *req)
         s->readahead = cJSON_IsTrue(b);
     }
     cJSON_Delete(o);
+    /* fallback just switched on, box not patched: keep its Boxine CA */
+    cloud_boxine_ca_keep();
 
     if (settings_save_ini(SETTINGS_INI_PATH) != 0)
     {

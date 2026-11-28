@@ -311,6 +311,12 @@ pre{margin:0;padding:12px 14px;border-radius:12px;background:var(--pre);color:va
 <label><input class="chk" id="uaorig" type="checkbox">Als Original-Firmware ausgeben (User-Agent)</label>
 </div>
 <p class="hint">Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.</p>
+<div class="f"><span class="lb">CA-Zertifikat der Tonies-Cloud</span>
+<label class="drop" for="bxcafile"><span class="tile"><svg class="ic"><use href="#i-up"/></svg></span>
+<span class="t"><b id="bxcaname">Datei wählen</b><span>teddyCloud: certs/client/ca.der · DER oder PEM</span></span>
+<input id="bxcafile" type="file" accept=".der,.pem,.crt,.cer"></label>
+<p class="status" id="bxcastatus"></p>
+<p class="hint">Nur nötig, wenn die Box für teddyCloud gepatcht ist: Dann liegt im Flash die CA von teddyCloud, und die Tonies-Cloud wird damit abgelehnt.</p></div>
 </div>
 </details>
 </div>
@@ -442,7 +448,7 @@ const EN={
 'Vorauslesen von der SD-Karte':'Read ahead from the SD card','an (Standard)':'on (default)','aus (nur zur Fehlersuche)':'off (debugging only)',
 'CELT braucht deutlich weniger Arbeitsspeicher. Mit 160 MHz hält der Akku etwas länger, mit ESP-ADF stockten bei 160 MHz aber manche Tonies. Im Log zeigt „Decoder … % CPU“ die Auslastung. Der Download-Takt gilt nur, solange ein Tonie läuft.':'CELT needs much less memory. At 160 MHz the battery lasts a little longer, but with ESP-ADF some tonies stuttered at 160 MHz. "Decoder … % CPU" in the log shows the load. The download limit only applies while a tonie plays.',
 'Erweitert':'Advanced','Tonies-Cloud als Ausweg, User-Agent':'Tonies cloud as fallback, user agent',
-'Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist':'Go to the Tonies cloud directly when teddyCloud is unreachable','Als Original-Firmware ausgeben (User-Agent)':'Identify as the original firmware (user agent)',
+'Direkt zur Tonies-Cloud, wenn teddyCloud nicht erreichbar ist':'Go to the Tonies cloud directly when teddyCloud is unreachable','Als Original-Firmware ausgeben (User-Agent)':'Identify as the original firmware (user agent)','CA-Zertifikat der Tonies-Cloud':'Tonies cloud CA certificate','teddyCloud: certs/client/ca.der · DER oder PEM':'teddyCloud: certs/client/ca.der · DER or PEM','Nur nötig, wenn die Box für teddyCloud gepatcht ist: Dann liegt im Flash die CA von teddyCloud, und die Tonies-Cloud wird damit abgelehnt.':'Only needed if the box is patched for teddyCloud: then the flash holds teddyCloud\'s CA, and the Tonies cloud is rejected with it.',
 'Beides ist standardmäßig aus. Boxine kann TeddyBox trotzdem am Verbindungsaufbau und Verhalten erkennen. Wird das Zertifikat der Box gesperrt, funktioniert die Tonies-Cloud auch mit der Original-Firmware und über teddyCloud nicht mehr.':'Both are off by default. Boxine can still recognize TeddyBox by how it connects and behaves. If the box certificate is blocked, the Tonies cloud stops working for the original firmware and through teddyCloud too.',
 'Auf der SD-Karte':'On the SD card','Lade Liste …':'Loading list …','Liste neu laden':'Reload list',
 'Tonie bespielen':'Put content on a tonie',
@@ -581,6 +587,7 @@ async function load(){
     $('fcint').value=String(cfg.freshness_interval||60);
     $('fwinfo').textContent='TeddyBox '+(cfg.fw_version||'?')+' · '+(cfg.fw_slot||'?');
     $('earsoff').checked=cfg.ears_poweroff!==false;
+    if(cfg.boxine_ca_custom){$('bxcaname').textContent=T('Eigenes CA-Zertifikat gespeichert');}
     $('boxfb').checked=!!cfg.boxine_fallback;$('uaorig').checked=!!cfg.user_agent_original;
     if(cfg.box_id){$('bkcname').textContent='toniebox-'+cfg.box_id+'-certs.zip';$('bksize').textContent='toniebox-'+cfg.box_id+'-flash.bin';}
     chips();
@@ -596,6 +603,15 @@ $('cafile').onchange=async()=>{
     setStatus($('castatus'),j.ok?T('Zertifikat gespeichert: {s}',{s:j.subject}):T('Fehler: {s}',{s:j.error}),j.ok?'ok':'err');
     if(j.ok){cfg.ca_custom=true;chips();}
   }catch(e){setStatus($('castatus'),T('Upload fehlgeschlagen.'),'err');}
+};
+$('bxcafile').onchange=async()=>{
+  const f=$('bxcafile').files[0];if(!f)return;
+  $('bxcaname').textContent=f.name;setStatus($('bxcastatus'),T('Lade hoch …'));
+  try{
+    const j=await (await fetch('/api/ca?for=boxine',{method:'POST',body:await f.arrayBuffer()})).json();
+    setStatus($('bxcastatus'),j.ok?T('Zertifikat gespeichert: {s}',{s:j.subject}):T('Fehler: {s}',{s:j.error}),j.ok?'ok':'err');
+    if(j.ok){cfg.boxine_ca_custom=true;}
+  }catch(e){setStatus($('bxcastatus'),T('Upload fehlgeschlagen.'),'err');}
 };
 // online update: only in the home network; the page asks GitHub for the
 // latest release, the box downloads and checks it itself

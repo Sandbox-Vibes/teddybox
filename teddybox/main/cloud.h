@@ -112,6 +112,16 @@ bool cloud_download_busy(void);
 bool cloud_tls_busy(void);
 /* the Boxine cloud (opt-in fallback) is the backend in use, not teddyCloud */
 bool cloud_backend_is_boxine(void);
+/* a DER certificate that teddyCloud made (its root CA), not Boxine's */
+bool cloud_ca_is_teddycloud(const uint8_t *der, size_t len);
+/* where the Boxine CA is kept on the SD card (upload on the setup page, or
+   the copy of the one in flash) */
+#define CLOUD_BOXINE_CA_FILE "/sdcard/teddybox/boxine-ca.der"
+/* with the Boxine fallback on and the CA still the one in flash: if that is
+   the original Boxine CA (box not patched for teddyCloud), keep a copy on
+   the SD card and use it, so a later teddyCloud patch of the flash does not
+   break the fallback. True if boxine_ca was changed (save the settings) */
+bool cloud_boxine_ca_keep(void);
 /* a tag that is not an original tonie, by the same rules as teddyCloud
    (cloud.markCustomTagByUid / markCustomTagByPass): the UID does not start
    with E0:04:03 or the token is all zeros (token NULL: not checked). Such

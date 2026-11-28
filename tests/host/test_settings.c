@@ -37,6 +37,8 @@ int main(void)
     s->tilt_level = 0;
     s->boxine_fallback = true;
     s->user_agent_original = true;
+    CHECK(!strcmp(s->boxine_ca, "/spiflash/cert/ca.der"));
+    strcpy(s->boxine_ca, "/sdcard/teddybox/boxine-ca.der");
     s->text_de = true;
     CHECK(settings_save_ini(SETTINGS_INI_PATH) == 0);
     CHECK(settings_ini_exists());
@@ -61,6 +63,7 @@ int main(void)
     CHECK(s->led_brightness == 1);
     CHECK(s->slap_level == 5 && s->slap_reverse && s->tilt_level == 0);
     CHECK(!strcmp(s->boxine_host, "prod.de.tbs.toys"));
+    CHECK(!strcmp(s->boxine_ca, "/sdcard/teddybox/boxine-ca.der"));
 
     /* host set but cloud switched off must survive the round trip */
     s->cloud_enabled = false;

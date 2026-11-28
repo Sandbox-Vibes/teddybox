@@ -28,6 +28,7 @@ static settings_t settings = {
     .ca_path = "/spiflash/cert/ca.der",
     .boxine_fallback = false,
     .boxine_host = "prod.de.tbs.toys",
+    .boxine_ca = "/spiflash/cert/ca.der",
     .user_agent_original = false,
     .volume_max = 100,
     .volume_max_hdp = 100,
@@ -107,6 +108,9 @@ int settings_save_ini(const char *path)
                      "# Boxine cloud directly when teddyCloud is missing or down (box certificate could be blocked)\n"
                      "boxine_fallback = %d\n"
                      "boxine_host = %s\n"
+                     "# CA of the Boxine cloud; on a box patched for teddyCloud the original one\n"
+                     "# (teddyCloud: certs/client/ca.der) on the SD card\n"
+                     "boxine_ca = %s\n"
                      "# original firmware user agent instead of toniebox-esp32-teddybox\n"
                      "user_agent_original = %d\n"
                      "\n"
@@ -167,6 +171,7 @@ int settings_save_ini(const char *path)
                      (s->cloud_host[0] && !s->cloud_enabled) ? "cloud_enabled = 0\n" : "",
                      s->boxine_fallback ? 1 : 0,
                      s->boxine_host[0] ? s->boxine_host : "prod.de.tbs.toys",
+                     s->boxine_ca[0] ? s->boxine_ca : "/spiflash/cert/ca.der",
                      s->user_agent_original ? 1 : 0,
                      s->mqtt_host, s->mqtt_port, s->mqtt_user, s->mqtt_pass,
                      s->mqtt_topic[0] ? "mqtt_topic = " : "", s->mqtt_topic, s->mqtt_topic[0] ? "\n" : "",
@@ -562,6 +567,10 @@ void settings_load_ini(void)
         {
             copy_str(settings.boxine_host, sizeof(settings.boxine_host), val);
         }
+        else if (!strcmp(key, "boxine_ca"))
+        {
+            copy_str(settings.boxine_ca, sizeof(settings.boxine_ca), val);
+        }
         else if (!strcmp(key, "user_agent_original"))
         {
             settings.user_agent_original = parse_bool(val);
@@ -615,8 +624,9 @@ void settings_load_ini(void)
     }
     if (settings.boxine_fallback || settings.user_agent_original)
     {
-        ESP_LOGW(TAG, "INI: Boxine fallback %s (%s), original user agent %s",
-                 settings.boxine_fallback ? "ON" : "off", settings.boxine_host, settings.user_agent_original ? "ON" : "off");
+        ESP_LOGW(TAG, "INI: Boxine fallback %s (%s, CA %s), original user agent %s",
+                 settings.boxine_fallback ? "ON" : "off", settings.boxine_host, settings.boxine_ca,
+                 settings.user_agent_original ? "ON" : "off");
     }
     ESP_LOGI(TAG, "INI: cloud %s %s:%d (CA %s), lang %d, volume max %d, idle %ds",
              settings.cloud_enabled ? "on" : "off", settings.cloud_host, settings.cloud_port,
