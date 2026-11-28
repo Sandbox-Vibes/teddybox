@@ -85,6 +85,18 @@ static bool pb_dl_running(const cloud_content_req_t *dl)
     return dl && dl->state != CC_STATE_FINISHED && dl->state != CC_STATE_ERROR && dl->state != CC_STATE_ABORTED;
 }
 
+/* last tonie, its position and audio ID: written by the playback task and the
+   reader of the TAF file (pipeline task), read by the main loop (RTC memory),
+   MQTT, freshness and names; under pb_last_lock, so the 64 bit UID never
+   tears and the main loop sees the three together */
+static portMUX_TYPE pb_last_lock = portMUX_INITIALIZER_UNLOCKED;
+#define PB_LAST_SET(stmt)                  \
+    do                                     \
+    {                                      \
+        taskENTER_CRITICAL(&pb_last_lock); \
+        stmt;                              \
+        taskEXIT_CRITICAL(&pb_last_lock);  \
+    } while (0)
 static uint64_t pb_last_nfc_uid = 0;
 static uint32_t pb_last_play_position = 0;
 /* audio ID of the content the position belongs to (0 = unknown): a new
@@ -646,7 +658,7 @@ static size_t pb_ensure_block(pb_toniefile_t *info, FILE *shared)
     }
     if (!pb_default_content)
     {
-        pb_last_play_position = info->current_block;
+        PB_LAST_SET(pb_last_play_position = info->current_block);
     }
 
     /* nothing (more) in this block: 0, never a wrapped around size_t */
@@ -728,7 +740,7 @@ static int pb_try_buffered(pb_toniefile_t *info)
     {
         info->granule = g;
     }
-    pb_last_play_position = info->current_block;
+    PB_LAST_SET(pb_last_play_position = info->current_block);
     return TONIEFILE_FRAME_SIZE - offset;
 }
 
@@ -928,7 +940,7 @@ int pb_toniefile_cbr(audio_element_handle_t self, char *buffer, int len, TickTyp
         if (!pb_default_content && info->taf && (uint64_t)info->current_pos >= info->taf->num_bytes + TONIEFILE_FRAME_SIZE)
         {
             ESP_LOGI(TAG, "Tonie played to the end, next time from the start");
-            pb_last_play_position = 0;
+            PB_LAST_SET(pb_last_play_position = 0);
         }
         pb_toniefile_close(info);
         return AEL_IO_DONE;
@@ -1191,26 +1203,26 @@ bool pb_is_playing()
     return pb_playing;
 }
 
-uint32_t pb_get_resume_position()
-{
-    return pb_last_play_position;
-}
-
-uint32_t pb_get_resume_audio_id(void)
-{
-    return pb_last_audio_id;
-}
-
 uint64_t pb_get_current_uid()
 {
-    return pb_last_nfc_uid;
+    taskENTER_CRITICAL(&pb_last_lock);
+    uint64_t uid = pb_last_nfc_uid;
+    taskEXIT_CRITICAL(&pb_last_lock);
+    return uid;
+}
+
+void pb_get_last(uint64_t *nfc_uid, uint32_t *play_position, uint32_t *audio_id)
+{
+    taskENTER_CRITICAL(&pb_last_lock);
+    *nfc_uid = pb_last_nfc_uid;
+    *play_position = pb_last_play_position;
+    *audio_id = pb_last_audio_id;
+    taskEXIT_CRITICAL(&pb_last_lock);
 }
 
 void pb_set_last(uint64_t nfc_uid, uint32_t play_position, uint32_t audio_id)
 {
-    pb_last_nfc_uid = nfc_uid;
-    pb_last_play_position = play_position;
-    pb_last_audio_id = audio_id;
+    PB_LAST_SET(pb_last_nfc_uid = nfc_uid; pb_last_play_position = play_position; pb_last_audio_id = audio_id);
 }
 
 /********************************************************/
@@ -1357,7 +1369,7 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
         {
             ESP_LOGI(TAG, "UID %16llX: new content (audio ID %08" PRIX32 ", was %08" PRIX32 "), play from start", nfc_uid,
                      audio_id, pb_last_audio_id);
-            pb_last_play_position = 0;
+            PB_LAST_SET(pb_last_play_position = 0);
         }
         if (nfc_uid == pb_last_nfc_uid && pb_last_play_position + 1 >= 2)
         {
@@ -1371,10 +1383,9 @@ static esp_err_t pb_int_play_file(const char *file, uint64_t nfc_uid)
         else
         {
             ESP_LOGI(TAG, "UID %16llX is new, play from start", nfc_uid);
-            pb_last_play_position = 0;
-            pb_last_nfc_uid = nfc_uid;
+            PB_LAST_SET(pb_last_play_position = 0; pb_last_nfc_uid = nfc_uid);
         }
-        pb_last_audio_id = audio_id;
+        PB_LAST_SET(pb_last_audio_id = audio_id);
     }
 
     /* events of a run that ended on its own (jingle just finished) are stale now */
@@ -1517,7 +1528,7 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
 
     if (!pb_default_content && pb_last_nfc_uid != req->uid)
     {
-        pb_last_play_position = 0;
+        PB_LAST_SET(pb_last_play_position = 0);
     }
     else if (!pb_default_content && pb_last_play_position)
     {
@@ -1530,7 +1541,7 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
         {
             ESP_LOGI(TAG, "New download (audio ID %08" PRIX32 ", played %08" PRIX32 "): play from start", tmp_id,
                      pb_last_audio_id);
-            pb_last_play_position = 0;
+            PB_LAST_SET(pb_last_play_position = 0);
         }
     }
 
@@ -1587,7 +1598,7 @@ static esp_err_t pb_req_handle_play_token(pb_req_play_token_t *req)
             {
                 /* a stream starts anew every time: no position to resume */
                 ESP_LOGI(TAG, "Stream: playing from its start");
-                pb_last_play_position = 0;
+                PB_LAST_SET(pb_last_play_position = 0);
                 start_pos = PB_MIN_DL_BLOCKS;
             }
             if (current_dl_req->received / 4096 > start_pos)
@@ -1742,7 +1753,9 @@ void pb_mainthread(void *arg)
             if (!pb_playing && nfc_get_current_uid() == uid)
             {
                 ESP_LOGI(TAG, "Stream: requesting it again");
-                pb_play_content_token(uid, nfc_get_current_token());
+                uint8_t token[32];
+                nfc_get_current_token(token);
+                pb_play_content_token(uid, token);
             }
         }
 

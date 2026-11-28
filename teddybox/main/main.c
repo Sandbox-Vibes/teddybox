@@ -76,6 +76,18 @@ typedef struct
 static RTC_NOINIT_ATTR rtc_mem_t rtc_storage;
 
 /* requests from other tasks, see control.h */
+/* Requests from other tasks (MQTT, cloud, NFC, I/O) to the main loop: set
+   by the caller, taken by the main loop with an atomic exchange, so a new
+   request that comes in while the loop handles the old one is not lost. */
+static inline int ctrl_take(volatile int *req)
+{
+    return __atomic_exchange_n(req, -1, __ATOMIC_SEQ_CST);
+}
+static inline bool ctrl_take_flag(volatile bool *flag)
+{
+    return __atomic_exchange_n(flag, false, __ATOMIC_SEQ_CST);
+}
+
 static volatile int ctrl_volume_request = -1;
 static volatile bool ctrl_poweroff_request = false;
 static volatile int ctrl_eq_request = -1;
@@ -294,6 +306,9 @@ static void io_start(bool with_ui)
 #define SLEEP_TIMER_HOLD_US (2 * 1000000LL)
 static sleep_timer_t sleep_timer;
 static volatile int ctrl_sleep_request = -1;
+/* minutes left, set by the main loop: MQTT must not read the timer itself
+   (64 bit times, changed by the main loop) */
+static volatile int sleep_timer_left_min = 0;
 
 void ctrl_request_sleep_timer(int minutes)
 {
@@ -302,7 +317,7 @@ void ctrl_request_sleep_timer(int minutes)
 
 int ctrl_get_sleep_timer(void)
 {
-    return sleep_timer_remaining_min(&sleep_timer, esp_timer_get_time());
+    return sleep_timer_left_min;
 }
 
 static uint32_t rotl32a(uint32_t x, uint32_t n)
@@ -633,10 +648,9 @@ void app_main(void)
             small_ear_since = 0;
         }
 
-        int sleep_req = ctrl_sleep_request;
+        int sleep_req = ctrl_take(&ctrl_sleep_request);
         if (sleep_req >= 0)
         {
-            ctrl_sleep_request = -1;
             bool was_active = sleep_timer_active(&sleep_timer);
             sleep_timer_set(&sleep_timer, cur_time, sleep_req);
             dac3100_set_mute(false);
@@ -658,6 +672,7 @@ void app_main(void)
                 audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
             }
         }
+        sleep_timer_left_min = sleep_timer_remaining_min(&sleep_timer, cur_time);
         if (sleep_timer_active(&sleep_timer))
         {
             int level = sleep_timer_level(&sleep_timer, cur_time);
@@ -686,20 +701,18 @@ void app_main(void)
             confirmed = true;
         }
 
-        int vol_req = ctrl_volume_request;
+        int vol_req = ctrl_take(&ctrl_volume_request);
         if (vol_req >= 0)
         {
-            ctrl_volume_request = -1;
             ESP_LOGI(TAG, "Volume set to %d", vol_req);
             rtc_storage.volume = vol_req;
             audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
             rtnl_volume(rtc_storage.volume);
             last_activity_time = cur_time;
         }
-        int vmax_spk = ctrl_vmax_spk_request, vmax_hdp = ctrl_vmax_hdp_request;
+        int vmax_spk = ctrl_take(&ctrl_vmax_spk_request), vmax_hdp = ctrl_take(&ctrl_vmax_hdp_request);
         if (vmax_spk >= 0 || vmax_hdp >= 0)
         {
-            ctrl_vmax_spk_request = ctrl_vmax_hdp_request = -1;
             settings_t *ms = settings_get_mutable();
             if (vmax_spk >= 0)
             {
@@ -726,10 +739,9 @@ void app_main(void)
             ESP_LOGI(TAG, "Volume lowered to the limit %u %%", (unsigned)rtc_storage.volume);
             audio_hal_set_volume(audio_board_get_hal(), rtc_storage.volume);
         }
-        int led_req = ctrl_led_request;
+        int led_req = ctrl_take(&ctrl_led_request);
         if (led_req >= 0)
         {
-            ctrl_led_request = -1;
             ESP_LOGI(TAG, "LED brightness: %d", led_req);
             led_set_brightness(led_req);
             if (settings_get()->led_brightness != led_req)
@@ -742,9 +754,8 @@ void app_main(void)
             }
         }
 
-        if (ctrl_motion_save)
+        if (ctrl_take_flag(&ctrl_motion_save))
         {
-            ctrl_motion_save = false;
             ESP_LOGI(TAG, "Slap %d%s, tilt %d", settings_get()->slap_level, settings_get()->slap_reverse ? " (reversed)" : "",
                      settings_get()->tilt_level);
             if (settings_save_ini(SETTINGS_INI_PATH) != 0)
@@ -753,10 +764,9 @@ void app_main(void)
             }
         }
 
-        int eq_req = ctrl_eq_request;
+        int eq_req = ctrl_take(&ctrl_eq_request);
         if (eq_req >= 0)
         {
-            ctrl_eq_request = -1;
             ESP_LOGI(TAG, "Speaker EQ: %s", speaker_eq_name(eq_req));
             dac3100_set_speaker_eq(eq_req);
             if (settings_get()->speaker_eq != eq_req)
@@ -787,11 +797,14 @@ void app_main(void)
 
         /* also after the playback ended: a tonie played to the end continues
            from the start, after deep sleep too */
-        if (pb_get_current_uid())
+        uint64_t last_uid;
+        uint32_t last_pos, last_aid;
+        pb_get_last(&last_uid, &last_pos, &last_aid);
+        if (last_uid)
         {
-            rtc_storage.nfc_uid = pb_get_current_uid();
-            rtc_storage.play_position = pb_get_resume_position();
-            rtc_storage.audio_id = pb_get_resume_audio_id();
+            rtc_storage.nfc_uid = last_uid;
+            rtc_storage.play_position = last_pos;
+            rtc_storage.audio_id = last_aid;
         }
 
         /* feedback for the gestures with both ears; they are evaluated by
@@ -820,9 +833,8 @@ void app_main(void)
                 ledman_change("idle");
             }
         }
-        if (ctrl_setup_request)
+        if (ctrl_take_flag(&ctrl_setup_request))
         {
-            ctrl_setup_request = false;
             ESP_LOGW(TAG, "Restarting into setup mode (Home Assistant)");
             pb_stop();
             rtc_checksum_update();
@@ -830,9 +842,8 @@ void app_main(void)
             vTaskDelay(pdMS_TO_TICKS(300));
             esp_restart();
         }
-        if (ctrl_boot_original_request)
+        if (ctrl_take_flag(&ctrl_boot_original_request))
         {
-            ctrl_boot_original_request = false;
             ESP_LOGW(TAG, "Switching to the original firmware");
             pb_stop();
             rtc_checksum_update();

@@ -52,7 +52,9 @@ static char mdns_host[24] = ""; /* "teddybox-xxxx" */
 extern const uint8_t setup_html_start[] asm("_binary_setup_html_gz_start");
 extern const uint8_t setup_html_end[] asm("_binary_setup_html_gz_end");
 
-static volatile int64_t last_activity = 0;
+/* last use of the page in ms (web server tasks write, the setup loop reads):
+   32 bit, so it is written in one store */
+static volatile uint32_t last_activity_ms = 0;
 static volatile bool saved = false;
 
 static void fetch_finished(void)
@@ -62,12 +64,12 @@ static void fetch_finished(void)
 
 void setup_portal_touch(void)
 {
-    last_activity = esp_timer_get_time();
+    last_activity_ms = (uint32_t)(esp_timer_get_time() / 1000);
 }
 
 static void touch(void)
 {
-    last_activity = esp_timer_get_time();
+    setup_portal_touch();
 }
 
 /* reads the request body into a NUL terminated buffer, caller frees */
@@ -935,7 +937,8 @@ void setup_portal_run(void)
             ledman_change(SETUP_LED_PATTERN);
             led_set = true;
         }
-        if (esp_timer_get_time() - last_activity > (int64_t)SETUP_PORTAL_IDLE_TIMEOUT_MS * 1000)
+        uint32_t idle_since = last_activity_ms;
+        if ((int32_t)((uint32_t)(esp_timer_get_time() / 1000) - idle_since) > (int32_t)SETUP_PORTAL_IDLE_TIMEOUT_MS)
         {
             ESP_LOGW(TAG, "Nobody used the setup page, giving up");
             httpd_stop(server);

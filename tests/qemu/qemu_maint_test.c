@@ -26,17 +26,17 @@ void app_main(void)
     /* the box has the clock from teddyCloud (a run needs it) */
     struct timeval tv = {.tv_sec = 1795400000};
     settimeofday(&tv, NULL);
-    const char *r;
+    char r[64];
 
     /* 1: the run ends right away (no teddyCloud set up), then hangs while
        switching off: the result stays, with the step after it */
     maint_run();
-    maint_last(&r);
+    maint_last(r, sizeof(r));
     check("1a result of the run", strstr(r, "no teddyCloud") != NULL);
     maint_stage("switching off");
     /* next start without maint_run_end() */
     maint_log_status();
-    time_t t = maint_last(&r);
+    time_t t = maint_last(r, sizeof(r));
     ESP_LOGI(TAG, "result: '%s'", r);
     check("1b unfinished run reported with its step", t > 0 && strstr(r, "no teddyCloud") && strstr(r, "then: switching off"));
 
@@ -45,7 +45,7 @@ void app_main(void)
     maint_stage("switching off");
     maint_run_end();
     maint_log_status();
-    maint_last(&r);
+    maint_last(r, sizeof(r));
     ESP_LOGI(TAG, "result: '%s'", r);
     check("2 normal end keeps the result", !strcmp(r, "no teddyCloud set up"));
 
@@ -63,7 +63,7 @@ void app_main(void)
     settings_get_mutable()->text_de = true;
     maint_run();
     maint_run_end();
-    maint_last(&r);
+    maint_last(r, sizeof(r));
     ESP_LOGI(TAG, "result: '%s'", r);
     check("3 German result", !strcmp(r, "kein teddyCloud eingerichtet"));
 

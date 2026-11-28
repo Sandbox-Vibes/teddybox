@@ -36,12 +36,30 @@ static const char *const cert_files[] = {"ca.der", "client.der", "private.der"};
 #define CERT_DIR "/spiflash/cert/"
 #define SD_DIR "/sdcard/teddybox_backup"
 
-static volatile int64_t wait_until = 0;
-static volatile int64_t unlocked_until = 0;
+/* written by the web server and the unlock task: 64 bit, so read and
+   written under a lock (a 32 bit core needs two stores) */
+static portMUX_TYPE bk_lock = portMUX_INITIALIZER_UNLOCKED;
+static int64_t wait_until = 0;
+static int64_t unlocked_until = 0;
+
+static int64_t bk_get(const int64_t *v)
+{
+    taskENTER_CRITICAL(&bk_lock);
+    int64_t r = *v;
+    taskEXIT_CRITICAL(&bk_lock);
+    return r;
+}
+
+static void bk_set(int64_t *v, int64_t value)
+{
+    taskENTER_CRITICAL(&bk_lock);
+    *v = value;
+    taskEXIT_CRITICAL(&bk_lock);
+}
 
 static bool unlocked(void)
 {
-    return esp_timer_get_time() < unlocked_until;
+    return esp_timer_get_time() < bk_get(&unlocked_until);
 }
 
 static void box_id(char *out, size_t size)
@@ -56,20 +74,20 @@ static void unlock_task(void *arg)
 {
     ledman_change("fadeblink blue");
     bool was_pressed = audio_board_ear_small();
-    while (esp_timer_get_time() < wait_until)
+    while (esp_timer_get_time() < bk_get(&wait_until))
     {
         bool pressed = audio_board_ear_small();
         /* a new press, not an ear that was already held */
         if (pressed && !was_pressed)
         {
-            unlocked_until = esp_timer_get_time() + UNLOCK_VALID_US;
+            bk_set(&unlocked_until, esp_timer_get_time() + UNLOCK_VALID_US);
             ESP_LOGI(TAG, "Released by the small ear for %lld min", UNLOCK_VALID_US / 60000000);
             break;
         }
         was_pressed = pressed;
         vTaskDelay(pdMS_TO_TICKS(30));
     }
-    wait_until = 0;
+    bk_set(&wait_until, 0);
     ledman_change(SETUP_LED_PATTERN);
     vTaskDelete(NULL);
 }
@@ -79,20 +97,20 @@ static esp_err_t send_status(httpd_req_t *req)
     char json[96];
     int64_t now = esp_timer_get_time();
     snprintf(json, sizeof(json), "{\"unlocked\":%s,\"waiting\":%s,\"flash_size\":%lu}", unlocked() ? "true" : "false",
-             now < wait_until ? "true" : "false", (unsigned long)backup_flash_size());
+             now < bk_get(&wait_until) ? "true" : "false", (unsigned long)backup_flash_size());
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, json);
 }
 
 static esp_err_t unlock_handler(httpd_req_t *req)
 {
-    if (!unlocked() && esp_timer_get_time() >= wait_until)
+    if (!unlocked() && esp_timer_get_time() >= bk_get(&wait_until))
     {
-        wait_until = esp_timer_get_time() + UNLOCK_WAIT_US;
+        bk_set(&wait_until, esp_timer_get_time() + UNLOCK_WAIT_US);
         ESP_LOGI(TAG, "Waiting for the small ear");
         if (xTaskCreate(unlock_task, "[TB] backup", 2560, NULL, 5, NULL) != pdPASS)
         {
-            wait_until = 0;
+            bk_set(&wait_until, 0);
         }
     }
     return send_status(req);

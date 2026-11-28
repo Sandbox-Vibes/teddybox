@@ -35,9 +35,13 @@ static uint8_t received_length;
 
 static char dump_buf[129];
 
-bool nfc_valid = false;
-uint8_t nfc_current_uid_rev[8];
-uint8_t nfc_current_token[32];
+/* the tag on the box: written by the NFC task, read by the playback task
+   (download wait, stream restart); under nfc_lock so the 8 byte UID and the
+   32 byte token are never read half written */
+static portMUX_TYPE nfc_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool nfc_valid = false;
+static uint8_t nfc_current_uid_rev[8];
+static uint8_t nfc_current_token[32];
 static int nfc_retry = 0;
 
 static const char *TAG = "[NFC]";
@@ -51,29 +55,34 @@ typedef enum
 
 uint64_t nfc_get_current_uid()
 {
-    if (!nfc_valid)
+    uint64_t uid = NFC_UID_INVALID;
+    taskENTER_CRITICAL(&nfc_lock);
+    if (nfc_valid)
     {
-        return NFC_UID_INVALID;
+        uid = 0;
+        for (int i = 7; i >= 0; i--)
+        {
+            uid = uid << 8 | nfc_current_uid_rev[i];
+        }
     }
-    uint64_t uid = ((uint64_t)nfc_current_uid_rev[7] << 56) |
-                   ((uint64_t)nfc_current_uid_rev[6] << 48) |
-                   ((uint64_t)nfc_current_uid_rev[5] << 40) |
-                   ((uint64_t)nfc_current_uid_rev[4] << 32) |
-                   ((uint64_t)nfc_current_uid_rev[3] << 24) |
-                   ((uint64_t)nfc_current_uid_rev[2] << 16) |
-                   ((uint64_t)nfc_current_uid_rev[1] << 8) |
-                   ((uint64_t)nfc_current_uid_rev[0]);
-
+    taskEXIT_CRITICAL(&nfc_lock);
     return uid;
 }
 
-uint8_t *nfc_get_current_token()
+bool nfc_get_current_token(uint8_t token[32])
 {
-    if (!nfc_valid)
-    {
-        return NULL;
-    }
-    return nfc_current_token;
+    taskENTER_CRITICAL(&nfc_lock);
+    bool valid = nfc_valid;
+    memcpy(token, nfc_current_token, 32);
+    taskEXIT_CRITICAL(&nfc_lock);
+    return valid;
+}
+
+static void nfc_set_valid(bool valid)
+{
+    taskENTER_CRITICAL(&nfc_lock);
+    nfc_valid = valid;
+    taskEXIT_CRITICAL(&nfc_lock);
 }
 
 void nfc_dump(char *buffer, uint8_t *data, uint8_t length)
@@ -131,10 +140,11 @@ esp_err_t nfc_reset(trf7962a_t trf)
 /* reads the 32 byte tag memory the cloud expects as "Authorization: BD <hex>" */
 static esp_err_t nfc_read_token(trf7962a_t trf)
 {
-    memset(nfc_current_token, 0, sizeof(nfc_current_token));
-
+    /* read into a local buffer (SPI, retries), publish it at the end */
+    uint8_t token[32] = {0};
+    esp_err_t ret = ESP_OK;
     const int chunk = NFC_TOKEN_BLOCKS_PER_READ * 4;
-    for (int block = 0; block * 4 < (int)sizeof(nfc_current_token); block += NFC_TOKEN_BLOCKS_PER_READ)
+    for (int block = 0; block * 4 < (int)sizeof(token); block += NFC_TOKEN_BLOCKS_PER_READ)
     {
         bool ok = false;
         for (int retry = 0; retry < 3 && !ok; retry++)
@@ -147,12 +157,16 @@ static esp_err_t nfc_read_token(trf7962a_t trf)
         {
             ESP_LOGW(TAG, "Could not read tag memory block %d (%d bytes, status %d)", block, received_length,
                      received_length ? received_data[0] : -1);
-            memset(nfc_current_token, 0, sizeof(nfc_current_token));
-            return ESP_FAIL;
+            memset(token, 0, sizeof(token));
+            ret = ESP_FAIL;
+            break;
         }
-        memcpy(&nfc_current_token[block * 4], &received_data[1], chunk);
+        memcpy(&token[block * 4], &received_data[1], chunk);
     }
-    return ESP_OK;
+    taskENTER_CRITICAL(&nfc_lock);
+    memcpy(nfc_current_token, token, sizeof(token));
+    taskEXIT_CRITICAL(&nfc_lock);
+    return ret;
 }
 
 /* when token was detected, try to start playback using UID */
@@ -164,7 +178,9 @@ static void nfc_play()
 /* later, when memory was read, call pb handler so it will be able to download the file */
 static void nfc_play_token()
 {
-    pb_play_content_token(nfc_get_current_uid(), nfc_get_current_token());
+    uint8_t token[32];
+    nfc_get_current_token(token);
+    pb_play_content_token(nfc_get_current_uid(), token);
 }
 
 static void nfc_stop()
@@ -239,7 +255,13 @@ static bool nfc_unlock(trf7962a_t trf, int pass)
 
 static void nfc_new_tag(trf7962a_t trf, const char *what)
 {
+    /* UID and "valid" together; the token of the previous tag is cleared
+       until this one's is read */
+    taskENTER_CRITICAL(&nfc_lock);
     memcpy(nfc_current_uid_rev, &received_data[2], 8);
+    memset(nfc_current_token, 0, sizeof(nfc_current_token));
+    nfc_valid = true;
+    taskEXIT_CRITICAL(&nfc_lock);
     ESP_LOGI(TAG, "Tag %s: %llX", what, nfc_get_current_uid());
     /* before the playback starts, teddyCloud expects the tag first */
     rtnl_tag(nfc_get_current_uid(), true);
@@ -295,7 +317,6 @@ void nfc_mainthread(void *arg)
 
             if (!nfc_valid)
             {
-                nfc_valid = true;
                 nfc_new_tag(trf, "entered");
             }
             else if (memcmp(nfc_current_uid_rev, &received_data[2], 8))
@@ -329,10 +350,11 @@ void nfc_mainthread(void *arg)
 
             if (nfc_valid)
             {
-                nfc_valid = false;
+                uint64_t gone = nfc_get_current_uid();
+                nfc_set_valid(false);
                 nfc_dump(dump_buf, nfc_current_uid_rev, 8);
                 ESP_LOGI(TAG, "Tag disappeared: %s", dump_buf);
-                rtnl_tag_removed(nfc_get_current_uid());
+                rtnl_tag_removed(gone);
                 nfc_stop();
             }
 
