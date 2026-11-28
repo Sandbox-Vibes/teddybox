@@ -817,6 +817,18 @@ esp_err_t cloud_process_request(cloud_content_req_t *content_req)
 {
     ESP_LOGI(TAG, "[CDL] Request for '%s' -> '%s'", content_req->location, content_req->filename);
 
+    if (content_req->custom && active_backend == BACKEND_BOXINE)
+    {
+        /* the Boxine cloud only knows original tonies; asking for an own tag
+           would only show it there (teddyCloud does the same: nocloud) */
+        ESP_LOGW(TAG, "[CDL] %016llX is not an original tonie, not asked at the Boxine cloud",
+                 (unsigned long long)content_req->nfc_uid);
+        content_req->status_code = 404;
+        content_req->state = CC_STATE_ERROR;
+        xSemaphoreGive(content_req->update_sem);
+        return ESP_FAIL;
+    }
+
     http_parser_t http_parser_handler_ctx = {
         .http_status_cbr = &cloud_content_status_cbr,
         .http_data_cbr = &cloud_content_cbr,
@@ -1041,6 +1053,31 @@ bool cloud_is_enabled(void)
     return cloud_request_queue != NULL;
 }
 
+bool cloud_backend_is_boxine(void)
+{
+    return active_backend == BACKEND_BOXINE;
+}
+
+bool cloud_tag_is_custom(uint64_t uid, const uint8_t *token)
+{
+    if ((uid >> 40) != 0xE00403)
+    {
+        return true;
+    }
+    if (token)
+    {
+        for (int i = 0; i < 32; i++)
+        {
+            if (token[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 bool cloud_download_busy(void)
 {
     return __atomic_load_n(&content_busy, __ATOMIC_SEQ_CST) > 0;
@@ -1065,6 +1102,7 @@ cloud_content_req_t *cloud_content_download(uint64_t nfc_uid, const uint8_t *nfc
 
     /* fill input fields */
     req->nfc_uid = nfc_uid;
+    req->custom = cloud_tag_is_custom(nfc_uid, nfc_token);
 
     /* fill working variables based on input fields */
     req->state = CC_STATE_INIT;

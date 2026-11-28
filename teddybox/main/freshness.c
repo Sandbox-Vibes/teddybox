@@ -12,6 +12,7 @@
 #include "freshness.h"
 #include "cloud.h"
 #include "playback.h"
+#include "maint.h"
 #include "toniebox.pb.freshness-check.fc-request.pb-c.h"
 
 static const char *TAG = "Freshness";
@@ -234,6 +235,7 @@ int freshness_parse_response(const uint8_t *buf, size_t len, uint64_t *marked, i
 /* collects UID and audio_id of every tonie file, removes .old leftovers whose new version is complete */
 static int collect_tonies(TonieFCInfo *infos, int max)
 {
+    int skipped_custom = 0;
     DIR *top = opendir(CONTENT_DIR);
     if (!top)
     {
@@ -275,6 +277,18 @@ static int collect_tonies(TonieFCInfo *infos, int max)
                 /* uploaded on the setup page: not teddyCloud's business */
                 continue;
             }
+            if (cloud_backend_is_boxine())
+            {
+                /* the Boxine cloud only hears about original tonies: by UID and
+                   by the token saved when it was placed (none saved: unknown,
+                   left out too) */
+                uint8_t token[32];
+                if (cloud_tag_is_custom(uid, NULL) || !maint_token_load(uid, token) || cloud_tag_is_custom(uid, token))
+                {
+                    skipped_custom++;
+                    continue;
+                }
+            }
 
             FILE *f = fopen(path, "rb");
             if (!f)
@@ -306,6 +320,10 @@ static int collect_tonies(TonieFCInfo *infos, int max)
         closedir(sub);
     }
     closedir(top);
+    if (skipped_custom)
+    {
+        ESP_LOGI(TAG, "%d tag(s) that are not original tonies left out (Boxine cloud)", skipped_custom);
+    }
     return n;
 }
 

@@ -43,6 +43,8 @@ typedef struct
 {
     /* input fields filled by requester */
     uint64_t nfc_uid;
+    /* not an original tonie (cloud_tag_is_custom): never asked at Boxine */
+    bool custom;
     bool abort;
     /* set by the cloud task as its very last access, only then the requester may free it */
     volatile bool done;
@@ -105,5 +107,12 @@ bool cloud_is_ready(void);
    (file check, RTNL connection) waits, the download and the decoder next to
    it need nearly all of it */
 bool cloud_download_busy(void);
+/* the Boxine cloud (opt-in fallback) is the backend in use, not teddyCloud */
+bool cloud_backend_is_boxine(void);
+/* a tag that is not an original tonie, by the same rules as teddyCloud
+   (cloud.markCustomTagByUid / markCustomTagByPass): the UID does not start
+   with E0:04:03 or the token is all zeros (token NULL: not checked). Such
+   tags are never asked for at the Boxine cloud. */
+bool cloud_tag_is_custom(uint64_t uid, const uint8_t *token);
 cloud_content_state_t cloud_content_get_state(cloud_content_req_t *req);
 void cloud_content_cleanup(cloud_content_req_t *req);
