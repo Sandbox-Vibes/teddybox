@@ -807,7 +807,7 @@ Notes on the IDF 5 port:
   a single extra bit, so it sends two (`trf7962a_command`). At start the
   driver checks that a direct command (software init) has an effect.
 - Release build (`-O2`); TLS handshakes in QEMU about 20 % faster than -Og.
-- TCP window and WiFi RX buffers as with IDF 4.4. A 23 KB window with 32
+- Small TCP window (5.7 KB) and few WiFi RX buffers. A 23 KB window with 32
   dynamic RX buffers let the free heap fall to 8 KB on the box during a
   download.
 - WiFi, lwIP, heap and FreeRTOS functions stay in flash, not IRAM: about

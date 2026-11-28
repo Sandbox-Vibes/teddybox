@@ -23,7 +23,6 @@
  */
 
 #include "audio_idf_version.h"
-#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0))
 #include <string.h>
 
 #include "esp_log.h"
@@ -758,4 +757,3 @@ esp_err_t i2s_stream_sync_delay(audio_element_handle_t i2s_stream, int delay_ms)
     }
     return ESP_OK;
 }
-#endif

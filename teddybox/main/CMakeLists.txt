@@ -1,19 +1,27 @@
+# own task watchdog: taskwatch.c; minimal mDNS responder: mdns_min.c
+set(srcs
+    "ledman.c" "main.c" "cloud.c" "cloud_http.c" "memdiag.c" "mempeak.c"
+    "tls_mfl.c" "ogg_pos.c" "nfc.c" "ota.c" "playback.c" "wifi.c" "accel.c"
+    "settings.c" "sfx.c" "battery.c" "bootsel.c" "freshness.c" "tonie_names.c"
+    "tonie_names_tc.c" "tonies_portal.c" "tonie_seen.c" "crashlog.c"
+    "ear_gestures.c" "sleep_timer.c" "tc_box_settings.c" "rtnl.c"
+    "rtnl_encode.c" "proto/proto/toniebox.pb.freshness-check.fc-request.pb-c.c"
+    "proto/proto/toniebox.pb.freshness-check.fc-response.pb-c.c" "mqtt_ha.c"
+    "mqtt_ha_payload.c" "setup_portal.c" "backup.c" "backup_zip.c" "maint.c"
+    "ogg_demux.c" "tb_opus_dec.c" "readahead.c" "taf_verify.c"
+    "proto/protobuf-c.c" "proto/proto/toniebox.pb.taf-header.pb-c.c"
+    "taskwatch.c" "mdns_min.c" "fw_fetch.c")
 
-set(
-    COMPONENT_SRCS "ledman.c" "main.c" "cloud.c" "cloud_http.c" "memdiag.c" "mempeak.c" "tls_mfl.c" "ogg_pos.c" "nfc.c" "ota.c" "playback.c" "wifi.c" "accel.c" "settings.c" "sfx.c" "battery.c" "bootsel.c" "freshness.c" "tonie_names.c" "tonie_names_tc.c" "tonies_portal.c" "tonie_seen.c" "crashlog.c" "ear_gestures.c" "sleep_timer.c" "tc_box_settings.c" "rtnl.c" "rtnl_encode.c" "proto/proto/toniebox.pb.freshness-check.fc-request.pb-c.c" "proto/proto/toniebox.pb.freshness-check.fc-response.pb-c.c" "mqtt_ha.c" "mqtt_ha_payload.c" "setup_portal.c" "backup.c" "backup_zip.c" "maint.c" "ogg_demux.c" "tb_opus_dec.c" "readahead.c" "taf_verify.c" "proto/protobuf-c.c" "proto/proto/toniebox.pb.taf-header.pb-c.c")
-    
-set(COMPONENT_ADD_INCLUDEDIRS . "proto" "proto/proto")
-set(COMPONENT_REQUIRES toniebox lis3dh trf7962a audio_pipeline audio_stream audio_hal audio_board audio_sal opus_celt
-    esp-adf-libs esp_peripherals esp_dispatcher display_service
-    espcoredump esp_wifi esp_netif esp_event esp-tls mbedtls esp_http_server esp_http_client mqtt json nvs_flash app_update spi_flash
-    esp_partition fatfs vfs wear_levelling spiffs driver esp_adc esp_timer bootloader_support efuse esp_eth protobuf-c)
+# the QEMU test build adds its test sounds here (tests/qemu/qemu_variant.py)
+set(embed_files)
 
-# own task watchdog (taskwatch.h)
-list(APPEND COMPONENT_SRCS "taskwatch.c")
-list(APPEND COMPONENT_SRCS "mdns_min.c")
-list(APPEND COMPONENT_SRCS "fw_fetch.c")
-
-register_component()
+idf_component_register(SRCS ${srcs}
+                       INCLUDE_DIRS . proto proto/proto
+                       EMBED_FILES ${embed_files}
+                       REQUIRES toniebox lis3dh trf7962a audio_pipeline audio_stream audio_hal audio_board audio_sal opus_celt
+                                esp-adf-libs esp_peripherals esp_dispatcher display_service
+                                espcoredump esp_wifi esp_netif esp_event esp-tls mbedtls esp_http_server esp_http_client mqtt json nvs_flash app_update spi_flash
+                                esp_partition fatfs vfs wear_levelling spiffs driver esp_adc esp_timer bootloader_support efuse esp_eth protobuf-c)
 # see tls_mfl.c; -u because nothing else references that file
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=mbedtls_ssl_conf_ca_chain" "-u __wrap_mbedtls_ssl_conf_ca_chain")
 

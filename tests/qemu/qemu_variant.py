@@ -17,8 +17,8 @@ open(p,'w').write(t)
 p='main/CMakeLists.txt'; t=open(p).read()
 t=t.replace('"tls_mfl.c"','"tls_mfl.c" "qemu_mem_test.c"')
 # test sounds and the teddyCloud CA (setup.html is embedded gzip compressed further down)
-assert 'set(COMPONENT_ADD_INCLUDEDIRS' in t
-t=t.replace('set(COMPONENT_ADD_INCLUDEDIRS','set(COMPONENT_EMBED_FILES "jingle.ogg" "music.ogg" "speech.ogg" "tc_ca.der")\nset(COMPONENT_ADD_INCLUDEDIRS',1)
+assert 'set(embed_files)' in t and '"tls_mfl.c"' in t
+t=t.replace('set(embed_files)','set(embed_files "jingle.ogg" "music.ogg" "speech.ogg" "tc_ca.der")',1)
 open(p,'w').write(t)
 p='CMakeLists.txt'; t=open(p).read()
 t=t.replace('project(teddybox)','idf_build_set_property(COMPILE_DEFINITIONS "-DDR_REG_EMAC_BASE=0x600CD000" APPEND)\nidf_build_set_property(COMPILE_DEFINITIONS "-DETS_ETH_MAC_INTR_SOURCE=0" APPEND)\nidf_build_set_property(COMPILE_DEFINITIONS "-DTEDDYBOX_QEMU_TEST" APPEND)\nproject(teddybox)')

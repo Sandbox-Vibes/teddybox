@@ -1,6 +1,8 @@
 esp-adf
 teddybox/build
 teddybox/managed_components
+# written by the component manager when it fetches jsmn, nghttp and zlib
+teddybox/dependencies.lock
 tests/host/battery_sim/sim
 tests/host/battery_sim/battery_copy.c
 tests/host/battery_sim/stub/battery.h

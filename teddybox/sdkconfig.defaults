@@ -63,7 +63,8 @@ CONFIG_MBEDTLS_DYNAMIC_FREE_PEER_CERT=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y
 
-# carried over from the IDF 4.4 sdkconfig (set there beyond the defaults)
+# beyond the IDF defaults: panic handler in IRAM, FATFS (short LFN buffer on
+# the heap, fast seek), FreeRTOS tick and task statistics, code in flash
 CONFIG_ESP_PANIC_HANDLER_IRAM=y
 CONFIG_FATFS_API_ENCODING_ANSI_OEM=y
 CONFIG_FATFS_LFN_HEAP=y
@@ -109,7 +110,7 @@ CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=y
 # source (-Og before; the WiFi and Opus libraries are prebuilt anyway)
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
 
-# downloads: TCP window and WiFi RX buffers as with IDF 4.4 (5.7 KB window,
+# downloads: small TCP window and few WiFi RX buffers (5.7 KB window,
 # ~170 KiB/s). A 23 KB window with 32 dynamic RX buffers was tried in
 # f9d700e: on the box the free heap fell to 8 KB during a download.
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6

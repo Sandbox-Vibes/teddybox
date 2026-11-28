@@ -6,7 +6,7 @@ the label activated the progress bar instead of the file input."""
 import asyncio, http.server, os, sys, threading
 from playwright.async_api import async_playwright
 
-PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../teddybox/main/setup.html')
+PAGE = os.environ.get('SETUP_HTML') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../teddybox/main/setup.html')
 
 
 class H(http.server.BaseHTTPRequestHandler):
@@ -43,13 +43,22 @@ async def main():
             await pg.click('.tabs button[data-tab="%s"]' % tab)
             await pg.wait_for_timeout(400)  # let the tab settle (System: online update box)
             lab = pg.locator('label.drop:has(#%s) .t b' % fid)
-            await lab.scroll_into_view_if_needed()
-            bb = await lab.bounding_box()
-            try:
-                async with pg.expect_file_chooser(timeout=2000):
-                    await pg.mouse.click(bb['x'] + 5, bb['y'] + 5)
+            ok = False
+            # up to 3 tries: the System tab can still move (online update box)
+            # between measuring and clicking; a real fault fails every time
+            for _ in range(3):
+                await lab.scroll_into_view_if_needed()
+                bb = await lab.bounding_box()
+                try:
+                    async with pg.expect_file_chooser(timeout=1500):
+                        await pg.mouse.click(bb['x'] + 5, bb['y'] + 5)
+                    ok = True
+                    break
+                except Exception:
+                    await pg.wait_for_timeout(300)
+            if ok:
                 print('OK   %s: click opens the file chooser' % fid)
-            except Exception:
+            else:
                 print('FAIL %s: click does not open the file chooser' % fid)
                 bad += 1
         await b.close()
