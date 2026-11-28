@@ -9,6 +9,8 @@
 
 /* starts the check unless one is running or this audio ID was already found
    good since the start; sha1 must have 20 bytes */
+/* a file is being checked right now (buffers and task allocated) */
+bool taf_verify_running(void);
 void taf_verify_start(const char *filename, const uint8_t *sha1, size_t sha1_len, uint64_t num_bytes,
                       uint32_t audio_id);
 

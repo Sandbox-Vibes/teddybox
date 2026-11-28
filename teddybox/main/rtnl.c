@@ -113,6 +113,15 @@ static size_t rtnl_encode(uint8_t *out, const rtnl_item_t *it)
     return rtnl_encode_log2(out, it->uptime_ms, rtnl_sequence++, it->a, it->b, it->payload, it->len);
 }
 
+/* the RTNL connection is open (the cloud task waits for it to close before
+   its own TLS requests) */
+static volatile bool rtnl_connected = false;
+
+bool rtnl_is_connected(void)
+{
+    return rtnl_connected;
+}
+
 static void rtnl_task(void *arg)
 {
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -123,15 +132,17 @@ static void rtnl_task(void *arg)
 
     while (true)
     {
-        if (tls && cloud_download_busy())
+        rtnl_connected = tls != NULL;
+        if (tls && cloud_tls_busy())
         {
-            /* the download next to the playback needs the RAM of this
-               connection (about 10 KB); events wait in the queue */
-            ESP_LOGI(TAG, "Download running, closing the connection");
+            /* a download or another request of the cloud task needs the
+               RAM of this connection (about 10 KB); events wait in the queue */
+            ESP_LOGI(TAG, "Cloud request running, closing the connection");
             esp_tls_conn_destroy(tls);
             tls = NULL;
+            rtnl_connected = false;
         }
-        if (xQueueReceive(rtnl_queue, &it, tls ? pdMS_TO_TICKS(250) : portMAX_DELAY) != pdTRUE)
+        if (xQueueReceive(rtnl_queue, &it, tls ? pdMS_TO_TICKS(100) : portMAX_DELAY) != pdTRUE)
         {
             if (tls && esp_timer_get_time() - last_us > RTNL_IDLE_CLOSE_MS * 1000LL)
             {
@@ -147,9 +158,9 @@ static void rtnl_task(void *arg)
         }
         if (!tls)
         {
-            while (cloud_download_busy() && settings_get()->rtnl)
+            while (cloud_tls_busy() && settings_get()->rtnl)
             {
-                /* connect after the download; events queue up meanwhile
+                /* connect after the cloud request; events queue up meanwhile
                    (dropped when the queue is full) */
                 vTaskDelay(pdMS_TO_TICKS(500));
             }
@@ -164,6 +175,7 @@ static void rtnl_task(void *arg)
                 retry_after_us = esp_timer_get_time() + RTNL_RETRY_MS * 1000LL;
                 continue;
             }
+            rtnl_connected = true;
             ESP_LOGI(TAG, "Connected to teddyCloud (stack left %u)", (unsigned)uxTaskGetStackHighWaterMark(NULL));
             /* firmware version first, as the original does after connecting */
             const esp_app_desc_t *app = esp_app_get_description();
