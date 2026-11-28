@@ -22,6 +22,9 @@
  *
  */
 
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_log.h"
 #include "board.h"
 #include "audio_mem.h"
@@ -414,7 +417,11 @@ static bool sleep_pin_low(gpio_num_t pin)
 
 /* what woke the box and how the lines were right after the wake (for the
    diagnosis of unexpected wakes, shown in Home Assistant) */
-static char wake_info[80];
+static char wake_info[112];
+/* raw reading of the station's 5 V pin above which contacts may be settling
+   (on battery: 0), and how long to wait for them */
+#define CHARGER_SETTLING_RAW 100
+#define CHARGER_SETTLE_MS 3000
 
 const char *audio_board_wake_info(void)
 {
@@ -439,6 +446,31 @@ void audio_board_sleep_check(bool stay_awake_on_timer)
     else if (cause == ESP_SLEEP_WAKEUP_TIMER)
     {
         snprintf(wake_info, sizeof(wake_info), "timer%s", stay_awake_on_timer ? " (nightly update)" : "");
+    }
+    /* 28 Nov: put on the station, the wake line only pulsed and the 5 V of
+       the station was not there yet half a second after the wake (raw 264,
+       on battery 0), the box started. Something on the 5 V pin but no ear
+       pressed: give the contacts up to 3 s. A wake by an ear on battery
+       reads 0 there and does not wait. */
+    if (cause == ESP_SLEEP_WAKEUP_EXT0 && sleep_mode == SLEEP_MODE_LINE && !big && !small && !station &&
+        charger_raw > CHARGER_SETTLING_RAW)
+    {
+        int waited = 0;
+        while (!station && waited < CHARGER_SETTLE_MS)
+        {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            waited += 100;
+            station = charger_present();
+            big = sleep_pin_low(EAR_BIG_GPIO);
+            small = sleep_pin_low(EAR_SMALL_GPIO);
+            if (big || small)
+            {
+                break;
+            }
+        }
+        size_t len = strlen(wake_info);
+        snprintf(wake_info + len, sizeof(wake_info) - len, ", after %d ms: %s", waited,
+                 station ? "charger" : (big || small) ? "ear" : "nothing");
     }
     /* woken by the wake line with no ear pressed, while it stays low or the
        station is there: the box was put on the charger (or the line moved
